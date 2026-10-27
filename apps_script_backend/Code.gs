@@ -127,15 +127,88 @@
   }
 
   /**
+   * 🌟 FUNGSI OTOMATIS 1: BUAT SPREADSHEET BARU DARI NOL
+   * Jalankan fungsi ini langsung dari editor Google Apps Script (pilih fungsi ini lalu klik Run/Jalankan).
+   * Script akan otomatis membuat file Google Spreadsheet baru di Google Drive Anda,
+   * membuat seluruh sheet & tabel (DB_MASTER, DB_UPTIME, DB_TIKET_FOLLOWUP, DB_UPLOAD_LOG, dll)
+   * beserta header kolom rapi, dan mencetak link spreadsheet di Execution Log.
+   */
+  function buatSpreadsheetBaruOtomatis() {
+    var ssName = 'Database Dashboard Downtime BCA (' + Utilities.formatDate(new Date(), 'Asia/Jakarta', 'yyyy-MM-dd') + ')';
+    var ss = SpreadsheetApp.create(ssName);
+    var id = ss.getId();
+    var url = ss.getUrl();
+
+    // Inisialisasi seluruh tabel database
+    initSpreadsheetDB(ss);
+    setupJamOperasionalTable(id);
+    initIncidentDb(ss);
+
+    // Simpan ID ke konfigurasi internal script
+    var props = PropertiesService.getScriptProperties();
+    props.setProperty('SPREADSHEET_ID', id);
+    props.setProperty('INCIDENT_DB_SPREADSHEET_ID', id);
+
+    Logger.log('====================================================');
+    Logger.log('🎉 SPREADSHEET DATABASE BARU BERHASIL DIBUAT OTOMATIS!');
+    Logger.log('ID SPREADSHEET : ' + id);
+    Logger.log('LINK BUKA SHEET: ' + url);
+    Logger.log('====================================================');
+
+    return {
+      success: true,
+      id: id,
+      url: url,
+      message: 'Database berhasil dibuat otomatis: ' + ssName
+    };
+  }
+
+  /**
+   * 🌟 FUNGSI OTOMATIS 2: HUBUNGKAN KE SPREADSHEET YANG SUDAH ANDA BUAT
+   * Ganti isi 'MASUKKAN_ID_ATAU_URL_SPREADSHEET_DISINI' dengan URL Google Sheet Anda,
+   * lalu pilih fungsi ini dan klik Run.
+   */
+  function hubungkanSpreadsheetYangAda(optIdOrUrl) {
+    var input = optIdOrUrl || 'MASUKKAN_ID_ATAU_URL_SPREADSHEET_DISINI';
+    var id = String(input).trim();
+    var match = id.match(/\/d\/([a-zA-Z0-9-_]+)/);
+    if (match && match[1]) {
+      id = match[1];
+    }
+    if (!id || id === 'MASUKKAN_ID_ATAU_URL_SPREADSHEET_DISINI') {
+      try {
+        var active = SpreadsheetApp.getActiveSpreadsheet();
+        if (active) id = active.getId();
+      } catch (e) {}
+    }
+    if (!id || id === 'MASUKKAN_ID_ATAU_URL_SPREADSHEET_DISINI') {
+      throw new Error('Harap masukkan URL atau ID Google Spreadsheet yang valid!');
+    }
+
+    var ss = SpreadsheetApp.openById(id);
+    initSpreadsheetDB(ss);
+    setupJamOperasionalTable(id);
+    initIncidentDb(ss);
+
+    var props = PropertiesService.getScriptProperties();
+    props.setProperty('SPREADSHEET_ID', id);
+    props.setProperty('INCIDENT_DB_SPREADSHEET_ID', id);
+
+    Logger.log('✅ Sukses! Database telah diinisialisasi dan dihubungkan ke: ' + ss.getName());
+    Logger.log('Link: ' + ss.getUrl());
+    return { success: true, id: id, name: ss.getName(), url: ss.getUrl() };
+  }
+
+  /**
   * Menu otomatis saat Google Spreadsheet dibuka
   */
   function onOpen(e) {
     try {
       var ui = SpreadsheetApp.getUi();
       ui.createMenu('⚡ Dashboard Downtime')
-        .addItem('⚡ Sinkronkan Jam Operasional ke Master', 'syncJamOperasionalToMasterManual')
+        .addItem('🔄 Inisialisasi Seluruh Sheet Database Otomatis', 'initSpreadsheetDBManual')
         .addItem('🛠️ Siapkan Tabel Jam Operasional', 'setupJamOperasionalTable')
-        .addItem('🔄 Inisialisasi Seluruh Sheet Database', 'initSpreadsheetDBManual')
+        .addItem('⚡ Sinkronkan Jam Operasional ke Master', 'syncJamOperasionalToMasterManual')
         .addSeparator()
         .addItem('📁 Inisialisasi Database Insiden', 'initIncidentDbManual')
         .addItem('🔑 Setup Password Ka Ops', 'setupKaOpsPasswordManual')
@@ -148,7 +221,14 @@
     try {
       var ss = SpreadsheetApp.getActiveSpreadsheet();
       initSpreadsheetDB(ss);
-      SpreadsheetApp.getUi().alert('Inisialisasi selesai! Seluruh tabel database telah siap.');
+      setupJamOperasionalTable(ss.getId());
+      initIncidentDb(ss);
+      
+      var props = PropertiesService.getScriptProperties();
+      props.setProperty('SPREADSHEET_ID', ss.getId());
+      props.setProperty('INCIDENT_DB_SPREADSHEET_ID', ss.getId());
+
+      SpreadsheetApp.getUi().alert('Inisialisasi selesai! Seluruh tabel database telah siap secara otomatis.');
     } catch (err) {
       SpreadsheetApp.getUi().alert('Gagal inisialisasi: ' + err.toString());
     }
