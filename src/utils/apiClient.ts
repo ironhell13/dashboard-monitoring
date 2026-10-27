@@ -25,11 +25,6 @@ export function getBackendApiUrl(): string {
     return envUrl.trim();
   }
 
-  // Jika di Vercel tanpa env spesifik, gunakan endpoint proxy internal
-  if (typeof window !== 'undefined' && window.location.hostname !== 'localhost') {
-    return '/api/proxy';
-  }
-
   return '';
 }
 
