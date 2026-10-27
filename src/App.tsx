@@ -259,7 +259,12 @@ function App() {
   if (appMode === 'LANDING') {
     return (
       <ErrorBoundary>
-        <LandingPage onSelectMode={(mode) => setAppMode(mode)} />
+        <LandingPage onSelectMode={(mode) => {
+          if (mode === 'KAWIL' || mode === 'KAOPS') {
+            window.location.hash = '#/dashboard';
+          }
+          setAppMode(mode);
+        }} />
       </ErrorBoundary>
     );
   }
@@ -303,12 +308,13 @@ function App() {
     <ErrorBoundary>
       <HashRouter>
         <Routes>
-          <Route path="/" element={<Navigate to={machines.length > 0 ? "/dashboard" : "/upload"} replace />} />
-          <Route path="/upload" element={<UploadPage />} />
+          {/* Selalu arahkan root ke /dashboard saat login */}
+          <Route path="/" element={<Navigate to="/dashboard" replace />} />
           
           {/* Dashboard Routes wrapped in Layout */}
           <Route element={<Layout onLogout={appMode === 'KAWIL' ? handleLogoutKaWil : handleLogoutKaOps} userRole={currentRole} />}>
             <Route path="/dashboard" element={<DashboardPage />} />
+            <Route path="/upload" element={<UploadPage />} />
             <Route path="/cek-daily" element={<CekDailyPage userRole={currentRole} />} />
             <Route path="/follow-up" element={<FollowUpPage />} />
             <Route path="/sektor-mesin" element={<MesinPerSektorPage />} />
@@ -317,6 +323,9 @@ function App() {
             <Route path="/wsid/:wsid" element={<WsidDetailPage />} />
             <Route path="/total-uptime" element={<TotalUptimeBulanPage />} />
           </Route>
+
+          {/* Fallback route */}
+          <Route path="*" element={<Navigate to="/dashboard" replace />} />
         </Routes>
       </HashRouter>
     </ErrorBoundary>

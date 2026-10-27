@@ -29,7 +29,7 @@ export default class ErrorBoundary extends Component<Props, State> {
   };
 
   private handleResetToUpload = () => {
-    window.location.hash = '#/upload';
+    window.location.hash = '#/dashboard';
     window.location.reload();
   };
 

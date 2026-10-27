@@ -66,6 +66,7 @@ export default function LandingPage({ onSelectMode }: LandingPageProps) {
           } catch (e) {
             console.error('Failed to set sessionStorage', e);
           }
+          window.location.hash = '#/dashboard';
           onSelectMode('KAWIL');
         } else {
           if (res.isLocked) {
@@ -86,6 +87,7 @@ export default function LandingPage({ onSelectMode }: LandingPageProps) {
           } catch (e) {
             console.error('Failed to set sessionStorage', e);
           }
+          window.location.hash = '#/dashboard';
           onSelectMode('KAOPS');
         } else {
           if (res.isLocked) {
