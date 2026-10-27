@@ -17,6 +17,7 @@ import { parseMasterData, parseUptimeFile, type MasterRow, type ParsedUptimeFile
 import { matchData } from '../utils/dataMatcher';
 import { useDataStore } from '../store/useDataStore';
 import { saveMasterData, saveUptimePeriod, unlockPeriode, isGasEnvironment } from '../utils/spreadsheetService';
+import { saveDashboardSnapshot } from '../utils/dbCache';
 import { formatBulanTahun, normalizePeriode } from '../utils/comprehensiveExporter';
 
 const formatMonthPeriode = (periode: string): string => {
@@ -83,16 +84,12 @@ export default function UploadPage() {
 
   const handleProcess = async () => {
     // Validasi
-    if (!hasExistingMaster && !masterFile) {
-      setError("Mohon upload Master Data Mesin terlebih dahulu.");
-      return;
-    }
-    if (!hasExistingUptime && uptimeFiles.length === 0) {
-      setError("Mohon upload minimal 1 file Uptime Bulanan.");
-      return;
-    }
     if (!masterFile && uptimeFiles.length === 0) {
-      setError("Pilih minimal file Master Data atau file Uptime untuk diupdate.");
+      setError("Pilih minimal satu file: Master Data Mesin atau file Uptime Bulanan untuk diproses.");
+      return;
+    }
+    if (!hasExistingMaster && !masterFile && uptimeFiles.length > 0) {
+      setError("Belum ada Master Data Mesin di database. Mohon upload file Master Data Mesin terlebih dahulu.");
       return;
     }
 
@@ -123,10 +120,10 @@ export default function UploadPage() {
 
       // 3. Simpan Master Data ke Spreadsheet secara terpisah (Cepat: ~1s)
       if (masterFile && activeMasterData.length > 0) {
-        setStatusMessage(`Menyimpan Master Data (${activeMasterData.length} mesin) ke Spreadsheet...`);
+        setStatusMessage(`Menyimpan Master Data (${activeMasterData.length} mesin) ke database...`);
         const mRes = await saveMasterData(activeMasterData);
         if (!mRes.success) {
-          throw new Error(mRes.message || "Gagal menyimpan Master Data ke database.");
+          throw new Error(mRes.message || mRes.error || "Gagal menyimpan Master Data ke database.");
         }
         setProgress(50);
       }
@@ -142,11 +139,11 @@ export default function UploadPage() {
           const monthLabel = formatMonthPeriode(file.periode);
           const isUpdating = currentLocked.includes(file.periode);
 
-          setStatusMessage(`${isUpdating ? 'Memperbarui' : 'Menyimpan'} Uptime ${monthLabel} (${i + 1}/${totalFiles}) ke Spreadsheet...`);
+          setStatusMessage(`${isUpdating ? 'Memperbarui' : 'Menyimpan'} Uptime ${monthLabel} (${i + 1}/${totalFiles}) ke database...`);
           const uRes = await saveUptimePeriod(file, true);
 
           if (!uRes.success) {
-            throw new Error(uRes.message || `Gagal menyimpan Uptime periode ${monthLabel}`);
+            throw new Error(uRes.message || uRes.error || `Gagal menyimpan Uptime periode ${monthLabel}`);
           }
 
           if (!currentLocked.includes(file.periode)) {
@@ -185,7 +182,7 @@ export default function UploadPage() {
       const sortedPeriods = Array.from(periods).sort();
       trendData.sort((a, b) => a.periode.localeCompare(b.periode));
 
-      // 7. Update Zustand Store
+      // 7. Update Zustand Store & Simpan Snapshot ke IndexedDB
       setProgress(98);
       setMachines(matchedMachines);
       setAvailablePeriodes(sortedPeriods);
@@ -194,6 +191,15 @@ export default function UploadPage() {
       setRawUptimeFiles(combinedUptimeFiles);
       setLockedPeriodes(currentLocked);
       setLastDbSync(new Date().toISOString());
+
+      await saveDashboardSnapshot({
+        masterData: activeMasterData,
+        parsedUptimeFiles: combinedUptimeFiles,
+        lockedPeriodes: currentLocked,
+        followUpTickets: [],
+        lastUpdated: new Date().toISOString(),
+        timestamp: Date.now()
+      });
 
       setProgress(100);
       setStatusMessage("Selesai! Mengarahkan ke Dashboard...");

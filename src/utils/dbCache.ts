@@ -45,6 +45,10 @@ function openIndexedDB(): Promise<IDBDatabase> {
   });
 }
 
+const MASTER_DATA_KEY = 'cached_master_data';
+const UPTIME_FILES_KEY = 'cached_uptime_files';
+const LOCKED_PERIODES_KEY = 'cached_locked_periodes';
+
 /**
  * Menyimpan snapshot database ke IndexedDB (dan fallback LocalStorage jika muat)
  */
@@ -71,6 +75,126 @@ export async function saveDashboardSnapshot(snapshot: CachedSnapshot): Promise<b
       return false;
     }
   }
+}
+
+/**
+ * Menyimpan Master Data langsung ke IndexedDB tanpa batasan kuota LocalStorage 5MB
+ */
+export async function saveCachedMasterData(rows: MasterRow[]): Promise<boolean> {
+  try {
+    const db = await openIndexedDB();
+    await new Promise<void>((resolve, reject) => {
+      const tx = db.transaction(STORE_NAME, 'readwrite');
+      const store = tx.objectStore(STORE_NAME);
+      const req = store.put(rows, MASTER_DATA_KEY);
+      req.onsuccess = () => resolve();
+      req.onerror = () => reject(req.error);
+      tx.oncomplete = () => resolve();
+    });
+    return true;
+  } catch (err) {
+    console.warn('Gagal menyimpan master data ke IndexedDB:', err);
+    return false;
+  }
+}
+
+/**
+ * Memuat Master Data dari IndexedDB secara instan
+ */
+export async function loadCachedMasterData(): Promise<MasterRow[]> {
+  try {
+    const db = await openIndexedDB();
+    const rows = await new Promise<MasterRow[] | null>((resolve, reject) => {
+      const tx = db.transaction(STORE_NAME, 'readonly');
+      const store = tx.objectStore(STORE_NAME);
+      const req = store.get(MASTER_DATA_KEY);
+      req.onsuccess = () => resolve(req.result || null);
+      req.onerror = () => reject(req.error);
+    });
+    if (rows && Array.isArray(rows)) return rows;
+  } catch (err) {
+    console.warn('Gagal membaca master data dari IndexedDB:', err);
+  }
+  return [];
+}
+
+/**
+ * Menyimpan seluruh file Uptime bulanan langsung ke IndexedDB tanpa batasan kuota 5MB
+ */
+export async function saveCachedUptimeFiles(files: ParsedUptimeFile[]): Promise<boolean> {
+  try {
+    const db = await openIndexedDB();
+    await new Promise<void>((resolve, reject) => {
+      const tx = db.transaction(STORE_NAME, 'readwrite');
+      const store = tx.objectStore(STORE_NAME);
+      const req = store.put(files, UPTIME_FILES_KEY);
+      req.onsuccess = () => resolve();
+      req.onerror = () => reject(req.error);
+      tx.oncomplete = () => resolve();
+    });
+    return true;
+  } catch (err) {
+    console.warn('Gagal menyimpan uptime files ke IndexedDB:', err);
+    return false;
+  }
+}
+
+/**
+ * Memuat file Uptime bulanan dari IndexedDB secara instan
+ */
+export async function loadCachedUptimeFiles(): Promise<ParsedUptimeFile[]> {
+  try {
+    const db = await openIndexedDB();
+    const files = await new Promise<ParsedUptimeFile[] | null>((resolve, reject) => {
+      const tx = db.transaction(STORE_NAME, 'readonly');
+      const store = tx.objectStore(STORE_NAME);
+      const req = store.get(UPTIME_FILES_KEY);
+      req.onsuccess = () => resolve(req.result || null);
+      req.onerror = () => reject(req.error);
+    });
+    if (files && Array.isArray(files)) return files;
+  } catch (err) {
+    console.warn('Gagal membaca uptime files dari IndexedDB:', err);
+  }
+  return [];
+}
+
+/**
+ * Menyimpan daftar periode terkunci ke IndexedDB
+ */
+export async function saveCachedLockedPeriodes(locked: string[]): Promise<boolean> {
+  try {
+    const db = await openIndexedDB();
+    await new Promise<void>((resolve, reject) => {
+      const tx = db.transaction(STORE_NAME, 'readwrite');
+      const store = tx.objectStore(STORE_NAME);
+      const req = store.put(locked, LOCKED_PERIODES_KEY);
+      req.onsuccess = () => resolve();
+      req.onerror = () => reject(req.error);
+      tx.oncomplete = () => resolve();
+    });
+    return true;
+  } catch (err) {
+    return false;
+  }
+}
+
+/**
+ * Memuat daftar periode terkunci dari IndexedDB
+ */
+export async function loadCachedLockedPeriodes(): Promise<string[]> {
+  try {
+    const db = await openIndexedDB();
+    const locked = await new Promise<string[] | null>((resolve, reject) => {
+      const tx = db.transaction(STORE_NAME, 'readonly');
+      const store = tx.objectStore(STORE_NAME);
+      const req = store.get(LOCKED_PERIODES_KEY);
+      req.onsuccess = () => resolve(req.result || null);
+      req.onerror = () => reject(req.error);
+    });
+    if (locked && Array.isArray(locked)) return locked;
+  } catch (err) {}
+  return [];
 }
 
 /**

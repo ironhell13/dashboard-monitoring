@@ -1,6 +1,15 @@
 import type { MasterRow, ParsedUptimeFile } from './excelParser';
 import { normalizePeriode } from './comprehensiveExporter';
 import { apiGet, apiPost, isBackendConfigured } from './apiClient';
+import {
+  saveCachedMasterData,
+  loadCachedMasterData,
+  saveCachedUptimeFiles,
+  loadCachedUptimeFiles,
+  saveCachedLockedPeriodes,
+  loadCachedLockedPeriodes,
+  loadDashboardSnapshot
+} from './dbCache';
 
 export interface DashboardDbData {
   success: boolean;
@@ -206,17 +215,26 @@ export const saveMasterData = async (masterData: MasterRow[]): Promise<SaveMaste
   if (isBackendConfigured()) {
     try {
       const res = await apiPost('saveMasterDataToSpreadsheet', { masterData });
-      if (res && res.success !== undefined) return res;
+      if (res && res.success) {
+        await saveCachedMasterData(masterData);
+        return res;
+      }
     } catch (err: any) {
-      console.warn('API saveMasterData failed, fallback local:', err);
+      console.warn('API saveMasterData failed, fallback ke database lokal:', err);
     }
   }
 
-  // Local storage fallback
+  // Local IndexedDB storage (bebas limit 5MB LocalStorage)
   try {
-    localStorage.setItem(LOCAL_STORAGE_KEYS.MASTER, JSON.stringify(masterData));
-    localStorage.setItem(LOCAL_STORAGE_KEYS.LAST_SYNC, new Date().toISOString());
-    return { success: true, count: masterData.length, message: 'Master Data tersimpan di local storage' };
+    await saveCachedMasterData(masterData);
+    try {
+      localStorage.setItem(LOCAL_STORAGE_KEYS.LAST_SYNC, new Date().toISOString());
+    } catch (e) {}
+    return {
+      success: true,
+      count: masterData.length,
+      message: `Master Data (${masterData.length} mesin) tersimpan di database lokal.`
+    };
   } catch (err: any) {
     return { success: false, error: err.message };
   }
@@ -278,34 +296,63 @@ export const saveUptimePeriod = async (file: ParsedUptimeFile, forceUpdate: bool
   if (isBackendConfigured()) {
     try {
       const res = await apiPost('saveSingleUptimeToSpreadsheet', compactPayload);
-      if (res && res.success !== undefined) return res;
+      if (res && res.success) {
+        let existing = await loadCachedUptimeFiles();
+        existing = existing.filter(f => normalizePeriode(f.periode) !== normPeriode);
+        existing.push({
+          ...file,
+          periode: normPeriode,
+          atmData: compactAtmData as any,
+          atsData: compactAtsData as any
+        });
+        await saveCachedUptimeFiles(existing);
+        return res;
+      }
     } catch (err: any) {
-      console.warn('API saveSingleUptime failed, fallback local:', err);
+      console.warn('API saveSingleUptime failed, fallback ke database lokal:', err);
     }
   }
 
-  // Local storage fallback
+  // Local storage / IndexedDB fallback (Bebas kuota 5MB)
   try {
-    const rawLocked = localStorage.getItem(LOCAL_STORAGE_KEYS.LOCKED);
-    let lockedPeriodes: string[] = rawLocked ? JSON.parse(rawLocked) : [];
+    let lockedPeriodes: string[] = await loadCachedLockedPeriodes();
+    if (!lockedPeriodes || lockedPeriodes.length === 0) {
+      const rawLocked = localStorage.getItem(LOCAL_STORAGE_KEYS.LOCKED);
+      lockedPeriodes = rawLocked ? JSON.parse(rawLocked) : [];
+    }
     lockedPeriodes = lockedPeriodes.map(normalizePeriode);
 
     if (!forceUpdate && lockedPeriodes.includes(normPeriode)) {
       return { success: true, skipped: true, periode: normPeriode, lockedPeriodes, message: `Periode ${normPeriode} sudah terkunci.` };
     }
 
-    const rawExistingUptime = localStorage.getItem(LOCAL_STORAGE_KEYS.UPTIME);
-    let existingUptime: ParsedUptimeFile[] = rawExistingUptime ? JSON.parse(rawExistingUptime) : [];
+    let existingUptime: ParsedUptimeFile[] = await loadCachedUptimeFiles();
+    if (!existingUptime || existingUptime.length === 0) {
+      const rawExistingUptime = localStorage.getItem(LOCAL_STORAGE_KEYS.UPTIME);
+      if (rawExistingUptime) {
+        try { existingUptime = JSON.parse(rawExistingUptime); } catch (e) {}
+      }
+    }
 
     existingUptime = existingUptime.filter(f => normalizePeriode(f.periode) !== normPeriode);
-    existingUptime.push({ ...file, periode: normPeriode });
+    existingUptime.push({
+      ...file,
+      periode: normPeriode,
+      atmData: compactAtmData as any,
+      atsData: compactAtsData as any
+    });
+
     if (!lockedPeriodes.includes(normPeriode)) {
       lockedPeriodes.push(normPeriode);
     }
 
-    localStorage.setItem(LOCAL_STORAGE_KEYS.UPTIME, JSON.stringify(existingUptime));
-    localStorage.setItem(LOCAL_STORAGE_KEYS.LOCKED, JSON.stringify(lockedPeriodes));
-    localStorage.setItem(LOCAL_STORAGE_KEYS.LAST_SYNC, new Date().toISOString());
+    await saveCachedUptimeFiles(existingUptime);
+    await saveCachedLockedPeriodes(lockedPeriodes);
+
+    try {
+      localStorage.setItem(LOCAL_STORAGE_KEYS.LOCKED, JSON.stringify(lockedPeriodes));
+      localStorage.setItem(LOCAL_STORAGE_KEYS.LAST_SYNC, new Date().toISOString());
+    } catch (e) {}
 
     return {
       success: true,
@@ -321,7 +368,7 @@ export const saveUptimePeriod = async (file: ParsedUptimeFile, forceUpdate: bool
 };
 
 /**
- * Mengambil data dashboard dari database (Google Spreadsheet atau Mock Local Storage)
+ * Mengambil data dashboard dari database (Google Spreadsheet atau IndexedDB Cache)
  */
 export const fetchDashboardData = async (): Promise<DashboardDbData> => {
   if (isGasEnvironment()) {
@@ -364,7 +411,7 @@ export const fetchDashboardData = async (): Promise<DashboardDbData> => {
   if (isBackendConfigured()) {
     try {
       const res = await apiGet('getDashboardDataFromSpreadsheet');
-      if (res && res.success !== undefined) {
+      if (res && res.success !== undefined && res.hasData) {
         const parsedUptimeFiles = (res.parsedUptimeFiles || []).map((f: any) => ({
           ...f,
           periode: normalizePeriode(f.periode)
@@ -378,11 +425,47 @@ export const fetchDashboardData = async (): Promise<DashboardDbData> => {
         };
       }
     } catch (err: any) {
-      console.warn('API fetchDashboardData failed, fallback local:', err);
+      console.warn('API fetchDashboardData failed, fallback ke database lokal:', err);
     }
   }
 
-  // Fallback untuk local development / browser preview
+  // 1. Coba ambil dari IndexedDB cache (kapasitas puluhan MB, sangat cepat)
+  try {
+    const cachedMaster = await loadCachedMasterData();
+    const cachedUptime = await loadCachedUptimeFiles();
+    const cachedLocked = await loadCachedLockedPeriodes();
+
+    if (cachedMaster && cachedMaster.length > 0 && cachedUptime && cachedUptime.length > 0) {
+      return {
+        success: true,
+        hasData: true,
+        masterData: cachedMaster,
+        parsedUptimeFiles: cachedUptime.map(f => ({ ...f, periode: normalizePeriode(f.periode) })),
+        lockedPeriodes: cachedLocked.map(normalizePeriode),
+        lastUpdated: localStorage.getItem(LOCAL_STORAGE_KEYS.LAST_SYNC) || new Date().toISOString()
+      };
+    }
+  } catch (idbErr) {
+    console.warn('Gagal membaca IndexedDB, mencoba snapshot fallback:', idbErr);
+  }
+
+  // 2. Coba ambil dari Snapshot cache
+  try {
+    const snapshot = await loadDashboardSnapshot();
+    if (snapshot && snapshot.masterData?.length > 0 && snapshot.parsedUptimeFiles?.length > 0) {
+      return {
+        success: true,
+        hasData: true,
+        masterData: snapshot.masterData,
+        parsedUptimeFiles: snapshot.parsedUptimeFiles.map(f => ({ ...f, periode: normalizePeriode(f.periode) })),
+        lockedPeriodes: (snapshot.lockedPeriodes || []).map(normalizePeriode),
+        lastUpdated: snapshot.lastUpdated,
+        tickets: snapshot.followUpTickets || []
+      };
+    }
+  } catch (e) {}
+
+  // 3. Fallback LocalStorage
   try {
     const rawMaster = localStorage.getItem(LOCAL_STORAGE_KEYS.MASTER);
     const rawUptime = localStorage.getItem(LOCAL_STORAGE_KEYS.UPTIME);
@@ -421,10 +504,9 @@ export const fetchDashboardData = async (): Promise<DashboardDbData> => {
           const sample = await res.json();
           if (sample.rawMasterData && sample.rawUptimeFiles) {
             const defaultLocked = (sample.rawUptimeFiles as ParsedUptimeFile[]).map(f => f.periode);
-            localStorage.setItem(LOCAL_STORAGE_KEYS.MASTER, JSON.stringify(sample.rawMasterData));
-            localStorage.setItem(LOCAL_STORAGE_KEYS.UPTIME, JSON.stringify(sample.rawUptimeFiles));
-            localStorage.setItem(LOCAL_STORAGE_KEYS.LOCKED, JSON.stringify(defaultLocked));
-            localStorage.setItem(LOCAL_STORAGE_KEYS.LAST_SYNC, new Date().toISOString());
+            await saveCachedMasterData(sample.rawMasterData);
+            await saveCachedUptimeFiles(sample.rawUptimeFiles);
+            await saveCachedLockedPeriodes(defaultLocked);
 
             return {
               success: true,

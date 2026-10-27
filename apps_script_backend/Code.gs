@@ -496,7 +496,11 @@
     }
     var propId = PropertiesService.getScriptProperties().getProperty('SPREADSHEET_ID');
     if (propId && propId.trim() !== '') {
-      return SpreadsheetApp.openById(propId.trim());
+      try {
+        return SpreadsheetApp.openById(propId.trim());
+      } catch (e) {
+        console.warn('Gagal membuka spreadsheet dari SPREADSHEET_ID: ' + e);
+      }
     }
     try {
       var active = SpreadsheetApp.getActiveSpreadsheet();
@@ -504,7 +508,18 @@
     } catch (err) {
       // Standalone
     }
-    throw new Error('Spreadsheet Database belum dikonfigurasi. Harap setting SPREADSHEET_ID.');
+    // Auto-create spreadsheet jika belum ada agar upload data langsung berhasil tanpa error konfigurasi
+    try {
+      var ssName = 'Database Dashboard Downtime BCA';
+      var newSs = SpreadsheetApp.create(ssName);
+      var newId = newSs.getId();
+      PropertiesService.getScriptProperties().setProperty('SPREADSHEET_ID', newId);
+      initSpreadsheetDB(newSs);
+      initIncidentDb(newSs);
+      return newSs;
+    } catch (createErr) {
+      throw new Error('Spreadsheet Database belum dikonfigurasi. Harap setting SPREADSHEET_ID di Script Properties.');
+    }
   }
 
   /**
