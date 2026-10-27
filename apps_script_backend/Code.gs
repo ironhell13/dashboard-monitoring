@@ -169,19 +169,19 @@
    * lalu pilih fungsi ini dan klik Run.
    */
   function hubungkanSpreadsheetYangAda(optIdOrUrl) {
-    var input = optIdOrUrl || 'MASUKKAN_ID_ATAU_URL_SPREADSHEET_DISINI';
+    var input = optIdOrUrl || 'https://docs.google.com/spreadsheets/d/1rMqgZIJeSkDUrOfOzTq_m_n5s1nnxUACFDiJe75wYX4/edit?gid=454101069#gid=454101069';
     var id = String(input).trim();
     var match = id.match(/\/d\/([a-zA-Z0-9-_]+)/);
     if (match && match[1]) {
       id = match[1];
     }
-    if (!id || id === 'MASUKKAN_ID_ATAU_URL_SPREADSHEET_DISINI') {
+    if (!id || id === 'https://docs.google.com/spreadsheets/d/1rMqgZIJeSkDUrOfOzTq_m_n5s1nnxUACFDiJe75wYX4/edit?gid=454101069#gid=454101069') {
       try {
         var active = SpreadsheetApp.getActiveSpreadsheet();
         if (active) id = active.getId();
       } catch (e) {}
     }
-    if (!id || id === 'MASUKKAN_ID_ATAU_URL_SPREADSHEET_DISINI') {
+    if (!id || id === 'https://docs.google.com/spreadsheets/d/1rMqgZIJeSkDUrOfOzTq_m_n5s1nnxUACFDiJe75wYX4/edit?gid=454101069#gid=454101069') {
       throw new Error('Harap masukkan URL atau ID Google Spreadsheet yang valid!');
     }
 
