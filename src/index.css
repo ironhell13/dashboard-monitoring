@@ -1,0 +1,81 @@
+@import "tailwindcss";
+
+@layer base {
+  body {
+    @apply bg-slate-50 text-slate-800 antialiased;
+    font-family: 'Plus Jakarta Sans', 'Inter', system-ui, -apple-system, sans-serif;
+  }
+}
+
+/* Purity UI Organic Gradient Wave Backdrop */
+.purity-wave-banner {
+  background: linear-gradient(135deg, #4FD1C5 0%, #319795 100%);
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  overflow: hidden;
+}
+.wave-shape {
+  position: absolute;
+  width: 140%;
+  height: 280px;
+  left: -20%;
+  bottom: -60px;
+  background: radial-gradient(circle at 50% 120%, rgba(255, 255, 255, 0.18) 0%, rgba(255, 255, 255, 0) 70%);
+  border-radius: 50%;
+  pointer-events: none;
+}
+.wave-shape-2 {
+  position: absolute;
+  width: 100%;
+  height: 220px;
+  right: -10%;
+  top: -40px;
+  background: radial-gradient(circle at 80% 20%, rgba(255, 255, 255, 0.15) 0%, rgba(255, 255, 255, 0) 65%);
+  border-radius: 50%;
+  pointer-events: none;
+}
+
+@layer components {
+  .glass-card {
+    @apply bg-white border border-slate-100 shadow-[0px_3.5px_5.5px_rgba(0,0,0,0.02)] rounded-2xl;
+  }
+  
+  .glass-panel {
+    @apply bg-white border border-slate-100 shadow-[0px_3.5px_5.5px_rgba(0,0,0,0.02)] rounded-2xl text-slate-700;
+  }
+}
+
+/* Custom Scrollbar */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  @apply bg-slate-300 rounded-full;
+}
+::-webkit-scrollbar-thumb:hover {
+  @apply bg-slate-400;
+}
+
+/* Custom Floating Horizontal Scrollbar for Table */
+.floating-scrollbar::-webkit-scrollbar {
+  height: 12px;
+}
+.floating-scrollbar::-webkit-scrollbar-track {
+  background: rgba(15, 23, 42, 0.85);
+  border-radius: 9999px;
+}
+.floating-scrollbar::-webkit-scrollbar-thumb {
+  background: #2563eb;
+  border-radius: 9999px;
+  border: 2px solid rgba(15, 23, 42, 0.85);
+}
+.floating-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: #3b82f6;
+}
+

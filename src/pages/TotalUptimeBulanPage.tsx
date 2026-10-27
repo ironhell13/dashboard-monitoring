@@ -1,0 +1,467 @@
+import React, { useMemo } from 'react';
+import { useDataStore } from '../store/useDataStore';
+import { 
+  Activity, 
+  TrendingUp, 
+  Download, 
+  CheckCircle2, 
+  AlertTriangle, 
+  Layers,
+  ArrowUpRight,
+  ArrowDownRight
+} from 'lucide-react';
+import { 
+  ResponsiveContainer, 
+  LineChart, 
+  Line, 
+  BarChart, 
+  Bar, 
+  XAxis, 
+  YAxis, 
+  CartesianGrid, 
+  Tooltip, 
+  Legend, 
+  ReferenceLine 
+} from 'recharts';
+import { exportComprehensiveExcel, formatBulanTahun } from '../utils/comprehensiveExporter';
+
+const SLA_ATM = 99.00;
+const SLA_CRM = 98.50;
+
+export default function TotalUptimeBulanPage() {
+  const { 
+    globalTrendData, 
+    rawMasterData, 
+    rawUptimeFiles, 
+    machines, 
+    selectedPeriode 
+  } = useDataStore();
+
+  const handleExportAll = () => {
+    exportComprehensiveExcel({
+      masterData: rawMasterData,
+      parsedUptimeFiles: rawUptimeFiles,
+      machines,
+      selectedPeriode
+    });
+  };
+
+  // Format data untuk grafik Recharts
+  const chartData = useMemo(() => {
+    if (!globalTrendData || globalTrendData.length === 0) return [];
+    return [...globalTrendData]
+      .sort((a, b) => a.periode.localeCompare(b.periode))
+      .map(item => ({
+        periodeRaw: item.periode,
+        periodeLabel: formatBulanTahun(item.periode),
+        uptimeATM: item.uptimeATM > 0 ? Number(item.uptimeATM.toFixed(2)) : null,
+        uptimeCRM: item.uptimeCRM > 0 ? Number(item.uptimeCRM.toFixed(2)) : null,
+        mesinATM: item.jumlahMesinATM || 0,
+        mesinCRM: item.jumlahMesinCRM || 0,
+        totalMesin: (item.jumlahMesinATM || 0) + (item.jumlahMesinCRM || 0)
+      }));
+  }, [globalTrendData]);
+
+  // Statistik bulan terakhir
+  const latestMonth = chartData.length > 0 ? chartData[chartData.length - 1] : null;
+
+  // Hitung batas minimum sumbu Y agar grafik terlihat dinamis namun proporsional
+  const minUptime = useMemo(() => {
+    let min = 100;
+    chartData.forEach(d => {
+      if (d.uptimeATM && d.uptimeATM > 0) min = Math.min(min, d.uptimeATM);
+      if (d.uptimeCRM && d.uptimeCRM > 0) min = Math.min(min, d.uptimeCRM);
+    });
+    return Math.max(90, Math.floor(min - 0.5));
+  }, [chartData]);
+
+  return (
+    <div className="space-y-6 animate-fade-in">
+      {/* Header & Export Action */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div className="flex items-center gap-3">
+          <div className="w-12 h-12 rounded-2xl bg-gradient-to-tr from-blue-600 to-indigo-600 flex items-center justify-center text-white shadow-md shadow-blue-500/20">
+            <Activity size={26} />
+          </div>
+          <div>
+            <h1 className="text-2xl font-bold text-slate-800 tracking-tight">Total Uptime & Mesin (Abacus Jakarta)</h1>
+            <p className="text-sm text-slate-500">Perhitungan performa terpisah antara mesin ATM dan CRM dengan grafik tren bulanan</p>
+          </div>
+        </div>
+
+        <button
+          onClick={handleExportAll}
+          className="inline-flex items-center gap-2 px-4 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-sm font-semibold transition-all shadow-sm hover:shadow-emerald-600/20 active:scale-95 cursor-pointer self-start sm:self-auto"
+        >
+          <Download size={18} />
+          <span>Export Laporan Lengkap (.xlsx)</span>
+        </button>
+      </div>
+
+      {/* KPI Cards: Separated ATM & CRM Performance */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
+        {/* ATM SLA Card */}
+        <div className="bg-white rounded-2xl p-5 border border-slate-200/80 shadow-sm relative overflow-hidden group hover:border-blue-300 transition-all">
+          <div className="absolute top-0 right-0 w-24 h-24 bg-blue-50 rounded-full -mr-8 -mt-8 transition-transform group-hover:scale-110" />
+          <div className="relative">
+            <div className="flex items-center justify-between mb-3">
+              <span className="text-xs font-bold tracking-wider text-blue-600 uppercase bg-blue-50 px-2.5 py-1 rounded-lg">
+                Mesin ATM BCA
+              </span>
+              <span className="text-xs text-slate-400 font-medium">
+                {latestMonth ? latestMonth.periodeLabel : '-'}
+              </span>
+            </div>
+            
+            <div className="flex items-baseline gap-2 mb-2">
+              <span className="text-3xl font-extrabold text-slate-800">
+                {latestMonth?.uptimeATM ? `${latestMonth.uptimeATM.toFixed(2)}%` : '-'}
+              </span>
+              <span className="text-xs font-semibold text-slate-500">
+                Target: {SLA_ATM}%
+              </span>
+            </div>
+
+            <div className="flex items-center justify-between pt-2 border-t border-slate-100">
+              <div className="flex items-center gap-1.5">
+                {latestMonth && latestMonth.uptimeATM !== null ? (
+                  latestMonth.uptimeATM >= SLA_ATM ? (
+                    <span className="inline-flex items-center gap-1 text-xs font-bold text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-full">
+                      <CheckCircle2 size={13} />
+                      ACHIEVED (+{(latestMonth.uptimeATM - SLA_ATM).toFixed(2)}%)
+                    </span>
+                  ) : (
+                    <span className="inline-flex items-center gap-1 text-xs font-bold text-rose-600 bg-rose-50 px-2 py-0.5 rounded-full">
+                      <AlertTriangle size={13} />
+                      NOT ACHIEVED ({(latestMonth.uptimeATM - SLA_ATM).toFixed(2)}%)
+                    </span>
+                  )
+                ) : (
+                  <span className="text-xs text-slate-400">-</span>
+                )}
+              </div>
+              <span className="text-xs font-medium text-slate-500">
+                Populasi: <strong className="text-slate-700">{latestMonth?.mesinATM?.toLocaleString() || 0}</strong> mesin
+              </span>
+            </div>
+          </div>
+        </div>
+
+        {/* CRM SLA Card */}
+        <div className="bg-white rounded-2xl p-5 border border-slate-200/80 shadow-sm relative overflow-hidden group hover:border-emerald-300 transition-all">
+          <div className="absolute top-0 right-0 w-24 h-24 bg-emerald-50 rounded-full -mr-8 -mt-8 transition-transform group-hover:scale-110" />
+          <div className="relative">
+            <div className="flex items-center justify-between mb-3">
+              <span className="text-xs font-bold tracking-wider text-emerald-600 uppercase bg-emerald-50 px-2.5 py-1 rounded-lg">
+                Mesin CRM / ATS BCA
+              </span>
+              <span className="text-xs text-slate-400 font-medium">
+                {latestMonth ? latestMonth.periodeLabel : '-'}
+              </span>
+            </div>
+            
+            <div className="flex items-baseline gap-2 mb-2">
+              <span className="text-3xl font-extrabold text-slate-800">
+                {latestMonth?.uptimeCRM ? `${latestMonth.uptimeCRM.toFixed(2)}%` : '-'}
+              </span>
+              <span className="text-xs font-semibold text-slate-500">
+                Target: {SLA_CRM}%
+              </span>
+            </div>
+
+            <div className="flex items-center justify-between pt-2 border-t border-slate-100">
+              <div className="flex items-center gap-1.5">
+                {latestMonth && latestMonth.uptimeCRM !== null ? (
+                  latestMonth.uptimeCRM >= SLA_CRM ? (
+                    <span className="inline-flex items-center gap-1 text-xs font-bold text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-full">
+                      <CheckCircle2 size={13} />
+                      ACHIEVED (+{(latestMonth.uptimeCRM - SLA_CRM).toFixed(2)}%)
+                    </span>
+                  ) : (
+                    <span className="inline-flex items-center gap-1 text-xs font-bold text-rose-600 bg-rose-50 px-2 py-0.5 rounded-full">
+                      <AlertTriangle size={13} />
+                      NOT ACHIEVED ({(latestMonth.uptimeCRM - SLA_CRM).toFixed(2)}%)
+                    </span>
+                  )
+                ) : (
+                  <span className="text-xs text-slate-400">-</span>
+                )}
+              </div>
+              <span className="text-xs font-medium text-slate-500">
+                Populasi: <strong className="text-slate-700">{latestMonth?.mesinCRM?.toLocaleString() || 0}</strong> mesin
+              </span>
+            </div>
+          </div>
+        </div>
+
+        {/* Total Active Machines Card */}
+        <div className="bg-white rounded-2xl p-5 border border-slate-200/80 shadow-sm relative overflow-hidden group hover:border-indigo-300 transition-all">
+          <div className="absolute top-0 right-0 w-24 h-24 bg-indigo-50 rounded-full -mr-8 -mt-8 transition-transform group-hover:scale-110" />
+          <div className="relative">
+            <div className="flex items-center justify-between mb-3">
+              <span className="text-xs font-bold tracking-wider text-indigo-600 uppercase bg-indigo-50 px-2.5 py-1 rounded-lg">
+                Total Populasi Mesin
+              </span>
+              <span className="text-xs text-slate-400 font-medium">Abacus Jakarta</span>
+            </div>
+            
+            <div className="flex items-baseline gap-2 mb-2">
+              <span className="text-3xl font-extrabold text-slate-800">
+                {latestMonth?.totalMesin?.toLocaleString() || 0}
+              </span>
+              <span className="text-xs font-semibold text-slate-500">
+                Mesin Aktif
+              </span>
+            </div>
+
+            <div className="flex items-center justify-between pt-2 border-t border-slate-100 text-xs text-slate-500">
+              <span>ATM: <strong className="text-blue-600">{latestMonth?.mesinATM || 0}</strong></span>
+              <span>CRM: <strong className="text-emerald-600">{latestMonth?.mesinCRM || 0}</strong></span>
+              <span>Periode: <strong className="text-slate-700">{chartData.length} Bulan</strong></span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Visual Monthly Charts Section */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        {/* Chart 1: Uptime Trend (ATM vs CRM with SLA Reference Lines) */}
+        <div className="bg-white rounded-2xl p-6 border border-slate-200 shadow-sm">
+          <div className="flex items-center justify-between mb-4">
+            <div>
+              <h2 className="text-base font-bold text-slate-800 flex items-center gap-2">
+                <TrendingUp size={18} className="text-blue-600" />
+                Grafik Tren Uptime Bulanan (ATM vs CRM)
+              </h2>
+              <p className="text-xs text-slate-500">Garis putus-putus menunjukkan standar Target SLA (ATM 99.00%, CRM 98.50%)</p>
+            </div>
+          </div>
+
+          <div className="h-72 w-full">
+            {chartData.length === 0 ? (
+              <div className="h-full flex items-center justify-center text-slate-400 text-sm">
+                Belum ada data bulanan untuk grafik
+              </div>
+            ) : (
+              <ResponsiveContainer width="100%" height="100%">
+                <LineChart data={chartData} margin={{ top: 15, right: 25, left: -10, bottom: 5 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
+                  <XAxis 
+                    dataKey="periodeLabel" 
+                    tick={{ fontSize: 11, fill: '#64748b' }}
+                  />
+                  <YAxis 
+                    domain={[minUptime, 100]} 
+                    tick={{ fontSize: 11, fill: '#64748b' }}
+                    tickFormatter={(v) => `${v}%`}
+                  />
+                  <Tooltip 
+                    contentStyle={{ 
+                      backgroundColor: 'rgba(255, 255, 255, 0.96)', 
+                      borderRadius: '12px', 
+                      boxShadow: '0 4px 20px rgba(0,0,0,0.08)',
+                      borderColor: '#e2e8f0',
+                      fontSize: '12px'
+                    }}
+                    formatter={(val: any, name: any) => {
+                      if (val === null) return ['-', name];
+                      const num = Number(val);
+                      if (name === 'Uptime ATM (%)') {
+                        const gap = num - SLA_ATM;
+                        return [`${num.toFixed(2)}% (${gap >= 0 ? '+' : ''}${gap.toFixed(2)}% vs SLA)`, name];
+                      }
+                      if (name === 'Uptime CRM (%)') {
+                        const gap = num - SLA_CRM;
+                        return [`${num.toFixed(2)}% (${gap >= 0 ? '+' : ''}${gap.toFixed(2)}% vs SLA)`, name];
+                      }
+                      return [`${num.toFixed(2)}%`, name];
+                    }}
+                  />
+                  <Legend wrapperStyle={{ fontSize: '12px', paddingTop: '10px' }} />
+                  <ReferenceLine 
+                    y={SLA_ATM} 
+                    stroke="#dc2626" 
+                    strokeDasharray="4 4" 
+                    label={{ value: 'SLA ATM 99.00%', position: 'top', fill: '#dc2626', fontSize: 10 }}
+                  />
+                  <ReferenceLine 
+                    y={SLA_CRM} 
+                    stroke="#f59e0b" 
+                    strokeDasharray="4 4" 
+                    label={{ value: 'SLA CRM 98.50%', position: 'bottom', fill: '#d97706', fontSize: 10 }}
+                  />
+                  <Line 
+                    type="monotone" 
+                    dataKey="uptimeATM" 
+                    name="Uptime ATM (%)" 
+                    stroke="#2563eb" 
+                    strokeWidth={3} 
+                    dot={{ r: 4, fill: '#2563eb' }}
+                    activeDot={{ r: 6 }}
+                    connectNulls
+                  />
+                  <Line 
+                    type="monotone" 
+                    dataKey="uptimeCRM" 
+                    name="Uptime CRM (%)" 
+                    stroke="#10b981" 
+                    strokeWidth={3} 
+                    dot={{ r: 4, fill: '#10b981' }}
+                    activeDot={{ r: 6 }}
+                    connectNulls
+                  />
+                </LineChart>
+              </ResponsiveContainer>
+            )}
+          </div>
+        </div>
+
+        {/* Chart 2: Machine Population Growth */}
+        <div className="bg-white rounded-2xl p-6 border border-slate-200 shadow-sm">
+          <div className="flex items-center justify-between mb-4">
+            <div>
+              <h2 className="text-base font-bold text-slate-800 flex items-center gap-2">
+                <Layers size={18} className="text-indigo-600" />
+                Grafik Pertumbuhan Populasi Mesin (ATM vs CRM)
+              </h2>
+              <p className="text-xs text-slate-500">Perkembangan jumlah mesin ATM dan CRM yang aktif beroperasi per periode</p>
+            </div>
+          </div>
+
+          <div className="h-72 w-full">
+            {chartData.length === 0 ? (
+              <div className="h-full flex items-center justify-center text-slate-400 text-sm">
+                Belum ada data populasi untuk grafik
+              </div>
+            ) : (
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={chartData} margin={{ top: 15, right: 25, left: -10, bottom: 5 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
+                  <XAxis 
+                    dataKey="periodeLabel" 
+                    tick={{ fontSize: 11, fill: '#64748b' }}
+                  />
+                  <YAxis 
+                    tick={{ fontSize: 11, fill: '#64748b' }}
+                  />
+                  <Tooltip 
+                    contentStyle={{ 
+                      backgroundColor: 'rgba(255, 255, 255, 0.96)', 
+                      borderRadius: '12px', 
+                      boxShadow: '0 4px 20px rgba(0,0,0,0.08)',
+                      borderColor: '#e2e8f0',
+                      fontSize: '12px'
+                    }}
+                    formatter={(val: any, name: any) => [`${Number(val).toLocaleString()} Mesin`, name]}
+                  />
+                  <Legend wrapperStyle={{ fontSize: '12px', paddingTop: '10px' }} />
+                  <Bar 
+                    dataKey="mesinATM" 
+                    name="Mesin ATM" 
+                    fill="#3b82f6" 
+                    radius={[6, 6, 0, 0]} 
+                  />
+                  <Bar 
+                    dataKey="mesinCRM" 
+                    name="Mesin CRM / ATS" 
+                    fill="#10b981" 
+                    radius={[6, 6, 0, 0]} 
+                  />
+                </BarChart>
+              </ResponsiveContainer>
+            )}
+          </div>
+        </div>
+      </div>
+
+      {/* Detailed Monthly Performance Table */}
+      <div className="bg-white rounded-2xl overflow-hidden shadow-sm border border-slate-200">
+        <div className="p-5 border-b border-slate-100 flex items-center justify-between">
+          <div>
+            <h3 className="font-bold text-slate-800 text-base">Tabel Rekapitulasi Performa Bulanan</h3>
+            <p className="text-xs text-slate-500">Perbandingan detail performa Uptime dan kepatuhan SLA BCA per bulan</p>
+          </div>
+          <span className="text-xs text-slate-400 font-medium">Total: {chartData.length} Bulan</span>
+        </div>
+
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm text-left">
+            <thead className="bg-slate-50/80 text-slate-600 font-semibold border-b border-slate-200">
+              <tr>
+                <th className="px-5 py-3.5">Periode Bulan</th>
+                <th className="px-5 py-3.5 text-center">Populasi ATM</th>
+                <th className="px-5 py-3.5 text-center">Uptime ATM (%)</th>
+                <th className="px-5 py-3.5 text-center">Status SLA ATM</th>
+                <th className="px-5 py-3.5 text-center">Populasi CRM</th>
+                <th className="px-5 py-3.5 text-center">Uptime CRM (%)</th>
+                <th className="px-5 py-3.5 text-center">Status SLA CRM</th>
+                <th className="px-5 py-3.5 text-center font-bold text-slate-700">Total Mesin</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-100">
+              {chartData.length === 0 ? (
+                <tr>
+                  <td colSpan={8} className="px-6 py-12 text-center text-slate-400">
+                    Tidak ada data bulanan yang tersedia.
+                  </td>
+                </tr>
+              ) : (
+                chartData.map((data) => {
+                  const atmAchieved = data.uptimeATM !== null && data.uptimeATM >= SLA_ATM;
+                  const crmAchieved = data.uptimeCRM !== null && data.uptimeCRM >= SLA_CRM;
+
+                  return (
+                    <tr key={data.periodeRaw} className="hover:bg-slate-50/60 transition-colors">
+                      <td className="px-5 py-3.5 font-semibold text-slate-800">{data.periodeLabel}</td>
+                      
+                      {/* ATM Info */}
+                      <td className="px-5 py-3.5 text-center text-slate-600">
+                        {data.mesinATM.toLocaleString()}
+                      </td>
+                      <td className="px-5 py-3.5 text-center font-bold text-blue-600">
+                        {data.uptimeATM !== null ? `${data.uptimeATM.toFixed(2)}%` : '-'}
+                      </td>
+                      <td className="px-5 py-3.5 text-center">
+                        {data.uptimeATM !== null ? (
+                          <span className={`inline-flex items-center gap-1 text-xs font-semibold px-2.5 py-1 rounded-full ${
+                            atmAchieved ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' : 'bg-rose-50 text-rose-700 border border-rose-200'
+                          }`}>
+                            {atmAchieved ? <CheckCircle2 size={12} /> : <AlertTriangle size={12} />}
+                            {atmAchieved ? 'ACHIEVED' : 'NOT ACHIEVED'}
+                          </span>
+                        ) : '-'}
+                      </td>
+
+                      {/* CRM Info */}
+                      <td className="px-5 py-3.5 text-center text-slate-600">
+                        {data.mesinCRM.toLocaleString()}
+                      </td>
+                      <td className="px-5 py-3.5 text-center font-bold text-emerald-600">
+                        {data.uptimeCRM !== null ? `${data.uptimeCRM.toFixed(2)}%` : '-'}
+                      </td>
+                      <td className="px-5 py-3.5 text-center">
+                        {data.uptimeCRM !== null ? (
+                          <span className={`inline-flex items-center gap-1 text-xs font-semibold px-2.5 py-1 rounded-full ${
+                            crmAchieved ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' : 'bg-rose-50 text-rose-700 border border-rose-200'
+                          }`}>
+                            {crmAchieved ? <CheckCircle2 size={12} /> : <AlertTriangle size={12} />}
+                            {crmAchieved ? 'ACHIEVED' : 'NOT ACHIEVED'}
+                          </span>
+                        ) : '-'}
+                      </td>
+
+                      {/* Total */}
+                      <td className="px-5 py-3.5 text-center font-bold text-slate-800">
+                        {data.totalMesin.toLocaleString()}
+                      </td>
+                    </tr>
+                  );
+                })
+              )}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  );
+}
