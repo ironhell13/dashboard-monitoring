@@ -16,8 +16,6 @@ import {
 } from 'lucide-react';
 import FilterBar from './FilterBar';
 import { useDataStore } from '../store/useDataStore';
-import { BackendConfigModal } from './BackendConfigModal';
-import { isBackendConfigured } from '../utils/apiClient';
 
 interface LayoutProps {
   onLogout?: () => void;
@@ -28,8 +26,6 @@ export default function Layout({ onLogout, userRole }: LayoutProps) {
   const location = useLocation();
   const { machines } = useDataStore();
   const effectiveRole = userRole || (sessionStorage.getItem('USER_ROLE') as any) || 'KAOPS';
-  const [isBackendModalOpen, setIsBackendModalOpen] = useState(false);
-  const [backendActive, setBackendActive] = useState(() => isBackendConfigured());
 
   // Persist sidebar collapsed preference in localStorage
   const [isCollapsed, setIsCollapsed] = useState<boolean>(() => {
@@ -319,21 +315,6 @@ export default function Layout({ onLogout, userRole }: LayoutProps) {
           <div className="flex-1 min-w-0">
             <FilterBar />
           </div>
-
-          {/* Tombol Status Koneksi Backend Google Apps Script */}
-          <button
-            type="button"
-            onClick={() => setIsBackendModalOpen(true)}
-            className={`px-3 py-2 rounded-2xl border text-xs font-semibold flex items-center gap-2 cursor-pointer transition-all shadow-xs shrink-0 ${
-              backendActive
-                ? 'bg-emerald-50 hover:bg-emerald-100/80 border-emerald-300 text-emerald-800'
-                : 'bg-amber-50 hover:bg-amber-100/80 border-amber-300 text-amber-800'
-            }`}
-            title="Pengaturan Koneksi Backend Google Apps Script"
-          >
-            <span className={`w-2.5 h-2.5 rounded-full ${backendActive ? 'bg-emerald-500 animate-pulse' : 'bg-amber-500'}`} />
-            <span className="hidden md:inline">{backendActive ? 'GAS Connected' : 'Hubungkan Backend'}</span>
-          </button>
         </header>
 
         {/* Scrollable Page Content */}
@@ -348,16 +329,6 @@ export default function Layout({ onLogout, userRole }: LayoutProps) {
           </footer>
         </div>
       </main>
-
-      {/* Modal Pengaturan Backend API */}
-      <BackendConfigModal
-        isOpen={isBackendModalOpen}
-        onClose={() => setIsBackendModalOpen(false)}
-        onSaved={() => {
-          setBackendActive(isBackendConfigured());
-          window.location.reload();
-        }}
-      />
     </div>
   );
 }
