@@ -2927,11 +2927,13 @@
         }
 
         if (lastRow > 1) {
-          // ⚡ EFISIENSI TINGGI: Hanya baca Kolom 1 (Incident_Key) dan Kolom 2 (Incident_Number)
-          // Menghemat memori RAM 95% (< 2MB untuk 92.000+ baris), eksekusi instan ~0.3 detik!
-          var keyIndexData = incSheet.getRange(2, 1, lastRow - 1, 2).getValues();
+          // ⚡ EFISIENSI TINGGI: Baca 15.000 baris terbaru untuk deteksi duplikat harian/mingguan (~0.8 detik)
+          // dan DB_ACTIVE_OPEN untuk 100% insiden OPEN lintas seluruh baris (1 s/d 92.000+)
+          var scanRows = Math.min(lastRow - 1, 15000);
+          var startScanRow = lastRow - scanRows + 1;
+          var keyIndexData = incSheet.getRange(startScanRow, 1, scanRows, 2).getValues();
           for (var k = 0; k < keyIndexData.length; k++) {
-            var rNum = k + 2;
+            var rNum = startScanRow + k;
             var kVal = String(keyIndexData[k][0] || '').trim();
             var exIncNum = String(keyIndexData[k][1] || '').trim();
             if (kVal) {

@@ -100,18 +100,33 @@ export async function apiPost<T = any>(action: string, body: Record<string, any>
     ...body
   });
 
-  const res = await fetch(baseUrl, {
-    method: 'POST',
-    redirect: 'follow',
-    headers: {
-      'Content-Type': 'text/plain;charset=utf-8'
-    },
-    body: payload
-  });
+  let lastErr: any = null;
+  const maxRetries = 2;
 
-  if (!res.ok) {
-    throw new Error(`HTTP error ${res.status}: ${res.statusText}`);
+  for (let attempt = 0; attempt <= maxRetries; attempt++) {
+    try {
+      const res = await fetch(baseUrl, {
+        method: 'POST',
+        redirect: 'follow',
+        headers: {
+          'Content-Type': 'text/plain;charset=utf-8'
+        },
+        body: payload
+      });
+
+      if (!res.ok) {
+        throw new Error(`HTTP error ${res.status}: ${res.statusText}`);
+      }
+
+      return await res.json();
+    } catch (err: any) {
+      lastErr = err;
+      console.warn(`apiPost attempt ${attempt + 1} failed for action "${action}":`, err);
+      if (attempt < maxRetries) {
+        await new Promise((resolve) => setTimeout(resolve, 1000 * (attempt + 1)));
+      }
+    }
   }
 
-  return await res.json();
+  throw lastErr;
 }

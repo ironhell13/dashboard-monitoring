@@ -3870,7 +3870,7 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
       setActiveTab('OPEN');
       setIsUploadModalOpen(false);
 
-      const chunkSize = 1000;
+      const chunkSize = 2000;
       const totalChunks = Math.ceil(parsed.rows.length / chunkSize) || 1;
       let aggStats = {
         totalLines: parsed.totalRawLines,
@@ -3905,6 +3905,10 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
           aggStats.newCount += res.stats.newCount || 0;
           aggStats.updatedCount += res.stats.updatedCount || 0;
           aggStats.unchangedCount += res.stats.unchangedCount || 0;
+        }
+
+        if (i < totalChunks - 1) {
+          await new Promise((r) => setTimeout(r, 300));
         }
       }
 
