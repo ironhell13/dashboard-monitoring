@@ -17,6 +17,7 @@ import { parseMasterData, parseUptimeFile, type MasterRow, type ParsedUptimeFile
 import { matchData } from '../utils/dataMatcher';
 import { useDataStore } from '../store/useDataStore';
 import { saveMasterData, saveUptimePeriod, unlockPeriode, isGasEnvironment } from '../utils/spreadsheetService';
+import { isBackendConfigured } from '../utils/apiClient';
 import { saveDashboardSnapshot } from '../utils/dbCache';
 import { formatBulanTahun, normalizePeriode } from '../utils/comprehensiveExporter';
 
@@ -79,6 +80,46 @@ export default function UploadPage() {
       alert("Error membuka kunci: " + (e?.message || String(e)));
     } finally {
       setUnlockingPeriode(null);
+    }
+  };
+
+  const handleSyncCachedToBackend = async () => {
+    if (!hasExistingMaster && !hasExistingUptime) return;
+    setIsProcessing(true);
+    setError(null);
+    setStatusMessage("Menghubungkan ke Spreadsheet Backend...");
+    setProgress(10);
+
+    try {
+      if (hasExistingMaster && rawMasterData && rawMasterData.length > 0) {
+        setStatusMessage(`Menyimpan Master Data (${rawMasterData.length} mesin) ke Google Spreadsheet...`);
+        const mRes = await saveMasterData(rawMasterData);
+        if (!mRes.success) throw new Error(mRes.message || mRes.error || "Gagal menyimpan Master Data");
+        setProgress(45);
+      }
+
+      if (hasExistingUptime && rawUptimeFiles && rawUptimeFiles.length > 0) {
+        const total = rawUptimeFiles.length;
+        for (let i = 0; i < total; i++) {
+          const file = rawUptimeFiles[i];
+          const label = formatMonthPeriode(file.periode);
+          setStatusMessage(`Menyimpan Uptime ${label} (${i + 1}/${total}) ke Google Spreadsheet...`);
+          const uRes = await saveUptimePeriod(file, true);
+          if (!uRes.success) throw new Error(uRes.message || uRes.error || `Gagal menyimpan Uptime ${label}`);
+          setProgress(45 + Math.floor(((i + 1) / total) * 50));
+        }
+      }
+
+      setProgress(100);
+      setStatusMessage("✅ Berhasil! Seluruh Master Data & Uptime berhasil disimpan ke Spreadsheet Backend!");
+      setTimeout(() => {
+        setIsProcessing(false);
+        setStatusMessage(null);
+        window.location.reload();
+      }, 1500);
+    } catch (err: any) {
+      setError(err?.message || String(err));
+      setIsProcessing(false);
     }
   };
 
@@ -237,8 +278,8 @@ export default function UploadPage() {
           )}
 
           <div className="inline-flex items-center gap-2 px-3 py-1 bg-slate-100/80 border border-slate-200 rounded-full text-xs text-slate-600 font-medium">
-            <Database size={14} className={isGasEnvironment() ? "text-emerald-500" : "text-blue-500"} />
-            <span>{isGasEnvironment() ? "Tersambung ke Google Spreadsheet" : "Database Mode Lokal (Tersimpan)"}</span>
+            <Database size={14} className={(isGasEnvironment() || isBackendConfigured()) ? "text-emerald-500" : "text-amber-500"} />
+            <span>{(isGasEnvironment() || isBackendConfigured()) ? "Tersambung ke Google Spreadsheet Backend" : "Database Mode Lokal (Tersimpan)"}</span>
           </div>
         </div>
 
@@ -248,6 +289,46 @@ export default function UploadPage() {
             Data tersimpan permanen di Google Spreadsheet. Master Data dapat diupdate kapan saja, dan data uptime bulanan yang sudah masuk otomatis dikunci agar tidak tertimpa.
           </p>
         </div>
+
+        {/* Sync Cache to Backend Banner */}
+        {hasExistingData && (isGasEnvironment() || isBackendConfigured()) && (
+          <div className="mb-6 p-4 bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-200 rounded-2xl flex flex-col md:flex-row items-start md:items-center justify-between gap-4 shadow-xs">
+            <div className="flex items-start gap-3">
+              <div className="p-2.5 bg-blue-600 rounded-xl text-white mt-0.5 shadow-sm">
+                <UploadCloud size={20} />
+              </div>
+              <div>
+                <h4 className="text-sm font-bold text-slate-800 flex items-center gap-2">
+                  <span>Data Aktif di Browser:</span>
+                  <span className="text-xs font-semibold text-blue-700 bg-blue-100 px-2 py-0.5 rounded-full">
+                    {rawMasterData?.length || 0} Mesin &bull; {rawUptimeFiles?.length || 0} Bulan Uptime
+                  </span>
+                </h4>
+                <p className="text-xs text-slate-600 mt-1 max-w-xl">
+                  Data yang Anda upload sebelumnya saat ini berada di memori browser. Klik tombol di samping untuk langsung <strong>menyimpan data ini ke Spreadsheet Backend</strong> ("Backend API Monitoring BCA") tanpa perlu upload ulang file!
+                </p>
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={handleSyncCachedToBackend}
+              disabled={isProcessing}
+              className="px-4 py-2.5 bg-blue-600 hover:bg-blue-700 active:scale-95 text-white text-xs font-bold rounded-xl shadow-md hover:shadow-lg transition-all flex items-center gap-2 whitespace-nowrap cursor-pointer disabled:opacity-50 flex-shrink-0"
+            >
+              {isProcessing ? (
+                <>
+                  <Loader2 size={16} className="animate-spin" />
+                  <span>Menyimpan ke Spreadsheet...</span>
+                </>
+              ) : (
+                <>
+                  <UploadCloud size={16} />
+                  <span>⚡ Kirim ke Spreadsheet Sekarang</span>
+                </>
+              )}
+            </button>
+          </div>
+        )}
 
         {/* Locked Periods Status Banner */}
         {lockedPeriodes && lockedPeriodes.length > 0 && (
