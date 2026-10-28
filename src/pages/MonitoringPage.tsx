@@ -3897,7 +3897,11 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
           rows: chunk
         });
 
-        if (res.success && res.stats) {
+        if (!res.success) {
+          throw new Error(res.message || `Gagal memproses batch ${i + 1}`);
+        }
+
+        if (res.stats) {
           aggStats.newCount += res.stats.newCount || 0;
           aggStats.updatedCount += res.stats.updatedCount || 0;
           aggStats.unchangedCount += res.stats.unchangedCount || 0;

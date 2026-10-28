@@ -83,6 +83,10 @@
         return checkSpreadsheetStatus(params.spreadsheetId);
       case 'getIncidentDbId':
         return getIncidentDbId();
+      case 'pangkasBarisKosongBerlebih':
+        return pangkasBarisKosongBerlebih();
+      case 'diagnoseDailyDb':
+        return diagnoseDailyDb();
       case 'ping':
         return { success: true, timestamp: Date.now(), message: 'Pong - Google Apps Script Online' };
       default:
@@ -931,6 +935,7 @@
       }
 
       if (masterRows.length > 0) {
+        ensureSheetCapacity(masterSheet, masterRows.length + 1);
         masterSheet.getRange(2, 1, masterRows.length, headers.length).setValues(masterRows);
       }
 
@@ -1150,10 +1155,12 @@
             if (uFiltered[k].length > targetCols) uFiltered[k] = uFiltered[k].slice(0, targetCols);
           }
 
+          ensureSheetCapacity(uptimeSheet, uFiltered.length);
           uptimeSheet.clearContents();
           uptimeSheet.getRange(1, 1, uFiltered.length, targetCols).setValues(uFiltered);
         } else {
           var startRow = uptimeSheet.getLastRow() + 1;
+          ensureSheetCapacity(uptimeSheet, startRow + uptimeRows.length - 1);
           uptimeSheet.getRange(startRow, 1, uptimeRows.length, uptimeRows[0].length).setValues(uptimeRows);
         }
       }
@@ -2533,6 +2540,88 @@
     }
   }
 
+  /**
+   * Memastikan kapasitas baris di sheet mencukupi sebelum setValues()
+   * Otomatis menambah baris jika kurang, sehingga user TIDAK PERLU klik 'Add rows' manual!
+   */
+  function ensureSheetCapacity(sheet, neededRow) {
+    if (!sheet) return;
+    var maxR = sheet.getMaxRows();
+    if (neededRow > maxR) {
+      var toAdd = (neededRow - maxR) + 200; // Tambah secukupnya + buffer 200 baris
+      sheet.insertRowsAfter(maxR, toAdd);
+    }
+  }
+
+  /**
+   * Pangkas baris-baris kosong berlebih di spreadsheet Daily Incident
+   * agar spreadsheet tetap ringan dan terbebas dari limit 10 juta sel Google
+   */
+  function pangkasBarisKosongBerlebih() {
+    try {
+      var ss = getIncidentDbSpreadsheet();
+      var sheets = ss.getSheets();
+      var report = [];
+      for (var i = 0; i < sheets.length; i++) {
+        var sh = sheets[i];
+        var sName = sh.getName();
+        var maxR = sh.getMaxRows();
+        var lastR = sh.getLastRow();
+        // Sisakan buffer aman 50 baris di bawah baris data terakhir
+        var safeTarget = Math.max(lastR + 50, 100);
+        if (maxR > safeTarget) {
+          var rowsToDelete = maxR - safeTarget;
+          sh.deleteRows(safeTarget + 1, rowsToDelete);
+          report.push(sName + ': Dihapus ' + rowsToDelete + ' baris kosong (Sisa baris: ' + sh.getMaxRows() + ')');
+        } else {
+          report.push(sName + ': Normal (' + maxR + ' baris, data sampai baris ' + lastR + ')');
+        }
+      }
+      Logger.log('=== HASIL PANGKAS BARIS KOSONG ===');
+      report.forEach(function(r) { Logger.log(r); });
+      return { success: true, message: 'Berhasil memangkas baris kosong berlebih.', report: report };
+    } catch (err) {
+      Logger.log('Gagal pangkas baris: ' + err.toString());
+      return { success: false, error: err.toString() };
+    }
+  }
+
+  /**
+   * Diagnostik status sel dan baris pada Spreadsheet Daily
+   */
+  function diagnoseDailyDb() {
+    try {
+      var ss = getIncidentDbSpreadsheet();
+      var sheets = ss.getSheets();
+      var list = [];
+      var totalCells = 0;
+      for (var i = 0; i < sheets.length; i++) {
+        var sh = sheets[i];
+        var mr = sh.getMaxRows();
+        var mc = sh.getMaxColumns();
+        var lr = sh.getLastRow();
+        var cells = mr * mc;
+        totalCells += cells;
+        list.push({
+          name: sh.getName(),
+          lastRow: lr,
+          maxRows: mr,
+          maxColumns: mc,
+          cells: cells
+        });
+      }
+      return {
+        success: true,
+        totalCells: totalCells,
+        maxLimit: 10000000,
+        percentUsed: ((totalCells / 10000000) * 100).toFixed(2) + '%',
+        sheets: list
+      };
+    } catch (err) {
+      return { success: false, error: err.toString() };
+    }
+  }
+
   function formatSheetHeader(sheet, headers) {
     sheet.getRange(1, 1, 1, headers.length).setValues([headers]);
     var hr = sheet.getRange(1, 1, 1, headers.length);
@@ -3024,18 +3113,21 @@
 
         // BATCH UPDATE BARIS EKSISTING DENGAN 1 PEMANGGILAN ATOMIK
         if (hasModifiedExisting && fullData.length > 0) {
+          ensureSheetCapacity(incSheet, fullData.length + 1);
           incSheet.getRange(2, 1, fullData.length, 26).setValues(fullData);
         }
 
         // BATCH APPEND BARIS BARU DENGAN 1 PEMANGGILAN ATOMIK
         if (rowsToAppend.length > 0) {
           var startAppendRow = incSheet.getLastRow() + 1;
+          ensureSheetCapacity(incSheet, startAppendRow + rowsToAppend.length - 1);
           incSheet.getRange(startAppendRow, 1, rowsToAppend.length, 26).setValues(rowsToAppend);
         }
 
         // BATCH APPEND LOG TINDAKAN DENGAN 1 PEMANGGILAN ATOMIK
         if (actionLogsToAppend.length > 0) {
           var startActRow = actSheet.getLastRow() + 1;
+          ensureSheetCapacity(actSheet, startActRow + actionLogsToAppend.length - 1);
           actSheet.getRange(startActRow, 1, actionLogsToAppend.length, 11).setValues(actionLogsToAppend);
         }
       }
@@ -3689,6 +3781,7 @@
       openSheet.getRange(2, 1, curLastRow - 1, curLastCol).clearContent();
     }
     if (openRows.length > 0) {
+      ensureSheetCapacity(openSheet, openRows.length + 1);
       openSheet.getRange(2, 1, openRows.length, headers.length).setValues(openRows);
     }
 

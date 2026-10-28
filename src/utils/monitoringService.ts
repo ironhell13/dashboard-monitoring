@@ -641,7 +641,11 @@ export const uploadIncidentChunkApi = async (payload: {
         return res;
       }
     } catch (err: any) {
-      console.warn('API uploadIncidentChunk failed, falling back to local:', err);
+      console.error('API uploadIncidentChunk failed:', err);
+      return {
+        success: false,
+        message: 'Gagal mengirim data ke database server: ' + (err.message || String(err))
+      };
     }
   }
 
