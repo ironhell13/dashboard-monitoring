@@ -3,6 +3,8 @@
  * Dilengkapi fallback cerdas, pencegahan CORS preflight, dan dukungan custom API URL.
  */
 
+export const DEFAULT_GAS_API_URL = 'https://script.google.com/macros/s/AKfycbxNfS0X4VcyuZ8fLR8MTPC0IbkliMKakBWKrIZJhejovMNFGG1KKHK1beeeCxusufpx/exec';
+
 const STORAGE_CUSTOM_URL_KEY = 'CUSTOM_GAS_API_URL';
 
 /**
@@ -10,7 +12,7 @@ const STORAGE_CUSTOM_URL_KEY = 'CUSTOM_GAS_API_URL';
  * Prioritas:
  * 1. Custom URL yang diisi user di modal pengaturan (tersimpan di localStorage)
  * 2. Environment variable VITE_GAS_API_URL dari Vercel
- * 3. Local proxy Vercel (/api/proxy)
+ * 3. Default Production Google Apps Script Web App URL
  */
 export function getBackendApiUrl(): string {
   try {
@@ -25,7 +27,7 @@ export function getBackendApiUrl(): string {
     return envUrl.trim();
   }
 
-  return '';
+  return DEFAULT_GAS_API_URL;
 }
 
 /**
