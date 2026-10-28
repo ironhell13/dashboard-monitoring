@@ -3956,16 +3956,55 @@
       // ⚡ PRIORITAS UTAMA: Baca langsung dari DB_ACTIVE_OPEN jika sheet ini ada data (1,080 baris, INSTAN < 200ms)
       var openSheet = ss.getSheetByName('DB_ACTIVE_OPEN');
       if (openSheet && openSheet.getLastRow() > 1) {
+        var isForceSync = Boolean(filters && (filters.forceSync === true || filters.forceSync === 'true' || filters.forceSync === '1'));
+        var validKeyMap = null;
+
+        // Jika forceSync aktif (misal user klik tombol Refresh di dashboard):
+        // Verifikasi keaslian baris di DB_ACTIVE_OPEN terhadap sheet INC_ utama secara instan (hanya scan kolom 1 & 13)
+        if (isForceSync && incSheets.length > 0) {
+          try {
+            validKeyMap = {};
+            for (var is = 0; is < Math.min(incSheets.length, 2); is++) {
+              var ish = incSheets[is];
+              var ilast = ish.getLastRow();
+              if (ilast > 1) {
+                var kVals = ish.getRange(2, 1, ilast - 1, 1).getValues();
+                var endVals = ish.getRange(2, 13, ilast - 1, 1).getValues();
+                for (var kv = 0; kv < kVals.length; kv++) {
+                  var kStr = String(kVals[kv][0] || '').trim();
+                  // Hanya anggap valid jika ada di INC_ dan kolom End_Time masih kosong
+                  if (kStr && !isEndTimeFilledGS(endVals[kv][0])) {
+                    validKeyMap[kStr] = true;
+                  }
+                }
+              }
+            }
+          } catch (eValid) {
+            validKeyMap = null;
+          }
+        }
+
         var actBundle = buildActionMapFromSheets(ss);
         var actMap = actBundle.actMap;
         var vals = openSheet.getDataRange().getValues();
         var openIncidentsList = [];
+        var cleanOpenSheetRows = [];
+        var hasOrphans = false;
+
         for (var r = 1; r < vals.length; r++) {
           var row = vals[r];
           var incKey = String(row[0] || '').trim();
           if (!incKey) continue;
+
+          // Jika forceSync aktif dan key tidak ditemukan di sheet INC_ (telah dihapus manual atau di-closed):
+          if (validKeyMap && !validKeyMap[incKey]) {
+            hasOrphans = true;
+            continue; // Pangkas baris ini dari output karena sudah tidak ada di database
+          }
+
           var rawEnd = row[12];
           if (!isEndTimeFilledGS(rawEnd)) {
+            cleanOpenSheetRows.push(row);
             var sTime = formatCellDateStr(row[11], 10);
             var act = String(row[18] || '-').trim();
             if (isTechnicalMachineLog(act)) act = '-';
@@ -4012,6 +4051,21 @@
             });
           }
         }
+
+        // Jika ditemukan baris yatim (dihapus manual dari INC_), bersihkan juga DB_ACTIVE_OPEN
+        if (hasOrphans && cleanOpenSheetRows.length < (vals.length - 1)) {
+          try {
+            var curLRow = openSheet.getLastRow();
+            if (curLRow > 1) {
+              openSheet.getRange(2, 1, curLRow - 1, openSheet.getLastColumn()).clearContent();
+            }
+            if (cleanOpenSheetRows.length > 0) {
+              ensureSheetCapacity(openSheet, cleanOpenSheetRows.length + 1);
+              openSheet.getRange(2, 1, cleanOpenSheetRows.length, cleanOpenSheetRows[0].length).setValues(cleanOpenSheetRows);
+            }
+          } catch (ePrune) {}
+        }
+
         if (openIncidentsList.length > 0) {
           return {
             success: true,

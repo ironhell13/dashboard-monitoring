@@ -461,7 +461,7 @@ export function enrichOpenWithDailyData(
   openItems: OpenIncidentItem[],
   dailyRows: DailyIncidentRow[]
 ): OpenIncidentItem[] {
-  // 1. Filter awal: Hanya singkirkan item yang benar-benar sudah memiliki End Time valid
+  // 1. Filter awal: Hanya ambil item yang benar-benar belum memiliki End Time valid
   const currentlyOpen = (openItems || []).filter((it) => !isEndTimeFilled(it.endTime));
 
   if (!dailyRows || dailyRows.length === 0) {
@@ -473,160 +473,116 @@ export function enrichOpenWithDailyData(
     }));
   }
 
-  // Bangun lookup map dari openItems yang sudah ada (untuk mempertahankan action/catatan petugas lokal)
-  const openByIncNum = new Map<string, OpenIncidentItem>();
-  const openByKey = new Map<string, OpenIncidentItem>();
-  const openByWsidEvDate = new Map<string, OpenIncidentItem>();
-
-  for (const item of currentlyOpen) {
-    if (item.incidentNumber && item.incidentNumber !== '-') {
-      openByIncNum.set(item.incidentNumber, item);
-    }
-    if (item.incidentKey) {
-      openByKey.set(item.incidentKey, item);
-    }
-    const dPart = (item.tanggal && item.tanggal !== '-') ? item.tanggal : (item.startTime || '').split(' ')[0];
-    openByWsidEvDate.set(`${item.wsid}|${item.eventCodeDesc}|${dPart}`.toUpperCase(), item);
-  }
-
-  const result: OpenIncidentItem[] = [];
-  const processedKeys = new Set<string>();
-
-  // A. Ekstrak SEMUA insiden yang berstatus OPEN dari dailyRows database
-  for (const d of dailyRows) {
-    const isRowClosed = isEndTimeFilled(d.endTime);
-    if (isRowClosed) continue; // Skip jika sudah selesai / terisi End Time
-
-    const incNum = (d.incidentNumber && d.incidentNumber !== '-') ? d.incidentNumber : undefined;
-    const sTime = formatStartProblemTime(d.startTime) !== '-' ? formatStartProblemTime(d.startTime) : getDisplayStartTime(d);
-    const key = incNum || `${d.wsid}|${d.eventCodeDesc}|${sTime}`;
-
-    if (processedKeys.has(key) || (incNum && processedKeys.has(incNum))) {
-      continue;
-    }
-
-    // Cari apakah ada catatan tindakan petugas yang tersimpan di openItems
-    const dDatePart = (d.dateStr && d.dateStr !== '-') ? d.dateStr : sTime.split(' ')[0];
-    const existing = (incNum ? openByIncNum.get(incNum) : undefined) ||
-                     openByKey.get(key) ||
-                     openByWsidEvDate.get(`${d.wsid}|${d.eventCodeDesc}|${dDatePart}`.toUpperCase());
-
-    const spParts = (d.servicePointSektor || '').split('-');
-    const sPoint = d.servicePoint || spParts[0]?.trim() || '-';
-    const sektor = d.sektor || spParts[1]?.trim() || '-';
-    const dText = (!d.detail || d.detail === '-' || isDateLikeString(d.detail)) ? (existing?.detail || '-') : d.detail;
-
-    // Sinkronisasi data tindakan terakhir: bandingkan timestamp secara presisi
-    const dHasAct = Boolean(d.actionTerakhir && d.actionTerakhir !== '-' && !isTechnicalMachineLog(d.actionTerakhir));
-    const exHasAct = Boolean(existing && existing.actionTerakhir && existing.actionTerakhir !== '-' && !isTechnicalMachineLog(existing.actionTerakhir));
-    const dEpoch = dHasAct ? parseDateTimeToEpoch(d.actionTerakhirWaktu) : 0;
-    const exEpoch = exHasAct ? parseDateTimeToEpoch(existing!.actionTerakhirWaktu) : 0;
-
-    let finalAction = '-';
-    let finalActionOleh = '-';
-    let finalActionWaktu = '-';
-    let finalJmlAction = 0;
-
-    if (dHasAct && exHasAct) {
-      if (exEpoch > dEpoch) {
-        finalAction = existing!.actionTerakhir;
-        finalActionOleh = (existing!.actionTerakhirOleh && existing!.actionTerakhirOleh !== '-' && existing!.actionTerakhirOleh !== 'CSV' && existing!.actionTerakhirOleh !== 'CSV Comment') ? existing!.actionTerakhirOleh : 'Petugas';
-        finalActionWaktu = existing!.actionTerakhirWaktu && existing!.actionTerakhirWaktu !== '-' ? existing!.actionTerakhirWaktu : '-';
-        finalJmlAction = Math.max(existing!.jumlahAction || 0, d.jumlahAction || 0, 1);
-      } else {
-        finalAction = d.actionTerakhir;
-        finalActionOleh = (d.actionTerakhirOleh && d.actionTerakhirOleh !== '-' && d.actionTerakhirOleh !== 'CSV' && d.actionTerakhirOleh !== 'CSV Comment') ? d.actionTerakhirOleh : 'Petugas';
-        finalActionWaktu = d.actionTerakhirWaktu && d.actionTerakhirWaktu !== '-' ? d.actionTerakhirWaktu : '-';
-        finalJmlAction = Math.max(d.jumlahAction || 0, existing!.jumlahAction || 0, 1);
-      }
-    } else if (exHasAct) {
-      finalAction = existing!.actionTerakhir;
-      finalActionOleh = (existing!.actionTerakhirOleh && existing!.actionTerakhirOleh !== '-' && existing!.actionTerakhirOleh !== 'CSV' && existing!.actionTerakhirOleh !== 'CSV Comment') ? existing!.actionTerakhirOleh : 'Petugas';
-      finalActionWaktu = existing!.actionTerakhirWaktu && existing!.actionTerakhirWaktu !== '-' ? existing!.actionTerakhirWaktu : '-';
-      finalJmlAction = existing!.jumlahAction || 1;
-    } else if (dHasAct) {
-      finalAction = d.actionTerakhir;
-      finalActionOleh = (d.actionTerakhirOleh && d.actionTerakhirOleh !== '-' && d.actionTerakhirOleh !== 'CSV' && d.actionTerakhirOleh !== 'CSV Comment') ? d.actionTerakhirOleh : 'Petugas';
-      finalActionWaktu = d.actionTerakhirWaktu && d.actionTerakhirWaktu !== '-' ? d.actionTerakhirWaktu : '-';
-      finalJmlAction = d.jumlahAction || 1;
-    }
-
-    result.push({
-      incidentKey: key,
-      incidentNumber: incNum || '-',
-      wsid: d.wsid,
-      lokasi: d.lokasi || existing?.lokasi || '-',
-      servicePoint: sPoint,
-      sektor: sektor,
-      typeMesin: d.typeMesin || existing?.typeMesin || '-',
-      vendor: d.vendorMesin || existing?.vendor || '-',
-      eventCode: d.eventCode || existing?.eventCode || '-',
-      eventCodeDesc: d.eventCodeDesc,
-      detail: dText,
-      startTime: sTime,
-      endTime: '-',
-      tanggal: d.dateStr || existing?.tanggal || sTime.split(' ')[0],
-      jam: d.hourStr || existing?.jam || (sTime.split(' ')[1] ? sTime.split(' ')[1].slice(0, 5) : '00:00'),
-      durationRaw: d.rawDuration || existing?.durationRaw || 0,
-      durasiOpr: (typeof d.durasi === 'number' && d.durasi >= 0) ? d.durasi : (existing?.durasiOpr || 0),
-      status: 'OPEN',
-      actionTerakhir: finalAction,
-      actionTerakhirOleh: finalActionOleh,
-      actionTerakhirWaktu: finalActionWaktu,
-      jumlahAction: finalJmlAction,
-      monthStr: extractMonthStr(d.dateStr || d.startTime, '2026-10'),
-      comment: existing?.comment,
-      keterangan: existing?.keterangan || (finalAction !== '-' ? finalAction : undefined)
-    });
-
-    processedKeys.add(key);
-    if (incNum) processedKeys.add(incNum);
-  }
-
-  // B. Pertahankan item dari currentlyOpen yang belum diproses di atas,
-  // KECUALI jika terbukti bahwa item tersebut secara eksplisit memiliki End Time di dailyRows
+  // Bangun lookup map dari dailyRows (insiden yang ada di database)
+  const dailyByIncNum = new Map<string, DailyIncidentRow>();
+  const dailyByKey = new Map<string, DailyIncidentRow>();
+  const dailyByWsidEv = new Map<string, DailyIncidentRow>();
   const closedInDaily = new Set<string>();
+
   for (const d of dailyRows) {
-    if (isEndTimeFilled(d.endTime)) {
-      if (d.incidentNumber && d.incidentNumber !== '-') closedInDaily.add(d.incidentNumber);
-      const sT = formatStartProblemTime(d.startTime);
+    const isClosed = isEndTimeFilled(d.endTime);
+    const incNum = (d.incidentNumber && d.incidentNumber !== '-') ? d.incidentNumber : undefined;
+    const sT = formatStartProblemTime(d.startTime);
+    const dP = (d.dateStr && d.dateStr !== '-') ? d.dateStr : sT.split(' ')[0];
+
+    if (isClosed) {
+      if (incNum) closedInDaily.add(incNum);
       closedInDaily.add(`${d.wsid}|${d.eventCodeDesc}|${sT}`.toUpperCase());
-      const dP = (d.dateStr && d.dateStr !== '-') ? d.dateStr : sT.split(' ')[0];
       closedInDaily.add(`${d.wsid}|${d.eventCodeDesc}|${dP}`.toUpperCase());
+    } else {
+      if (incNum) dailyByIncNum.set(incNum, d);
+      const key = incNum || `${d.wsid}|${d.eventCodeDesc}|${sT}`;
+      dailyByKey.set(key, d);
+      dailyByWsidEv.set(`${d.wsid}|${d.eventCodeDesc}|${dP}`.toUpperCase(), d);
     }
   }
 
-  for (const item of currentlyOpen) {
-    if (processedKeys.has(item.incidentKey) || (item.incidentNumber && item.incidentNumber !== '-' && processedKeys.has(item.incidentNumber))) {
-      continue;
+  // KASUS A: Jika openItems sudah ada (misal dari server getOpenIncidents / cleanIncidents)
+  // openItems adalah Single Source of Truth insiden OPEN!
+  // Kita HANYA memperkaya item-item yang ADA di openItems, tanpa membangkitkan row yang sudah dihapus!
+  if (currentlyOpen.length > 0) {
+    const result: OpenIncidentItem[] = [];
+    const processedKeys = new Set<string>();
+
+    for (const item of currentlyOpen) {
+      const dPart = (item.tanggal && item.tanggal !== '-') ? item.tanggal : (item.startTime || '').split(' ')[0];
+      const itemKey1 = (item.incidentNumber && item.incidentNumber !== '-') ? item.incidentNumber : '';
+      const itemKey2 = `${item.wsid}|${item.eventCodeDesc}|${item.startTime}`.toUpperCase();
+      const itemKey3 = `${item.wsid}|${item.eventCodeDesc}|${dPart}`.toUpperCase();
+
+      // Cek apakah item ini sudah closed di database dailyRows
+      if ((itemKey1 && closedInDaily.has(itemKey1)) || closedInDaily.has(itemKey2) || closedInDaily.has(itemKey3)) {
+        continue; // Drop: sudah selesai / CLOSED di database
+      }
+
+      const matchKey = item.incidentKey || itemKey1 || itemKey2;
+      if (processedKeys.has(matchKey)) continue;
+
+      // Cari enrichment data dari dailyRows jika tersedia
+      const d = (itemKey1 ? dailyByIncNum.get(itemKey1) : undefined) ||
+                (item.incidentKey ? dailyByKey.get(item.incidentKey) : undefined) ||
+                dailyByWsidEv.get(itemKey3);
+
+      if (d) {
+        const sTime = formatStartProblemTime(d.startTime) !== '-' ? formatStartProblemTime(d.startTime) : (formatStartProblemTime(item.startTime) !== '-' ? formatStartProblemTime(item.startTime) : getDisplayStartTime(item));
+        const dText = (!d.detail || d.detail === '-' || isDateLikeString(d.detail)) ? item.detail : d.detail;
+
+        const dHasAct = Boolean(d.actionTerakhir && d.actionTerakhir !== '-' && !isTechnicalMachineLog(d.actionTerakhir));
+        const exHasAct = Boolean(item.actionTerakhir && item.actionTerakhir !== '-' && !isTechnicalMachineLog(item.actionTerakhir));
+        const dEpoch = dHasAct ? parseDateTimeToEpoch(d.actionTerakhirWaktu) : 0;
+        const exEpoch = exHasAct ? parseDateTimeToEpoch(item.actionTerakhirWaktu) : 0;
+
+        let finalAction = item.actionTerakhir || '-';
+        let finalActionOleh = item.actionTerakhirOleh || '-';
+        let finalActionWaktu = item.actionTerakhirWaktu || '-';
+        let finalJmlAction = item.jumlahAction || 0;
+
+        if (dHasAct && exHasAct) {
+          if (dEpoch >= exEpoch) {
+            finalAction = d.actionTerakhir;
+            finalActionOleh = (d.actionTerakhirOleh && d.actionTerakhirOleh !== '-' && d.actionTerakhirOleh !== 'CSV' && d.actionTerakhirOleh !== 'CSV Comment') ? d.actionTerakhirOleh : 'Petugas';
+            finalActionWaktu = d.actionTerakhirWaktu && d.actionTerakhirWaktu !== '-' ? d.actionTerakhirWaktu : '-';
+            finalJmlAction = Math.max(d.jumlahAction || 0, item.jumlahAction || 0, 1);
+          }
+        } else if (dHasAct) {
+          finalAction = d.actionTerakhir;
+          finalActionOleh = (d.actionTerakhirOleh && d.actionTerakhirOleh !== '-' && d.actionTerakhirOleh !== 'CSV' && d.actionTerakhirOleh !== 'CSV Comment') ? d.actionTerakhirOleh : 'Petugas';
+          finalActionWaktu = d.actionTerakhirWaktu && d.actionTerakhirWaktu !== '-' ? d.actionTerakhirWaktu : '-';
+          finalJmlAction = d.jumlahAction || 1;
+        }
+
+        result.push({
+          ...item,
+          detail: dText,
+          startTime: sTime,
+          durasiOpr: (typeof d.durasi === 'number' && d.durasi >= 0) ? d.durasi : (item.durasiOpr || 0),
+          actionTerakhir: finalAction,
+          actionTerakhirOleh: finalActionOleh,
+          actionTerakhirWaktu: finalActionWaktu,
+          jumlahAction: finalJmlAction,
+          status: 'OPEN'
+        });
+      } else {
+        result.push({
+          ...item,
+          status: 'OPEN'
+        });
+      }
+      processedKeys.add(matchKey);
     }
 
-    const dPart = (item.tanggal && item.tanggal !== '-') ? item.tanggal : (item.startTime || '').split(' ')[0];
-    const itemKey1 = (item.incidentNumber && item.incidentNumber !== '-') ? item.incidentNumber : '';
-    const itemKey2 = `${item.wsid}|${item.eventCodeDesc}|${item.startTime}`.toUpperCase();
-    const itemKey3 = `${item.wsid}|${item.eventCodeDesc}|${dPart}`.toUpperCase();
-
-    if ((itemKey1 && closedInDaily.has(itemKey1)) || closedInDaily.has(itemKey2) || closedInDaily.has(itemKey3)) {
-      continue; // Selesai / CLOSED di dailyRows
-    }
-
-    result.push({
-      ...item,
-      startTime: formatStartProblemTime(item.startTime) !== '-' ? formatStartProblemTime(item.startTime) : getDisplayStartTime(item),
-      endTime: '-',
-      status: 'OPEN'
+    result.sort((a, b) => {
+      const epochA = parseDateTimeToEpoch(a.startTime);
+      const epochB = parseDateTimeToEpoch(b.startTime);
+      return epochB - epochA;
     });
-    processedKeys.add(item.incidentKey);
+
+    return result;
   }
 
-  // Urutkan insiden OPEN dari yang terbaru (tanggal & jam terbesar di baris atas)
-  result.sort((a, b) => {
-    const epochA = parseDateTimeToEpoch(a.startTime);
-    const epochB = parseDateTimeToEpoch(b.startTime);
-    return epochB - epochA;
-  });
-
-  return result;
+  // KASUS B: Jika openItems kosong (misal mode offline saat pertama kali load)
+  // Ekstrak insiden OPEN langsung dari dailyRows sebagai fallback
+  return extractOpenFromRows(dailyRows);
 }
 
 /** Format durasi menit ke format manusiawi ringkas e.g. "1j 42m" atau "48m" */
@@ -4702,10 +4658,11 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
                 </div>
                 <button
                   type="button"
-                  onClick={() => {
+                  onClick={async () => {
                     setCountdownSeconds(15);
-                    fetchOpenIncidents(true);
-                    fetchDailyIncidentsFromDb(historyMonth);
+                    historyCacheRef.current = {};
+                    await fetchOpenIncidents(true);
+                    await fetchDailyIncidentsFromDb(historyMonth);
                   }}
                   className="flex items-center gap-1.5 text-[#555F71] hover:text-[#0D1C2E] text-[11px] bg-[#EFF4FF] hover:bg-[#dbe6ff] px-2.5 py-1 rounded-full cursor-pointer transition-all border border-transparent hover:border-[#BFD3FF]"
                   title="Klik untuk menyinkronkan data Problem Open & Database terbaru sekarang"
