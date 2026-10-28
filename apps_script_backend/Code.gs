@@ -2321,10 +2321,13 @@
   function getIncidentDbSpreadsheet() {
     var props = PropertiesService.getScriptProperties();
     var id = props.getProperty('INCIDENT_DB_SPREADSHEET_ID');
-    if (!id) {
-      throw new Error('ID Spreadsheet Database Insiden belum diset. Silakan atur ID Spreadsheet di menu Cek Daily Ka Ops.');
+    if (!id || id.trim() === '') {
+      id = props.getProperty('SPREADSHEET_ID');
     }
-    var ss = SpreadsheetApp.openById(id);
+    if (!id || id.trim() === '') {
+      return getTargetSpreadsheet();
+    }
+    var ss = SpreadsheetApp.openById(id.trim());
     try {
       if (ss.getSpreadsheetLocale() !== 'id_ID') {
         ss.setSpreadsheetLocale('id_ID');
