@@ -206,6 +206,8 @@
     try {
       var ui = SpreadsheetApp.getUi();
       ui.createMenu('⚡ Dashboard Downtime')
+        .addItem('🔍 Cek Status Koneksi 2 Spreadsheet', 'cekKoneksiDatabaseDaily')
+        .addSeparator()
         .addItem('🔄 Inisialisasi Seluruh Sheet Database Otomatis', 'initSpreadsheetDBManual')
         .addItem('🛠️ Siapkan Tabel Jam Operasional', 'setupJamOperasionalTable')
         .addItem('⚡ Sinkronkan Jam Operasional ke Master', 'syncJamOperasionalToMasterManual')
@@ -217,6 +219,110 @@
     } catch (err) {}
   }
 
+  /**
+   * 🔍 FUNGSI DIAGNOSTIK KONEKSI 2 SPREADSHEET
+   * Pilih fungsi ini di toolbar editor Apps Script lalu klik Run (▷)
+   * untuk melihat status koneksi dan izin akses di Catatan Eksekusi (Execution Log).
+   */
+  function cekKoneksiDatabaseDaily() {
+    var props = PropertiesService.getScriptProperties();
+    var s1 = props.getProperty('SPREADSHEET_ID') || '';
+    var s2 = props.getProperty('INCIDENT_DB_SPREADSHEET_ID') || '';
+
+    Logger.log('========================================================');
+    Logger.log('🔎 DIAGNOSIS KONEKSI DATABASE SPREADSHEET');
+    Logger.log('========================================================');
+    Logger.log('1. SPREADSHEET_ID (Master & Uptime) : ' + (s1 || '(KOSONG)'));
+    Logger.log('2. INCIDENT_DB_SPREADSHEET_ID (Daily): ' + (s2 || '(KOSONG - otomatis fallback ke Spreadsheet 1)'));
+
+    // Tes Spreadsheet 1
+    var cleanId1 = extractSpreadsheetIdGS(s1);
+    if (cleanId1) {
+      try {
+        var ss1 = SpreadsheetApp.openById(cleanId1);
+        Logger.log('✅ Spreadsheet 1 Terhubung: "' + ss1.getName() + '"');
+      } catch (e1) {
+        Logger.log('❌ Gagal membuka Spreadsheet 1: ' + e1.toString());
+      }
+    } else {
+      Logger.log('⚠️ SPREADSHEET_ID belum diisi di Script Properties!');
+    }
+
+    // Tes Spreadsheet 2 (Daily)
+    var cleanId2 = extractSpreadsheetIdGS(s2 || s1);
+    Logger.log('--------------------------------------------------------');
+    Logger.log('Pemeriksaan Database Daily (ID: ' + cleanId2 + '):');
+    if (!cleanId2) {
+      Logger.log('❌ ERROR: Tidak ada ID Spreadsheet untuk Daily!');
+      Logger.log('========================================================');
+      return;
+    }
+
+    try {
+      var ss2 = SpreadsheetApp.openById(cleanId2);
+      Logger.log('✅ BERHASIL BUKA SPREADSHEET DAILY: "' + ss2.getName() + '"');
+      Logger.log('   URL: ' + ss2.getUrl());
+
+      var allSheets = ss2.getSheets();
+      var sheetNames = [];
+      var incSheets = [];
+      for (var i = 0; i < allSheets.length; i++) {
+        var name = allSheets[i].getName();
+        sheetNames.push(name);
+        if (name.toUpperCase().indexOf('INC') === 0) {
+          incSheets.push({ name: name, rows: allSheets[i].getLastRow() });
+        }
+      }
+
+      Logger.log('   Daftar Sheet yang ada (' + sheetNames.length + ' sheet): ' + JSON.stringify(sheetNames));
+
+      if (incSheets.length > 0) {
+        Logger.log('✅ Sheet Insiden Daily yang ditemukan:');
+        for (var j = 0; j < incSheets.length; j++) {
+          Logger.log('   * ' + incSheets[j].name + ' -> ' + incSheets[j].rows + ' baris data');
+        }
+      } else {
+        Logger.log('⚠️ PERHATIAN: Tidak ditemukan sheet berawalan "INC" di spreadsheet ini!');
+        Logger.log('   Sistem mencari sheet bernama seperti: INC_2026-10 atau INC_2026_10.');
+      }
+
+      // Cek DB_ACTIVE_OPEN
+      var actOpen = ss2.getSheetByName('DB_ACTIVE_OPEN');
+      if (actOpen) {
+        Logger.log('ℹ️ Sheet DB_ACTIVE_OPEN ditemukan: ' + actOpen.getLastRow() + ' baris.');
+      }
+
+      // Tes pemanggilan data insiden
+      var testRes = getDailyIncidentsFromDb({});
+      Logger.log('--------------------------------------------------------');
+      Logger.log('Tes getDailyIncidentsFromDb():');
+      Logger.log('Status: ' + (testRes.success ? 'SUKSES' : 'GAGAL'));
+      Logger.log('Total baris diambil: ' + (testRes.totalCount || 0));
+      Logger.log('Bulan tersedia: ' + JSON.stringify(testRes.availableMonths || []));
+      if (!testRes.success) {
+        Logger.log('Pesan Error: ' + testRes.message);
+      }
+      Logger.log('========================================================');
+
+      try {
+        var ui = SpreadsheetApp.getUi();
+        var alertMsg = '✅ Diagnosis Selesai!\n' +
+          'Spreadsheet Daily: ' + ss2.getName() + '\n' +
+          'Sheet Insiden Ditemukan: ' + incSheets.length + '\n' +
+          'Total Baris Terbaca: ' + (testRes.totalCount || 0) + '\n\n' +
+          'Buka menu View > Execution log di editor Apps Script untuk rincian lengkap.';
+        ui.alert('Status Koneksi Database Daily', alertMsg, ui.ButtonSet.OK);
+      } catch (uiErr) {}
+
+    } catch (err2) {
+      Logger.log('❌ GAGAL MEMBUKA SPREADSHEET DAILY: ' + err2.toString());
+      Logger.log('Kemungkinan penyebab:');
+      Logger.log('1. ID salah atau belum memiliki izin akses (pastikan spreadsheet sudah dishare ke email akun Apps Script).');
+      Logger.log('2. Otorisasi Apps Script belum disetujui (klik Review Permissions > Allow).');
+      Logger.log('========================================================');
+    }
+  }
+
   function initSpreadsheetDBManual() {
     try {
       var ss = SpreadsheetApp.getActiveSpreadsheet();
@@ -226,7 +332,9 @@
       
       var props = PropertiesService.getScriptProperties();
       props.setProperty('SPREADSHEET_ID', ss.getId());
-      props.setProperty('INCIDENT_DB_SPREADSHEET_ID', ss.getId());
+      if (!props.getProperty('INCIDENT_DB_SPREADSHEET_ID')) {
+        props.setProperty('INCIDENT_DB_SPREADSHEET_ID', ss.getId());
+      }
 
       SpreadsheetApp.getUi().alert('Inisialisasi selesai! Seluruh tabel database telah siap secara otomatis.');
     } catch (err) {
@@ -4444,8 +4552,9 @@
       var availableMonths = [];
       for (var s = 0; s < sheets.length; s++) {
         var sName = sheets[s].getName();
-        if (sName.indexOf('INC_') === 0) {
-          availableMonths.push(sName.replace('INC_', ''));
+        if (sName.toUpperCase().indexOf('INC') === 0) {
+          var cleanM = sName.replace(/^INC[-_ ]?/i, '').replace('_', '-');
+          availableMonths.push(cleanM);
         }
       }
       availableMonths.sort().reverse();
@@ -4490,20 +4599,28 @@
       for (var tm = 0; tm < targetMonths.length; tm++) {
         var curMonthStr = targetMonths[tm];
         var curTargetMonth = parseInt(curMonthStr.split('-')[1] || curMonthStr.split('_')[1] || '10', 10);
-        var sheet = ss.getSheetByName('INC_' + curMonthStr);
-        if (!sheet) {
-          sheet = ss.getSheetByName('INC_' + curMonthStr.replace('-', '_'));
-        }
-        if (!sheet) {
-          sheet = ss.getSheetByName('INC_' + curMonthStr.replace('_', '-'));
-        }
-        // Fallback cerdas: jika bulan spesifik tidak ditemukan tetapi ada bulan lain di database
+        var sheet = ss.getSheetByName('INC_' + curMonthStr) ||
+                    ss.getSheetByName('INC_' + curMonthStr.replace('-', '_')) ||
+                    ss.getSheetByName('INC_' + curMonthStr.replace('_', '-')) ||
+                    ss.getSheetByName('INC-' + curMonthStr) ||
+                    ss.getSheetByName('INC ' + curMonthStr) ||
+                    ss.getSheetByName(curMonthStr);
+
+        // Fallback cerdas 1: jika bulan spesifik tidak ditemukan tetapi ada bulan lain di database
         if (!sheet && tm === 0 && availableMonths.length > 0) {
-          sheet = ss.getSheetByName('INC_' + availableMonths[0]);
+          sheet = ss.getSheetByName('INC_' + availableMonths[0]) ||
+                  ss.getSheetByName('INC_' + availableMonths[0].replace('-', '_')) ||
+                  ss.getSheetByName('INC-' + availableMonths[0]) ||
+                  ss.getSheetByName('INC ' + availableMonths[0]);
           if (sheet) {
             curMonthStr = availableMonths[0];
             curTargetMonth = parseInt(curMonthStr.split('-')[1] || curMonthStr.split('_')[1] || '10', 10);
           }
+        }
+
+        // Fallback cerdas 2: jika hanya ada 1 sheet di spreadsheet dan sheet tersebut ada datanya
+        if (!sheet && tm === 0 && sheets.length === 1 && sheets[0].getLastRow() > 1) {
+          sheet = sheets[0];
         }
 
         if (sheet && sheet.getLastRow() > 1) {
