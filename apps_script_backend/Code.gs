@@ -2544,37 +2544,78 @@
    * Memastikan kapasitas baris di sheet mencukupi sebelum setValues()
    * Otomatis menambah baris jika kurang, sehingga user TIDAK PERLU klik 'Add rows' manual!
    */
+  function pangkasBarisKosongInternal(ss) {
+    if (!ss) return;
+    try {
+      var sheets = ss.getSheets();
+      for (var i = 0; i < sheets.length; i++) {
+        var sh = sheets[i];
+        var maxR = sh.getMaxRows();
+        var lastR = sh.getLastRow();
+        var safeTarget = Math.max(lastR + 50, 100);
+        if (maxR > safeTarget) {
+          var rowsToDelete = maxR - safeTarget;
+          try {
+            sh.deleteRows(safeTarget + 1, rowsToDelete);
+          } catch (e) {}
+        }
+      }
+    } catch (err) {
+      console.warn('pangkasBarisKosongInternal warning: ' + err);
+    }
+  }
+
   function ensureSheetCapacity(sheet, neededRow) {
     if (!sheet) return;
-    var maxR = sheet.getMaxRows();
-    if (neededRow > maxR) {
-      var toAdd = (neededRow - maxR) + 200; // Tambah secukupnya + buffer 200 baris
-      sheet.insertRowsAfter(maxR, toAdd);
+    try {
+      var maxR = sheet.getMaxRows();
+      if (neededRow > maxR) {
+        var toAdd = (neededRow - maxR) + 50; // Buffer ringkas 50 baris saja
+        try {
+          sheet.insertRowsAfter(maxR, toAdd);
+        } catch (capErr) {
+          // Jika limit sel mendekati batas 20 juta sel Google, pangkas baris kosong di seluruh sheet lalu coba lagi
+          pangkasBarisKosongInternal(sheet.getParent());
+          var newMaxR = sheet.getMaxRows();
+          if (neededRow > newMaxR) {
+            sheet.insertRowsAfter(newMaxR, (neededRow - newMaxR) + 10);
+          }
+        }
+      }
+    } catch (e) {
+      console.warn('ensureSheetCapacity: ' + e);
     }
   }
 
   /**
-   * Pangkas baris-baris kosong berlebih di spreadsheet Daily Incident
-   * agar spreadsheet tetap ringan dan terbebas dari limit 10 juta sel Google
+   * Pangkas baris-baris kosong berlebih di spreadsheet Daily Incident & Master
+   * agar spreadsheet tetap ringan dan terbebas dari limit 10/20 juta sel Google
    */
   function pangkasBarisKosongBerlebih() {
     try {
-      var ss = getIncidentDbSpreadsheet();
-      var sheets = ss.getSheets();
       var report = [];
-      for (var i = 0; i < sheets.length; i++) {
-        var sh = sheets[i];
-        var sName = sh.getName();
-        var maxR = sh.getMaxRows();
-        var lastR = sh.getLastRow();
-        // Sisakan buffer aman 50 baris di bawah baris data terakhir
-        var safeTarget = Math.max(lastR + 50, 100);
-        if (maxR > safeTarget) {
-          var rowsToDelete = maxR - safeTarget;
-          sh.deleteRows(safeTarget + 1, rowsToDelete);
-          report.push(sName + ': Dihapus ' + rowsToDelete + ' baris kosong (Sisa baris: ' + sh.getMaxRows() + ')');
-        } else {
-          report.push(sName + ': Normal (' + maxR + ' baris, data sampai baris ' + lastR + ')');
+      var ssList = [getIncidentDbSpreadsheet(), getTargetSpreadsheet()];
+      for (var sIdx = 0; sIdx < ssList.length; sIdx++) {
+        var ss = ssList[sIdx];
+        if (!ss) continue;
+        var sheets = ss.getSheets();
+        for (var i = 0; i < sheets.length; i++) {
+          var sh = sheets[i];
+          var sName = ss.getName() + ' -> ' + sh.getName();
+          var maxR = sh.getMaxRows();
+          var lastR = sh.getLastRow();
+          var safeTarget = Math.max(lastR + 50, 100);
+          if (maxR > safeTarget) {
+            var rowsToDelete = maxR - safeTarget;
+            try {
+              sh.deleteRows(safeTarget + 1, rowsToDelete);
+              report.push(sName + ': Dihapus ' + rowsToDelete + ' baris kosong (Sisa baris: ' + sh.getMaxRows() + ')');
+            } catch (delErr) {
+              report.push(sName + ': Gagal menghapus: ' + delErr.toString());
+            }
+          } else {
+            report.push(sName + ': Normal (' + maxR + ' baris, data sampai baris ' + lastR + ')');
+          }
         }
       }
       Logger.log('=== HASIL PANGKAS BARIS KOSONG ===');
@@ -2587,35 +2628,65 @@
   }
 
   /**
-   * Diagnostik status sel dan baris pada Spreadsheet Daily
+   * Diagnostik status sel dan baris pada Spreadsheet Daily & Master
    */
   function diagnoseDailyDb() {
     try {
-      var ss = getIncidentDbSpreadsheet();
-      var sheets = ss.getSheets();
-      var list = [];
-      var totalCells = 0;
-      for (var i = 0; i < sheets.length; i++) {
-        var sh = sheets[i];
-        var mr = sh.getMaxRows();
-        var mc = sh.getMaxColumns();
-        var lr = sh.getLastRow();
-        var cells = mr * mc;
-        totalCells += cells;
-        list.push({
-          name: sh.getName(),
-          lastRow: lr,
-          maxRows: mr,
-          maxColumns: mc,
-          cells: cells
-        });
+      var ss1 = getIncidentDbSpreadsheet();
+      var ss2 = getTargetSpreadsheet();
+      var report = {};
+
+      if (ss1) {
+        var list1 = [];
+        var totalCells1 = 0;
+        var s1 = ss1.getSheets();
+        for (var i = 0; i < s1.length; i++) {
+          var sh1 = s1[i];
+          var mr1 = sh1.getMaxRows();
+          var mc1 = sh1.getMaxColumns();
+          var lr1 = sh1.getLastRow();
+          var c1 = mr1 * mc1;
+          totalCells1 += c1;
+          list1.push({ name: sh1.getName(), lastRow: lr1, maxRows: mr1, maxColumns: mc1, cells: c1 });
+        }
+        report.incidentDb = {
+          name: ss1.getName(),
+          id: ss1.getId(),
+          totalCells: totalCells1,
+          maxLimit: 20000000,
+          percentUsed: ((totalCells1 / 20000000) * 100).toFixed(2) + '%',
+          sheets: list1
+        };
       }
+
+      if (ss2 && (!ss1 || ss1.getId() !== ss2.getId())) {
+        var list2 = [];
+        var totalCells2 = 0;
+        var s2 = ss2.getSheets();
+        for (var j = 0; j < s2.length; j++) {
+          var sh2 = s2[j];
+          var mr2 = sh2.getMaxRows();
+          var mc2 = sh2.getMaxColumns();
+          var lr2 = sh2.getLastRow();
+          var c2 = mr2 * mc2;
+          totalCells2 += c2;
+          list2.push({ name: sh2.getName(), lastRow: lr2, maxRows: mr2, maxColumns: mc2, cells: c2 });
+        }
+        report.masterDb = {
+          name: ss2.getName(),
+          id: ss2.getId(),
+          totalCells: totalCells2,
+          maxLimit: 20000000,
+          percentUsed: ((totalCells2 / 20000000) * 100).toFixed(2) + '%',
+          sheets: list2
+        };
+      }
+
       return {
         success: true,
-        totalCells: totalCells,
-        maxLimit: 10000000,
-        percentUsed: ((totalCells / 10000000) * 100).toFixed(2) + '%',
-        sheets: list
+        totalCells: report.incidentDb ? report.incidentDb.totalCells : 0,
+        sheets: report.incidentDb ? report.incidentDb.sheets : [],
+        ...report
       };
     } catch (err) {
       return { success: false, error: err.toString() };
@@ -2863,6 +2934,11 @@
 
       var ss = getIncidentDbSpreadsheet();
       var nowWib = formatDateWib(new Date());
+
+      // Pada batch pertama, pangkas baris kosong berlebih agar spreadsheet tidak melampaui limit sel Google
+      if (chunkIndex === 0) {
+        pangkasBarisKosongInternal(ss);
+      }
 
       // Tampilkan seluruh problem yang ada (tidak dibatasi 35 problem whitelist)
       var validRows = [];
