@@ -488,16 +488,33 @@
 
 
   /**
+   * Helper ekstraksi ID Spreadsheet dari URL lengkap atau teks mentah
+   */
+  function extractSpreadsheetIdGS(idOrUrl) {
+    if (!idOrUrl) return '';
+    var str = String(idOrUrl).trim();
+    var match = str.match(/\/spreadsheets\/d\/([a-zA-Z0-9-_]+)/);
+    if (match && match[1]) {
+      return match[1];
+    }
+    var matchShort = str.match(/\/d\/([a-zA-Z0-9-_]+)/);
+    if (matchShort && matchShort[1]) {
+      return matchShort[1];
+    }
+    if (str.indexOf('?') !== -1) str = str.split('?')[0];
+    if (str.indexOf('#') !== -1) str = str.split('#')[0];
+    return str.trim();
+  }
+
+  /**
   * Mendapatkan objek Spreadsheet target.
   */
   function getTargetSpreadsheet(optId) {
-    if (optId && typeof optId === 'string' && optId.trim() !== '') {
-      return SpreadsheetApp.openById(optId.trim());
-    }
-    var propId = PropertiesService.getScriptProperties().getProperty('SPREADSHEET_ID');
-    if (propId && propId.trim() !== '') {
+    var rawId = optId || PropertiesService.getScriptProperties().getProperty('SPREADSHEET_ID');
+    var cleanId = extractSpreadsheetIdGS(rawId);
+    if (cleanId) {
       try {
-        return SpreadsheetApp.openById(propId.trim());
+        return SpreadsheetApp.openById(cleanId);
       } catch (e) {
         console.warn('Gagal membuka spreadsheet dari SPREADSHEET_ID: ' + e);
       }
@@ -555,13 +572,33 @@
       try {
         locked = JSON.parse(config['LOCKED_PERIODES'] || '[]');
       } catch(e) {}
+
+      // Cek status Spreadsheet ke-2 (Incident DB)
+      var incDbInfo = null;
+      try {
+        var incSs = getIncidentDbSpreadsheet();
+        if (incSs) {
+          var sNames = incSs.getSheets().map(function(s) { return s.getName(); });
+          var incSheets = sNames.filter(function(n) { return n.indexOf('INC_') === 0; });
+          incDbInfo = {
+            id: incSs.getId(),
+            name: incSs.getName(),
+            sheets: sNames,
+            incSheetsCount: incSheets.length,
+            isSeparateSpreadsheet: (incSs.getId() !== ss.getId())
+          };
+        }
+      } catch (incErr) {
+        incDbInfo = { error: incErr.toString() };
+      }
       
       return {
         success: true,
         spreadsheetName: ss.getName(),
         spreadsheetId: ss.getId(),
         lockedPeriodes: locked,
-        lastUpdated: config['LAST_UPDATED'] || null
+        lastUpdated: config['LAST_UPDATED'] || null,
+        incidentDb: incDbInfo
       };
     } catch (err) {
       return {
@@ -2319,33 +2356,40 @@
   }
 
   function getIncidentDbSpreadsheet() {
-    var props = PropertiesService.getScriptProperties();
-    var id = props.getProperty('INCIDENT_DB_SPREADSHEET_ID');
-    if (!id || id.trim() === '') {
-      id = props.getProperty('SPREADSHEET_ID');
-    }
-    if (!id || id.trim() === '') {
+    try {
+      var props = PropertiesService.getScriptProperties();
+      var rawId = props.getProperty('INCIDENT_DB_SPREADSHEET_ID');
+      if (!rawId || rawId.trim() === '') {
+        rawId = props.getProperty('SPREADSHEET_ID');
+      }
+      var cleanId = extractSpreadsheetIdGS(rawId);
+      if (!cleanId) {
+        return getTargetSpreadsheet();
+      }
+      var ss = SpreadsheetApp.openById(cleanId);
+      try {
+        if (ss.getSpreadsheetLocale() !== 'id_ID') {
+          ss.setSpreadsheetLocale('id_ID');
+        }
+        if (ss.getSpreadsheetTimeZone() !== 'Asia/Jakarta') {
+          ss.setSpreadsheetTimeZone('Asia/Jakarta');
+        }
+      } catch (e) {}
+      return ss;
+    } catch (err) {
+      console.warn('Gagal membuka INCIDENT_DB_SPREADSHEET_ID, fallback ke target: ' + err.toString());
       return getTargetSpreadsheet();
     }
-    var ss = SpreadsheetApp.openById(id.trim());
-    try {
-      if (ss.getSpreadsheetLocale() !== 'id_ID') {
-        ss.setSpreadsheetLocale('id_ID');
-      }
-      if (ss.getSpreadsheetTimeZone() !== 'Asia/Jakarta') {
-        ss.setSpreadsheetTimeZone('Asia/Jakarta');
-      }
-    } catch (e) {}
-    return ss;
   }
 
   function initIncidentDbManual() {
     try {
       var props = PropertiesService.getScriptProperties();
-      var id = props.getProperty('INCIDENT_DB_SPREADSHEET_ID');
+      var rawId = props.getProperty('INCIDENT_DB_SPREADSHEET_ID');
+      var cleanId = extractSpreadsheetIdGS(rawId);
       var ss;
-      if (id) {
-        ss = SpreadsheetApp.openById(id);
+      if (cleanId) {
+        ss = SpreadsheetApp.openById(cleanId);
       } else {
         ss = SpreadsheetApp.getActiveSpreadsheet();
       }
@@ -3573,7 +3617,63 @@
       });
 
       if (incSheets.length === 0) {
-        return { success: true, incidents: [], totalOpen: 0 };
+        // Fallback jika tidak ada sheet INC_: coba baca langsung dari DB_ACTIVE_OPEN jika sheet ini ada data
+        var openSheet = ss.getSheetByName('DB_ACTIVE_OPEN');
+        if (openSheet && openSheet.getLastRow() > 1) {
+          var actBundle = buildActionMapFromSheets(ss);
+          var actMap = actBundle.actMap;
+          var vals = openSheet.getDataRange().getValues();
+          var fallbackIncidents = [];
+          for (var r = 1; r < vals.length; r++) {
+            var row = vals[r];
+            var incKey = String(row[0] || '').trim();
+            if (!incKey) continue;
+            var rawEnd = row[12];
+            if (!isEndTimeFilledGS(rawEnd)) {
+              var sTime = formatCellDateStr(row[11], 10);
+              var act = String(row[18] || '-').trim();
+              if (isTechnicalMachineLog(act)) act = '-';
+              fallbackIncidents.push({
+                incidentKey: incKey,
+                incidentNumber: String(row[1] || '-'),
+                wsid: String(row[2] || ''),
+                lokasi: String(row[3] || ''),
+                servicePoint: String(row[4] || '-'),
+                sektor: cleanSektorNameGS(row[5]),
+                servicePointSektor: (String(row[4] || '-') !== '-' && cleanSektorNameGS(row[5]) !== '-') ? (String(row[4] || '-') + ' - ' + cleanSektorNameGS(row[5])) : String(row[4] || row[5] || '-'),
+                typeMesin: String(row[6] || '-'),
+                vendorMesin: String(row[7] || '-'),
+                vendor: String(row[7] || '-'),
+                eventCode: String(row[8] || ''),
+                eventCodeDesc: String(row[9] || ''),
+                detail: resolveRowDetail(row, sTime),
+                startTime: sTime,
+                endTime: '-',
+                tanggal: formatCellDateOnly(row[13], 10),
+                jam: formatCellTimeOnly(row[14], sTime),
+                durasi: Number(row[16]) || 0,
+                durationRaw: Number(row[15]) || 0,
+                status: 'OPEN',
+                actionTerakhir: act,
+                actionTerakhirOleh: String(row[19] || '-'),
+                actionTerakhirWaktu: formatCellDateStr(row[20], 10),
+                jumlahAction: Number(row[21]) || 0,
+                monthStr: '2026-10'
+              });
+            }
+          }
+          if (fallbackIncidents.length > 0) {
+            return {
+              success: true,
+              incidents: fallbackIncidents,
+              totalOpen: fallbackIncidents.length,
+              source: 'DB_ACTIVE_OPEN',
+              spreadsheetName: ss.getName(),
+              spreadsheetId: ss.getId()
+            };
+          }
+        }
+        return { success: true, incidents: [], totalOpen: 0, spreadsheetName: ss.getName(), spreadsheetId: ss.getId() };
       }
 
       // Tarik peta riwayat tindakan terbaru dari ACT_ sheet secara instan O(1)
@@ -4389,8 +4489,22 @@
 
       for (var tm = 0; tm < targetMonths.length; tm++) {
         var curMonthStr = targetMonths[tm];
-        var curTargetMonth = parseInt(curMonthStr.split('-')[1] || '10', 10);
+        var curTargetMonth = parseInt(curMonthStr.split('-')[1] || curMonthStr.split('_')[1] || '10', 10);
         var sheet = ss.getSheetByName('INC_' + curMonthStr);
+        if (!sheet) {
+          sheet = ss.getSheetByName('INC_' + curMonthStr.replace('-', '_'));
+        }
+        if (!sheet) {
+          sheet = ss.getSheetByName('INC_' + curMonthStr.replace('_', '-'));
+        }
+        // Fallback cerdas: jika bulan spesifik tidak ditemukan tetapi ada bulan lain di database
+        if (!sheet && tm === 0 && availableMonths.length > 0) {
+          sheet = ss.getSheetByName('INC_' + availableMonths[0]);
+          if (sheet) {
+            curMonthStr = availableMonths[0];
+            curTargetMonth = parseInt(curMonthStr.split('-')[1] || curMonthStr.split('_')[1] || '10', 10);
+          }
+        }
 
         if (sheet && sheet.getLastRow() > 1) {
           var vals = sheet.getDataRange().getValues();
@@ -4521,7 +4635,10 @@
         rows: rows,
         totalCount: compactData.length,
         availableMonths: availableMonths,
-        lastUploadInfo: lastUploadInfo
+        lastUploadInfo: lastUploadInfo,
+        spreadsheetName: ss.getName(),
+        spreadsheetId: ss.getId(),
+        sheetsFound: sheets.map(function(s) { return s.getName(); })
       };
     } catch (err) {
       return { success: false, rows: [], message: 'Gagal memuat insiden dari database: ' + err.toString() };
