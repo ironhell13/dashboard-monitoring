@@ -304,15 +304,10 @@
       }
       Logger.log('========================================================');
 
-      try {
-        var ui = SpreadsheetApp.getUi();
-        var alertMsg = '✅ Diagnosis Selesai!\n' +
-          'Spreadsheet Daily: ' + ss2.getName() + '\n' +
-          'Sheet Insiden Ditemukan: ' + incSheets.length + '\n' +
-          'Total Baris Terbaca: ' + (testRes.totalCount || 0) + '\n\n' +
-          'Buka menu View > Execution log di editor Apps Script untuk rincian lengkap.';
-        ui.alert('Status Koneksi Database Daily', alertMsg, ui.ButtonSet.OK);
-      } catch (uiErr) {}
+      Logger.log('✅ Diagnosis Selesai!');
+      Logger.log('Spreadsheet Daily: ' + ss2.getName());
+      Logger.log('Sheet Insiden Ditemukan: ' + incSheets.length);
+      Logger.log('Total Baris Terbaca: ' + (testRes.totalCount || 0));
 
     } catch (err2) {
       Logger.log('❌ GAGAL MEMBUKA SPREADSHEET DAILY: ' + err2.toString());
@@ -3724,63 +3719,78 @@
         return b.getName().localeCompare(a.getName());
       });
 
-      if (incSheets.length === 0) {
-        // Fallback jika tidak ada sheet INC_: coba baca langsung dari DB_ACTIVE_OPEN jika sheet ini ada data
-        var openSheet = ss.getSheetByName('DB_ACTIVE_OPEN');
-        if (openSheet && openSheet.getLastRow() > 1) {
-          var actBundle = buildActionMapFromSheets(ss);
-          var actMap = actBundle.actMap;
-          var vals = openSheet.getDataRange().getValues();
-          var fallbackIncidents = [];
-          for (var r = 1; r < vals.length; r++) {
-            var row = vals[r];
-            var incKey = String(row[0] || '').trim();
-            if (!incKey) continue;
-            var rawEnd = row[12];
-            if (!isEndTimeFilledGS(rawEnd)) {
-              var sTime = formatCellDateStr(row[11], 10);
-              var act = String(row[18] || '-').trim();
-              if (isTechnicalMachineLog(act)) act = '-';
-              fallbackIncidents.push({
-                incidentKey: incKey,
-                incidentNumber: String(row[1] || '-'),
-                wsid: String(row[2] || ''),
-                lokasi: String(row[3] || ''),
-                servicePoint: String(row[4] || '-'),
-                sektor: cleanSektorNameGS(row[5]),
-                servicePointSektor: (String(row[4] || '-') !== '-' && cleanSektorNameGS(row[5]) !== '-') ? (String(row[4] || '-') + ' - ' + cleanSektorNameGS(row[5])) : String(row[4] || row[5] || '-'),
-                typeMesin: String(row[6] || '-'),
-                vendorMesin: String(row[7] || '-'),
-                vendor: String(row[7] || '-'),
-                eventCode: String(row[8] || ''),
-                eventCodeDesc: String(row[9] || ''),
-                detail: resolveRowDetail(row, sTime),
-                startTime: sTime,
-                endTime: '-',
-                tanggal: formatCellDateOnly(row[13], 10),
-                jam: formatCellTimeOnly(row[14], sTime),
-                durasi: Number(row[16]) || 0,
-                durationRaw: Number(row[15]) || 0,
-                status: 'OPEN',
-                actionTerakhir: act,
-                actionTerakhirOleh: String(row[19] || '-'),
-                actionTerakhirWaktu: formatCellDateStr(row[20], 10),
-                jumlahAction: Number(row[21]) || 0,
-                monthStr: '2026-10'
-              });
-            }
-          }
-          if (fallbackIncidents.length > 0) {
-            return {
-              success: true,
-              incidents: fallbackIncidents,
-              totalOpen: fallbackIncidents.length,
-              source: 'DB_ACTIVE_OPEN',
-              spreadsheetName: ss.getName(),
-              spreadsheetId: ss.getId()
-            };
+      // ⚡ PRIORITAS UTAMA: Baca langsung dari DB_ACTIVE_OPEN jika sheet ini ada data (1,080 baris, INSTAN < 200ms)
+      var openSheet = ss.getSheetByName('DB_ACTIVE_OPEN');
+      if (openSheet && openSheet.getLastRow() > 1) {
+        var actBundle = buildActionMapFromSheets(ss);
+        var actMap = actBundle.actMap;
+        var vals = openSheet.getDataRange().getValues();
+        var openIncidentsList = [];
+        for (var r = 1; r < vals.length; r++) {
+          var row = vals[r];
+          var incKey = String(row[0] || '').trim();
+          if (!incKey) continue;
+          var rawEnd = row[12];
+          if (!isEndTimeFilledGS(rawEnd)) {
+            var sTime = formatCellDateStr(row[11], 10);
+            var act = String(row[18] || '-').trim();
+            if (isTechnicalMachineLog(act)) act = '-';
+            var actOleh = (act !== '-') ? String(row[19] || '-').trim() : '-';
+            if (actOleh === 'CSV' || actOleh === 'CSV Comment') actOleh = '-';
+            var actWaktu = (act !== '-') ? formatCellDateStr(row[20], 10) : '-';
+            var actTimeMs = parseActionTimestampMs(actWaktu) || parseActionTimestampMs(row[20]);
+
+            var rowIncNum = String(row[1] || '-').trim();
+            var rowWsid = String(row[2] || '').trim().toUpperCase();
+            var rowEv = String(row[8] || row[9] || '').trim().toUpperCase();
+
+            var actResolved = resolveLatestActionForRow(
+              incKey, rowIncNum, rowWsid, rowEv,
+              act, actOleh, actWaktu, actTimeMs, actMap
+            );
+
+            openIncidentsList.push({
+              incidentKey: incKey,
+              incidentNumber: rowIncNum,
+              wsid: rowWsid,
+              lokasi: String(row[3] || ''),
+              servicePoint: String(row[4] || '-'),
+              sektor: cleanSektorNameGS(row[5]),
+              servicePointSektor: (String(row[4] || '-') !== '-' && cleanSektorNameGS(row[5]) !== '-') ? (String(row[4] || '-') + ' - ' + cleanSektorNameGS(row[5])) : String(row[4] || row[5] || '-'),
+              typeMesin: String(row[6] || '-'),
+              vendorMesin: String(row[7] || '-'),
+              vendor: String(row[7] || '-'),
+              eventCode: String(row[8] || ''),
+              eventCodeDesc: String(row[9] || ''),
+              detail: resolveRowDetail(row, sTime),
+              startTime: sTime,
+              endTime: '-',
+              tanggal: formatCellDateOnly(row[13], 10),
+              jam: formatCellTimeOnly(row[14], sTime),
+              durasi: Number(row[16]) || 0,
+              durationRaw: Number(row[15]) || 0,
+              status: 'OPEN',
+              actionTerakhir: actResolved.action,
+              actionTerakhirOleh: actResolved.petugas,
+              actionTerakhirWaktu: actResolved.waktu,
+              jumlahAction: actResolved.jumlah,
+              monthStr: '2026-10'
+            });
           }
         }
+        if (openIncidentsList.length > 0) {
+          return {
+            success: true,
+            incidents: openIncidentsList,
+            totalOpen: openIncidentsList.length,
+            source: 'DB_ACTIVE_OPEN',
+            spreadsheetName: ss.getName(),
+            spreadsheetId: ss.getId()
+          };
+        }
+      }
+
+      if (incSheets.length === 0) {
         return { success: true, incidents: [], totalOpen: 0, spreadsheetName: ss.getName(), spreadsheetId: ss.getId() };
       }
 
@@ -4625,7 +4635,11 @@
 
         if (sheet && sheet.getLastRow() > 1) {
           var vals = sheet.getDataRange().getValues();
-          for (var i = 1; i < vals.length; i++) {
+          var maxLimit = (payload && payload.limit) ? parseInt(payload.limit, 10) : 5000;
+          // Ambil baris terbaru dari bawah ke atas agar data paling mutakhir yang dikirim
+          var startRowIdx = Math.max(1, vals.length - maxLimit);
+
+          for (var i = vals.length - 1; i >= startRowIdx; i--) {
             var r = vals[i];
             var sPoint = String(r[4] || '-');
             var sektor = cleanSektorNameGS(r[5]);
@@ -4698,34 +4712,32 @@
             ];
             compactData.push(rowArray);
 
-            if (vals.length <= 1000) {
-              rows.push({
-                incidentNumber: rowArray[0],
-                wsid: rowArray[1],
-                lokasi: rowArray[2],
-                servicePointSektor: rowArray[3],
-                servicePoint: rowArray[4],
-                sektor: rowArray[5],
-                typeMesin: rowArray[6],
-                vendorMesin: rowArray[7],
-                startTime: rowArray[8],
-                endTime: rowArray[9],
-                dateStr: rowArray[10],
-                hourStr: rowArray[11],
-                hourNumber: rowArray[12],
-                durasi: rowArray[13],
-                rawDuration: rowArray[14],
-                eventCodeDesc: rowArray[15],
-                eventCode: rowArray[16],
-                detail: rowArray[17],
-                status: rowArray[18],
-                actionTerakhir: rowArray[19],
-                actionTerakhirOleh: rowArray[20],
-                actionTerakhirWaktu: rowArray[21],
-                jumlahAction: rowArray[22],
-                monthStr: rowArray[23]
-              });
-            }
+            rows.push({
+              incidentNumber: rowArray[0],
+              wsid: rowArray[1],
+              lokasi: rowArray[2],
+              servicePointSektor: rowArray[3],
+              servicePoint: rowArray[4],
+              sektor: rowArray[5],
+              typeMesin: rowArray[6],
+              vendorMesin: rowArray[7],
+              startTime: rowArray[8],
+              endTime: rowArray[9],
+              dateStr: rowArray[10],
+              hourStr: rowArray[11],
+              hourNumber: rowArray[12],
+              durasi: rowArray[13],
+              rawDuration: rowArray[14],
+              eventCodeDesc: rowArray[15],
+              eventCode: rowArray[16],
+              detail: rowArray[17],
+              status: rowArray[18],
+              actionTerakhir: rowArray[19],
+              actionTerakhirOleh: rowArray[20],
+              actionTerakhirWaktu: rowArray[21],
+              jumlahAction: rowArray[22],
+              monthStr: rowArray[23]
+            });
           }
         }
       }
