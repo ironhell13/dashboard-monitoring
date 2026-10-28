@@ -2550,6 +2550,15 @@
       var sheets = ss.getSheets();
       for (var i = 0; i < sheets.length; i++) {
         var sh = sheets[i];
+        var sName = sh.getName();
+
+        // Hapus sheet yang salah nama (misal ACT_07/10/2) jika isinya kosong atau hanya header
+        if (/^(ACT|INC)_/.test(sName) && !/^(ACT|INC)_\d{4}-\d{2}$/.test(sName)) {
+          if (sh.getLastRow() <= 1 && sheets.length > 1) {
+            try { ss.deleteSheet(sh); continue; } catch (e) {}
+          }
+        }
+
         var maxR = sh.getMaxRows();
         var lastR = sh.getLastRow();
         var safeTarget = Math.max(lastR + 50, 100);
@@ -2566,15 +2575,20 @@
   }
 
   function ensureSheetCapacity(sheet, neededRow) {
-    if (!sheet) return;
+    if (!sheet || !neededRow || isNaN(neededRow) || neededRow <= 0) return;
     try {
+      // 🛡️ PROTEKSI MUTLAK: Jangan pernah izinkan neededRow > 200.000 untuk mencegah alokasi miliaran sel
+      if (neededRow > 200000) {
+        console.warn('ensureSheetCapacity: neededRow abnormal (' + neededRow + '), operasi ditolak untuk keamanan.');
+        return;
+      }
+
       var maxR = sheet.getMaxRows();
       if (neededRow > maxR) {
         var toAdd = (neededRow - maxR) + 50; // Buffer ringkas 50 baris saja
         try {
           sheet.insertRowsAfter(maxR, toAdd);
         } catch (capErr) {
-          // Jika limit sel mendekati batas 20 juta sel Google, pangkas baris kosong di seluruh sheet lalu coba lagi
           pangkasBarisKosongInternal(sheet.getParent());
           var newMaxR = sheet.getMaxRows();
           if (neededRow > newMaxR) {
@@ -2955,12 +2969,10 @@
       for (var i = 0; i < validRows.length; i++) {
         var it = validRows[i];
         var mKey = '2026-10'; // default fallback
-        if (it.startTime && String(it.startTime).indexOf('/') !== -1) {
-          var dParts = it.startTime.split(' ')[0].split('/');
-          if (dParts.length >= 3) {
-            var y = dParts[2];
-            var m = ('0' + dParts[1]).slice(-2);
-            mKey = y + '-' + m;
+        if (it.startTime) {
+          var normM = normalizeMonthStr(it.startTime);
+          if (normM && /^\d{4}-\d{2}$/.test(normM)) {
+            mKey = normM;
           }
         }
         if (!rowsByMonth[mKey]) rowsByMonth[mKey] = [];
@@ -3081,19 +3093,19 @@
 
           // Pencarian nomor baris eksisting:
           var foundRowNum = 0;
-          if (keyRowMap[incKey]) {
+          if (keyRowMap[incKey] !== undefined) {
             foundRowNum = keyRowMap[incKey];
-          } else if (incidentNum && incidentNum !== '-' && incidentNumRowMap[incidentNum]) {
+          } else if (incidentNum && incidentNum !== '-' && incidentNumRowMap[incidentNum] !== undefined) {
             foundRowNum = incidentNumRowMap[incidentNum];
           } else {
             var itemNormKey = buildNormalizedKey(wsid, eventDesc, startTime);
-            if (itemNormKey && openIncidentsMap[itemNormKey]) {
+            if (itemNormKey && openIncidentsMap[itemNormKey] !== undefined) {
               foundRowNum = openIncidentsMap[itemNormKey];
             }
           }
 
-          if (foundRowNum > 0) {
-            // Insiden sudah ada di database.
+          if (foundRowNum > 0 && foundRowNum <= lastRow) {
+            // Insiden sudah ada di database (nomor baris valid antara 2 dan lastRow).
             // Jika data CSV memiliki End_Time dan insiden di database masih OPEN, lakukan penutupan:
             if (isClosed) {
               var curVals = incSheet.getRange(foundRowNum, 12, 1, 7).getValues()[0];
@@ -3154,14 +3166,17 @@
             } else {
               unchangedCount++;
             }
+          } else if (foundRowNum === -1) {
+            // Sudah masuk dalam antrean rowsToAppend pada chunk ini, tidak perlu diduplikasi
+            unchangedCount++;
           } else {
             // INSERT BARU
-            keyRowMap[incKey] = 99999999; // Tandai sudah ada dalam chunk ini agar tidak diduplikasi
+            keyRowMap[incKey] = -1; // Tandai -1 agar tidak diduplikasi dalam chunk ini
             if (incidentNum && incidentNum !== '-') {
-              incidentNumRowMap[incidentNum] = 99999999;
+              incidentNumRowMap[incidentNum] = -1;
             }
             var itemNormK = buildNormalizedKey(wsid, eventDesc, startTime);
-            if (itemNormK) openIncidentsMap[itemNormK] = 99999999;
+            if (itemNormK) openIncidentsMap[itemNormK] = -1;
 
             var newRow = [
               incKey,
