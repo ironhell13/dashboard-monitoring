@@ -2897,6 +2897,7 @@
 
       for (var monthStr in rowsByMonth) {
         var mRows = rowsByMonth[monthStr];
+        var targetMonth = parseInt(monthStr.split('-')[1] || '10', 10);
         var incSheet = getOrCreateIncidentSheet(ss, monthStr);
         var actSheet = getOrCreateActionSheet(ss, monthStr);
 
