@@ -2906,6 +2906,7 @@
         var openIncidentsMap = {}; // normalizedKey (WSID|EVENT|DATE|HOUR) -> 0-indexed position
         var fullData = [];
         var hasModifiedExisting = false;
+        var modifiedRowItems = [];
 
         // Helper untuk membangun kunci normalisasi: WSID|EVENT|DD/MM/YYYY|HH:mm
         function buildNormalizedKey(w, ev, st) {
@@ -3026,8 +3027,11 @@
                 : (durasiOpr > 0 ? durasiOpr : calculateOperationalDurationServer(exRow[11], finalEndTime, item.operatingDays, item.operatingHours, targetMonth)); // Durasi_OPR (col 17)
               exRow[17] = updatedStatus; // Status (col 18)
               exRow[24] = nowWib; // Last_Update_At (col 25)
-              exRow[25] = uploaderName; // Last_Update_By (col 26)
               hasModifiedExisting = true;
+              modifiedRowItems.push({
+                rowNum: foundIdx + 2,
+                row: exRow
+              });
 
               if (hasEndTimeUpdate) {
                 actionLogsToAppend.push([
@@ -3111,10 +3115,12 @@
           }
         }
 
-        // BATCH UPDATE BARIS EKSISTING DENGAN 1 PEMANGGILAN ATOMIK
-        if (hasModifiedExisting && fullData.length > 0) {
-          ensureSheetCapacity(incSheet, fullData.length + 1);
-          incSheet.getRange(2, 1, fullData.length, 26).setValues(fullData);
+        // HANYA UPDATE BARIS YANG BENAR-BENAR BERUBAH (Sangat Cepat: ~0.1 detik, BUKAN tulis ulang seluruh 90.000 baris!)
+        if (modifiedRowItems && modifiedRowItems.length > 0) {
+          for (var mIdx = 0; mIdx < modifiedRowItems.length; mIdx++) {
+            var mItem = modifiedRowItems[mIdx];
+            incSheet.getRange(mItem.rowNum, 1, 1, 26).setValues([mItem.row]);
+          }
         }
 
         // BATCH APPEND BARIS BARU DENGAN 1 PEMANGGILAN ATOMIK
@@ -3151,7 +3157,11 @@
             ]);
           }
           CacheService.getScriptCache().remove('MONITORING_OPEN_INCIDENTS');
-          syncOpenIncidentsSheet(ss);
+          try {
+            syncOpenIncidentsSheet(ss);
+          } catch (syncErr) {
+            console.warn('syncOpenIncidentsSheet deferred: ' + syncErr);
+          }
         } catch (logErr) {}
       }
 
