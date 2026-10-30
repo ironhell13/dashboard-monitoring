@@ -474,15 +474,33 @@ export function enrichOpenWithDailyData(
     }));
   }
 
-  // Bangun lookup map dari dailyRows (insiden yang ada di database)
+  // Pre-filter cepat: Kumpulkan WSID & Incident Number yang relevan dari item open aktif
+  // Sehingga dari puluhan ribu baris dailyRows, hanya baris yang relevan yang diproses
+  const relevantWsids = new Set<string>();
+  const relevantIncNums = new Set<string>();
+  for (let i = 0; i < currentlyOpen.length; i++) {
+    const it = currentlyOpen[i];
+    if (it.wsid) relevantWsids.add(it.wsid.toUpperCase());
+    if (it.incidentNumber && it.incidentNumber !== '-') relevantIncNums.add(it.incidentNumber);
+  }
+
+  // Bangun lookup map dari dailyRows (hanya untuk mesin yang relevan)
   const dailyByIncNum = new Map<string, DailyIncidentRow>();
   const dailyByKey = new Map<string, DailyIncidentRow>();
   const dailyByWsidEv = new Map<string, DailyIncidentRow>();
   const closedInDaily = new Set<string>();
 
-  for (const d of dailyRows) {
-    const isClosed = isEndTimeFilled(d.endTime);
+  for (let i = 0; i < dailyRows.length; i++) {
+    const d = dailyRows[i];
+    const wsidUpper = (d.wsid || '').toUpperCase();
     const incNum = (d.incidentNumber && d.incidentNumber !== '-') ? d.incidentNumber : undefined;
+
+    // Lewati langsung baris yang mesinnya tidak ada di open list aktif (skip 99% iterasi berat)
+    if (!relevantWsids.has(wsidUpper) && (!incNum || !relevantIncNums.has(incNum))) {
+      continue;
+    }
+
+    const isClosed = isEndTimeFilled(d.endTime);
     const sT = formatStartProblemTime(d.startTime);
     const dP = (d.dateStr && d.dateStr !== '-') ? d.dateStr : sT.split(' ')[0];
 
@@ -1203,12 +1221,14 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
   useEffect(() => {
     let isMounted = true;
     async function loadCache() {
+      let hasDailyData = false;
       try {
         const snap = await loadMonitoringSnapshot();
         if (isMounted && snap) {
           const daily = snap.allDailyIncidents || [];
           if (daily.length > 0) {
             setAllDailyIncidents(daily);
+            hasDailyData = true;
           }
           if (snap.openIncidents && snap.openIncidents.length > 0) {
             const enriched = daily.length > 0 ? enrichOpenWithDailyData(snap.openIncidents, daily) : snap.openIncidents;
@@ -1223,27 +1243,35 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
         }
       } catch (e) {}
 
-      try {
-        const cachedRows = await loadActiveIncidentDataset();
-        if (isMounted && cachedRows && cachedRows.length > 0) {
-          setAllDailyIncidents(cachedRows);
-          setOpenIncidents((prev) => (prev.length > 0 ? enrichOpenWithDailyData(prev, cachedRows) : extractOpenFromRows(cachedRows)));
-        }
-      } catch (e) {}
-
-      try {
-        const raw = localStorage.getItem(LOCAL_STORAGE_ACTIVE_DATA);
-        if (raw) {
-          const parsed = JSON.parse(raw);
-          if (isMounted && parsed && parsed.length > 0) {
-            setAllDailyIncidents((prev) => (prev.length > 0 ? prev : parsed));
-            setOpenIncidents((prev) => (prev.length > 0 ? enrichOpenWithDailyData(prev, parsed) : extractOpenFromRows(parsed)));
+      if (!hasDailyData) {
+        try {
+          const cachedRows = await loadActiveIncidentDataset();
+          if (isMounted && cachedRows && cachedRows.length > 0) {
+            setAllDailyIncidents(cachedRows);
+            hasDailyData = true;
+            setOpenIncidents((prev) => (prev.length > 0 ? enrichOpenWithDailyData(prev, cachedRows) : extractOpenFromRows(cachedRows)));
           }
-        }
-      } catch (e) {}
+        } catch (e) {}
+      }
 
-      // Tarik update dataset bulanan langsung dari database spreadsheet
-      fetchDailyIncidentsFromDb(historyMonth);
+      if (!hasDailyData) {
+        try {
+          const raw = localStorage.getItem(LOCAL_STORAGE_ACTIVE_DATA);
+          if (raw) {
+            const parsed = JSON.parse(raw);
+            if (isMounted && parsed && parsed.length > 0) {
+              setAllDailyIncidents((prev) => (prev.length > 0 ? prev : parsed));
+              hasDailyData = true;
+              setOpenIncidents((prev) => (prev.length > 0 ? enrichOpenWithDailyData(prev, parsed) : extractOpenFromRows(parsed)));
+            }
+          }
+        } catch (e) {}
+      }
+
+      // Hanya tarik otomatis dari database spreadsheet jika di cache lokal belum ada data sama sekali
+      if (!hasDailyData) {
+        fetchDailyIncidentsFromDb(historyMonth);
+      }
     }
 
     loadCache();
@@ -1300,12 +1328,9 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
           }
         }
 
-        saveMonitoringSnapshot({
-          openIncidents: finalEnriched,
-          allDailyIncidents: currentDaily,
-          historyResults: historyResultsRef.current,
-          lastSyncTime: Date.now()
-        });
+        try {
+          localStorage.setItem(LOCAL_STORAGE_OPEN_CACHE, JSON.stringify(finalEnriched.slice(0, 300)));
+        } catch (e) {}
 
         return finalEnriched;
       });
@@ -1313,7 +1338,7 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
       console.warn('Gagal memuat open incidents dari server, memakai data lokal:', err);
     } finally {
       setIsLoadingOpen(false);
-      setCountdownSeconds(45);
+      setCountdownSeconds(15);
     }
   };
 
@@ -1323,16 +1348,21 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
 
   // Countdown timer simulation (15 seconds auto-refresh loop) & Live Clock
   useEffect(() => {
+    let tickCount = 0;
     const timer = setInterval(() => {
       setCountdownSeconds((prev) => {
         if (prev <= 1) {
           fetchOpenIncidents();
+          setCurrentLiveTime(new Date());
           return 15;
         }
         return prev - 1;
       });
-      // Update waktu saat ini untuk perhitungan durasi live Problem Open
-      setCurrentLiveTime(new Date());
+
+      tickCount++;
+      if (tickCount % 15 === 0) {
+        setCurrentLiveTime(new Date());
+      }
     }, 1000);
     return () => clearInterval(timer);
   }, []);
@@ -1413,6 +1443,15 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
       }
     >();
 
+    const evalCache = new Map<string, {
+      sameDayCount: number;
+      is3xSehari: boolean;
+      fiveDayCount: number;
+      is3x5Hari: boolean;
+      totalOccurrences: number;
+      isChronic: boolean;
+    }>();
+
     const evaluateChronicItem = (inc: {
       incidentKey?: string;
       wsid?: string;
@@ -1424,7 +1463,30 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
       const wsid = (inc.wsid || '').trim().toUpperCase();
       const pKey = getProblemCanonicalKey(inc.eventCodeDesc, inc.eventCode);
       const groupKey = `${wsid}|||${pKey}`;
-      const occurrences = groupMap.get(groupKey) || [];
+      const occurrences = groupMap.get(groupKey);
+
+      if (!occurrences || occurrences.length === 0) {
+        return {
+          sameDayCount: 0,
+          is3xSehari: false,
+          fiveDayCount: 0,
+          is3x5Hari: false,
+          totalOccurrences: 0,
+          isChronic: false
+        };
+      }
+
+      // Fast-path: jika problem ini kurang dari 3 kali muncul di seluruh bulan, mustahil chronic
+      if (occurrences.length < 3) {
+        return {
+          sameDayCount: occurrences.length,
+          is3xSehari: false,
+          fiveDayCount: occurrences.length,
+          is3x5Hari: false,
+          totalOccurrences: occurrences.length,
+          isChronic: false
+        };
+      }
 
       const rawIncDate =
         inc.tanggal && inc.tanggal !== '-'
@@ -1433,6 +1495,10 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
           ? inc.startTime.split(' ')[0]
           : '';
       const normIncDate = normalizeDateStr(rawIncDate);
+      const cacheKey = `${groupKey}|||${normIncDate}`;
+      const cached = evalCache.get(cacheKey);
+      if (cached) return cached;
+
       const incEpoch = parseDateStrToEpochDay(rawIncDate);
 
       // Hitung per tanggal untuk deteksi 3x sehari
@@ -1440,7 +1506,8 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
       let sameDayCount = 0;
       let fiveDayCount = 0;
 
-      for (const occ of occurrences) {
+      for (let i = 0; i < occurrences.length; i++) {
+        const occ = occurrences[i];
         const dKey = occ.normDate || occ.dateStr;
         if (dKey && dKey !== '-') {
           dateCounts[dKey] = (dateCounts[dKey] || 0) + 1;
@@ -1459,8 +1526,10 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
         }
       }
 
-      // Max same day count di mana pun dalam data mesin ini untuk problem yang sama
-      const maxSameDay = Object.values(dateCounts).reduce((m, c) => Math.max(m, c), 0);
+      let maxSameDay = 0;
+      for (const dKey in dateCounts) {
+        if (dateCounts[dKey] > maxSameDay) maxSameDay = dateCounts[dKey];
+      }
       sameDayCount = Math.max(sameDayCount, maxSameDay, 1);
       fiveDayCount = Math.max(fiveDayCount, sameDayCount, occurrences.length >= 3 ? occurrences.length : 1);
 
@@ -1468,7 +1537,7 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
       const is3x5Hari = fiveDayCount >= 3 || occurrences.length >= 3;
       const isChronic = is3xSehari || is3x5Hari;
 
-      return {
+      const res = {
         sameDayCount,
         is3xSehari,
         fiveDayCount,
@@ -1476,22 +1545,28 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
         totalOccurrences: occurrences.length,
         isChronic
       };
+      evalCache.set(cacheKey, res);
+      return res;
     };
 
+    // Evaluasi seluruh open incidents aktif (biasanya 10-50 item, sekejap < 1ms)
     for (const inc of openIncidents) {
       if (inc.incidentKey) {
         resultMap.set(inc.incidentKey, evaluateChronicItem(inc));
       }
     }
 
-    for (const inc of historyResults) {
-      if (inc.incidentKey && !resultMap.has(inc.incidentKey)) {
-        resultMap.set(inc.incidentKey, evaluateChronicItem(inc));
+    // Hanya evaluasi riwayat jika user membuka tab Riwayat (History)
+    if (activeTab === 'HISTORY') {
+      for (const inc of historyResults) {
+        if (inc.incidentKey && !resultMap.has(inc.incidentKey)) {
+          resultMap.set(inc.incidentKey, evaluateChronicItem(inc));
+        }
       }
     }
 
     return resultMap;
-  }, [openIncidents, allDailyIncidents, historyResults]);
+  }, [openIncidents, allDailyIncidents, historyResults, activeTab]);
 
   const masterSchedMap = useMemo(() => {
     const map = new Map<string, any>();
@@ -2211,23 +2286,26 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
     setCurrentPageOpen(1);
   };
 
+  // Base sets dari master data & allDailyIncidents (dihitung SEKALI saat dataset berubah, BUKAN tiap detik clock)
+  const baseOpenEvents = useMemo(() => {
+    const set = new Set<string>();
+    TARGET_EVENT_CODES.forEach((c) => set.add(c));
+    for (let i = 0; i < allDailyIncidents.length; i++) {
+      const r = allDailyIncidents[i];
+      if (r.eventCodeDesc && r.eventCodeDesc.trim()) set.add(r.eventCodeDesc.trim());
+    }
+    return Array.from(set);
+  }, [allDailyIncidents]);
+
   /** Daftar seluruh Event Code / Problem yang ada */
   const openAvailableEvents = useMemo(() => {
-    const set = new Set<string>();
-    allDailyIncidents.forEach((r) => {
+    const set = new Set<string>(baseOpenEvents);
+    for (let i = 0; i < trulyOpenIncidents.length; i++) {
+      const r = trulyOpenIncidents[i];
       if (r.eventCodeDesc && r.eventCodeDesc.trim()) set.add(r.eventCodeDesc.trim());
-    });
-    trulyOpenIncidents.forEach((r) => {
-      if (r.eventCodeDesc && r.eventCodeDesc.trim()) set.add(r.eventCodeDesc.trim());
-    });
-    frequencyDataset.forEach((r) => {
-      if (r.eventCodeDesc && r.eventCodeDesc.trim()) set.add(r.eventCodeDesc.trim());
-    });
-    if (set.size === 0) {
-      TARGET_EVENT_CODES.forEach((c) => set.add(c));
     }
     return Array.from(set).sort((a, b) => a.localeCompare(b));
-  }, [allDailyIncidents, trulyOpenIncidents, frequencyDataset]);
+  }, [baseOpenEvents, trulyOpenIncidents]);
 
   const toggleEventCodeOpen = (code: string) => {
     setSelectedEventCodesOpen((prev) => {
@@ -2250,65 +2328,89 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
     setCurrentPageOpen(1);
   };
 
-  const openAvailableSPs = useMemo(() => {
+  const baseOpenSPs = useMemo(() => {
     const set = new Set<string>();
     if (rawMasterData && rawMasterData.length > 0) {
-      rawMasterData.forEach((m: any) => {
+      for (let i = 0; i < rawMasterData.length; i++) {
+        const m = rawMasterData[i];
         const sp = (m.servicePoint || m.service_point || m.ServicePoint || '').trim();
         if (sp && sp !== '-' && sp !== 'N/A') set.add(sp);
-      });
+      }
     }
-    allDailyIncidents.forEach((r) => {
+    for (let i = 0; i < allDailyIncidents.length; i++) {
+      const r = allDailyIncidents[i];
       const sp = (r.servicePoint || '').trim();
       if (sp && sp !== '-' && sp !== 'N/A') set.add(sp);
       if (r.servicePointSektor && r.servicePointSektor !== '-') {
         const p = r.servicePointSektor.split('-')[0].trim();
         if (p && p !== '-' && p !== 'N/A') set.add(p);
       }
-    });
-    trulyOpenIncidents.forEach((r) => {
+    }
+    return Array.from(set);
+  }, [rawMasterData, allDailyIncidents]);
+
+  const openAvailableSPs = useMemo(() => {
+    const set = new Set<string>(baseOpenSPs);
+    for (let i = 0; i < trulyOpenIncidents.length; i++) {
+      const r = trulyOpenIncidents[i];
       const sp = (r.servicePoint || '').trim();
       if (sp && sp !== '-' && sp !== 'N/A') set.add(sp);
-    });
+    }
     return Array.from(set).sort((a, b) => a.localeCompare(b));
-  }, [rawMasterData, allDailyIncidents, trulyOpenIncidents]);
+  }, [baseOpenSPs, trulyOpenIncidents]);
 
-  const openAvailableSektors = useMemo(() => {
+  const baseOpenSektors = useMemo(() => {
     const set = new Set<string>();
     if (rawMasterData && rawMasterData.length > 0) {
-      rawMasterData.forEach((m: any) => {
+      for (let i = 0; i < rawMasterData.length; i++) {
+        const m = rawMasterData[i];
         const sk = cleanSektorName(m.Sektor || m.sektor || m.sektorBCA || '');
         if (sk && sk !== '-') set.add(sk);
-      });
+      }
     }
-    allDailyIncidents.forEach((r) => {
+    for (let i = 0; i < allDailyIncidents.length; i++) {
+      const r = allDailyIncidents[i];
       const sk = cleanSektorName(r.sektor);
       if (sk && sk !== '-') set.add(sk);
-    });
-    trulyOpenIncidents.forEach((r) => {
-      const sk = cleanSektorName(r.sektor);
-      if (sk && sk !== '-') set.add(sk);
-    });
-    return Array.from(set).sort((a, b) => a.localeCompare(b));
-  }, [rawMasterData, allDailyIncidents, trulyOpenIncidents]);
+    }
+    return Array.from(set);
+  }, [rawMasterData, allDailyIncidents]);
 
-  const openAvailableVendors = useMemo(() => {
+  const openAvailableSektors = useMemo(() => {
+    const set = new Set<string>(baseOpenSektors);
+    for (let i = 0; i < trulyOpenIncidents.length; i++) {
+      const r = trulyOpenIncidents[i];
+      const sk = cleanSektorName(r.sektor);
+      if (sk && sk !== '-') set.add(sk);
+    }
+    return Array.from(set).sort((a, b) => a.localeCompare(b));
+  }, [baseOpenSektors, trulyOpenIncidents]);
+
+  const baseOpenVendors = useMemo(() => {
     const set = new Set<string>();
     if (rawMasterData && rawMasterData.length > 0) {
-      rawMasterData.forEach((m: any) => {
+      for (let i = 0; i < rawMasterData.length; i++) {
+        const m = rawMasterData[i];
         const vd = (m.Vendor || m.vendor || '').trim();
         if (vd && vd !== '-' && vd !== 'N/A') set.add(vd);
-      });
+      }
     }
-    allDailyIncidents.forEach((r) => {
+    for (let i = 0; i < allDailyIncidents.length; i++) {
+      const r = allDailyIncidents[i];
       const vd = (r.vendorMesin || '').trim();
       if (vd && vd !== '-' && vd !== 'N/A') set.add(vd);
-    });
-    trulyOpenIncidents.forEach((r) => {
+    }
+    return Array.from(set);
+  }, [rawMasterData, allDailyIncidents]);
+
+  const openAvailableVendors = useMemo(() => {
+    const set = new Set<string>(baseOpenVendors);
+    for (let i = 0; i < trulyOpenIncidents.length; i++) {
+      const r = trulyOpenIncidents[i];
       if (r.vendor && r.vendor !== '-') set.add(r.vendor.trim());
-    });
+    }
     return Array.from(set).sort((a, b) => a.localeCompare(b));
-  }, [rawMasterData, allDailyIncidents, trulyOpenIncidents]);
+  }, [baseOpenVendors, trulyOpenIncidents]);
 
   // =========================================================================
   // DRAWER & SINGLE ACTION HANDLERS
@@ -2741,6 +2843,7 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
   };
 
   const filteredFreqItems = useMemo(() => {
+    if (activeTab !== 'FREKUENSI') return [];
     return aggFreqItems.filter((item) => {
       if (freqSearch) {
         const q = freqSearch.toLowerCase();
@@ -2775,14 +2878,16 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
       }
       return true;
     });
-  }, [aggFreqItems, freqSearch, selectedEventCodesFreq, freqServicePoint, freqStartDate, freqEndDate, freqDateFilter, freqDates]);
+  }, [activeTab, aggFreqItems, freqSearch, selectedEventCodesFreq, freqServicePoint, freqStartDate, freqEndDate, freqDateFilter, freqDates]);
 
   const displayedFreqDates = useMemo(() => {
+    if (activeTab !== 'FREKUENSI') return freqDates;
     if (freqStartDate === 'ALL' && freqEndDate === 'ALL') return freqDates;
     return freqDates.filter((d) => isDateInRange(d, freqStartDate, freqEndDate));
-  }, [freqDates, freqStartDate, freqEndDate]);
+  }, [activeTab, freqDates, freqStartDate, freqEndDate]);
 
   const sortedFreqItems = useMemo(() => {
+    if (activeTab !== 'FREKUENSI') return [];
     const list = [...filteredFreqItems];
     list.sort((a, b) => {
       let aVal: any = 0;
@@ -2816,13 +2921,14 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
       return 0;
     });
     return list;
-  }, [filteredFreqItems, sortFieldFreq, sortDirectionFreq, freqDates]);
+  }, [activeTab, filteredFreqItems, sortFieldFreq, sortDirectionFreq, freqDates]);
 
   const totalPagesFreq = Math.ceil(sortedFreqItems.length / pageSizeFreq) || 1;
   const paginatedFreqItems = useMemo(() => {
+    if (activeTab !== 'FREKUENSI') return [];
     const start = (currentPageFreq - 1) * pageSizeFreq;
     return sortedFreqItems.slice(start, start + pageSizeFreq);
-  }, [sortedFreqItems, currentPageFreq, pageSizeFreq]);
+  }, [activeTab, sortedFreqItems, currentPageFreq, pageSizeFreq]);
 
   const handleSortFreq = (field: string) => {
     setCurrentPageFreq(1);
@@ -2836,6 +2942,7 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
 
   // Map WSID to count of Penanganan
   const wsidPenangananCountMap = useMemo(() => {
+    if (activeTab !== 'FREKUENSI') return new Map<string, number>();
     const map = new Map<string, number>();
 
     allDailyIncidents.forEach((r) => {
@@ -3416,6 +3523,7 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
    * Filter dataset problem 24 jam berdasarkan SP, Sektor, Tanggal, dan Jenis Problem
    */
   const filtered24hIncidents = useMemo(() => {
+    if (activeTab !== 'GRAFIK_24JAM') return [];
     return frequencyDataset.filter((r) => {
       if (grafik24Sp !== 'ALL') {
         const targetSpNorm = normSP(grafik24Sp);
@@ -3448,7 +3556,7 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
 
       return true;
     });
-  }, [frequencyDataset, grafik24Sp, grafik24Sektor, grafik24Problem, grafik24StartDate, grafik24EndDate]);
+  }, [activeTab, frequencyDataset, grafik24Sp, grafik24Sektor, grafik24Problem, grafik24StartDate, grafik24EndDate]);
 
   /**
    * Agregasi 24 Jam (00:00 s/d 23:00) lengkap dengan kalkulasi Peak Hour
@@ -3479,6 +3587,14 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
         solvedCount: 0,
         topProblems: []
       });
+    }
+
+    if (activeTab !== 'GRAFIK_24JAM') {
+      return {
+        buckets: buckets.map((b) => ({ ...b, isPeak: false, percentage: 0 })),
+        maxCount: 0,
+        totalCount: 0
+      };
     }
 
     filtered24hIncidents.forEach((r) => {
@@ -3520,12 +3636,21 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
       maxCount,
       totalCount: totalAll
     };
-  }, [filtered24hIncidents, getHourFromRecord]);
+  }, [activeTab, filtered24hIncidents, getHourFromRecord]);
 
   /**
    * Detail informasi Peak Hour (puncak kejadian dalam 24 jam)
    */
   const peakHourInfo = useMemo(() => {
+    if (activeTab !== 'GRAFIK_24JAM') {
+      return {
+        peakHourStr: '-',
+        peakCount: 0,
+        percentage: 0,
+        peakHours: [] as number[],
+        description: ''
+      };
+    }
     const { buckets, maxCount, totalCount } = hourly24Distribution;
     if (maxCount === 0 || totalCount === 0) {
       return {
@@ -3552,12 +3677,13 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
       peakHours: peakHourNumbers,
       description: `Puncak frekuensi ${problemPrefix} (Peak Hour) terdeteksi pada pukul ${peakHourStr} dengan total ${maxCount} kejadian problem (${pct}% dari seluruh problem pada filter ini).`
     };
-  }, [hourly24Distribution, grafik24Problem]);
+  }, [activeTab, hourly24Distribution, grafik24Problem]);
 
   /**
    * Baris data problem yang ditampilkan pada tabel (jam terpilih atau seluruh jam jika belum dipilih)
    */
   const displayed24hRows = useMemo(() => {
+    if (activeTab !== 'GRAFIK_24JAM') return [];
     let baseList: any[] = [];
     if (selectedHour24 !== null) {
       const bucket = hourly24Distribution.buckets.find((b) => b.hour === selectedHour24);
@@ -3587,13 +3713,14 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
         pet.includes(q)
       );
     });
-  }, [selectedHour24, hourly24Distribution, filtered24hIncidents, grafik24Search]);
+  }, [activeTab, selectedHour24, hourly24Distribution, filtered24hIncidents, grafik24Search]);
 
   const totalPages24 = Math.ceil(displayed24hRows.length / grafik24PageSize) || 1;
   const paginated24hRows = useMemo(() => {
+    if (activeTab !== 'GRAFIK_24JAM') return [];
     const start = (grafik24CurrentPage - 1) * grafik24PageSize;
     return displayed24hRows.slice(start, start + grafik24PageSize);
-  }, [displayed24hRows, grafik24CurrentPage, grafik24PageSize]);
+  }, [activeTab, displayed24hRows, grafik24CurrentPage, grafik24PageSize]);
 
   const handleExport24hToExcel = () => {
     const hourLabel = selectedHour24 !== null ? `Jam_${String(selectedHour24).padStart(2, '0')}` : '24_Jam';
@@ -3692,6 +3819,7 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
   };
 
   const filteredHistory = useMemo(() => {
+    if (activeTab !== 'HISTORY') return [];
     return historyResults.filter((r) => {
       if (historyStatus !== 'ALL' && r.status !== historyStatus) return false;
       if (
@@ -3719,9 +3847,10 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
       }
       return true;
     });
-  }, [historyResults, historyStatus, selectedEventCodesHistory, historyQuery, historyStartDate, historyEndDate]);
+  }, [activeTab, historyResults, historyStatus, selectedEventCodesHistory, historyQuery, historyStartDate, historyEndDate]);
 
   const sortedHistory = useMemo(() => {
+    if (activeTab !== 'HISTORY') return [];
     const list = [...filteredHistory];
     list.sort((a, b) => {
       let diff = 0;
@@ -3751,13 +3880,14 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
       return historySortDirection === 'asc' ? diff : -diff;
     });
     return list;
-  }, [filteredHistory, historySortColumn, historySortDirection, chronicInfoMap, getHistoryEffectiveDuration]);
+  }, [activeTab, filteredHistory, historySortColumn, historySortDirection, chronicInfoMap, getHistoryEffectiveDuration]);
 
   const totalPagesHistory = Math.ceil(sortedHistory.length / pageSizeHistory) || 1;
   const paginatedHistory = useMemo(() => {
+    if (activeTab !== 'HISTORY') return [];
     const start = (currentPageHistory - 1) * pageSizeHistory;
     return sortedHistory.slice(start, start + pageSizeHistory);
-  }, [sortedHistory, currentPageHistory, pageSizeHistory]);
+  }, [activeTab, sortedHistory, currentPageHistory, pageSizeHistory]);
 
   const handleSortHistory = (
     col: 'wsid' | 'typeMesin' | 'eventCodeDesc' | 'startTime' | 'endTime' | 'durasiOpr' | 'chronic' | 'actionTerakhir'
@@ -3974,6 +4104,7 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
 
   // Filtered rows for Grafik Frekuensi
   const filteredGfRows = useMemo(() => {
+    if (activeTab !== 'GRAFIK_FREKUENSI') return [];
     return rawGfDataset.filter((r) => {
       // 1. Problem filter
       if (gfSelectedProblems.length > 0) {
@@ -3999,7 +4130,7 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
 
       return true;
     });
-  }, [rawGfDataset, gfSelectedProblems, gfServicePoint, gfWsidSearch]);
+  }, [activeTab, rawGfDataset, gfSelectedProblems, gfServicePoint, gfWsidSearch]);
 
   // KPI summary metrics
   const gfKpiMetrics = useMemo(() => {
