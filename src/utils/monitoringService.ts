@@ -765,6 +765,7 @@ export const getDailyIncidentsFromDbApi = async (payload?: {
   startMonth?: string;
   endMonth?: string;
   months?: string[];
+  limit?: number;
 }): Promise<{
   success: boolean;
   rows: any[];
@@ -795,7 +796,7 @@ export const getDailyIncidentsFromDbApi = async (payload?: {
   if (isBackendConfigured()) {
     try {
       const sanitizedPayload = {
-        limit: 2500,
+        limit: 60000,
         ...payload
       };
       const res = await apiGet('getDailyIncidentsFromDb', sanitizedPayload);

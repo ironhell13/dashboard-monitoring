@@ -4901,7 +4901,6 @@
         'hourNumber', 'durasi', 'rawDuration', 'eventCodeDesc', 'eventCode', 'detail',
         'status', 'actionTerakhir', 'actionTerakhirOleh', 'actionTerakhirWaktu', 'jumlahAction', 'monthStr'
       ];
-      var rows = [];
       var compactData = [];
 
       for (var tm = 0; tm < targetMonths.length; tm++) {
@@ -4934,11 +4933,14 @@
         if (sheet && sheet.getLastRow() > 1) {
           var lastRow = sheet.getLastRow();
           var lastCol = Math.min(sheet.getLastColumn(), 25);
-          var maxLimit = (payload && payload.limit) ? parseInt(payload.limit, 10) : 2500;
+          var hasExplicitLimit = !!(payload && payload.limit && parseInt(payload.limit, 10) > 0);
+          var maxLimit = hasExplicitLimit ? parseInt(payload.limit, 10) : 60000;
           
           var totalDataRows = lastRow - 1;
           var rowsToFetch = Math.min(totalDataRows, maxLimit);
-          var startRow = Math.max(2, lastRow - rowsToFetch + 1);
+          // Jika limit eksplisit diberikan lebih kecil dari total baris, ambil dari baris paling bawah (terbaru).
+          // Jika tidak ada limit atau minta semua, mulai dari baris 2 (awal bulan) agar semua tanggal 1 s/d akhir bulan terbaca.
+          var startRow = (hasExplicitLimit && totalDataRows > maxLimit) ? Math.max(2, lastRow - rowsToFetch + 1) : 2;
 
           // Baca dalam chunk yang aman (maksimal 1000 baris per getRange)
           // Mencegah error "Data yang diminta melebihi ukuran maksimum yang diizinkan"
@@ -5038,33 +5040,6 @@
               curMonthStr
             ];
             compactData.push(rowArray);
-
-            rows.push({
-              incidentNumber: rowArray[0],
-              wsid: rowArray[1],
-              lokasi: rowArray[2],
-              servicePointSektor: rowArray[3],
-              servicePoint: rowArray[4],
-              sektor: rowArray[5],
-              typeMesin: rowArray[6],
-              vendorMesin: rowArray[7],
-              startTime: rowArray[8],
-              endTime: rowArray[9],
-              dateStr: rowArray[10],
-              hourStr: rowArray[11],
-              hourNumber: rowArray[12],
-              durasi: rowArray[13],
-              rawDuration: rowArray[14],
-              eventCodeDesc: rowArray[15],
-              eventCode: rowArray[16],
-              detail: rowArray[17],
-              status: rowArray[18],
-              actionTerakhir: rowArray[19],
-              actionTerakhirOleh: rowArray[20],
-              actionTerakhirWaktu: rowArray[21],
-              jumlahAction: rowArray[22],
-              monthStr: rowArray[23]
-            });
           }
         }
       }

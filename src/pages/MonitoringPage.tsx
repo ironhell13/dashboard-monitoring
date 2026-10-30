@@ -1056,7 +1056,7 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
   const fetchDailyIncidentsFromDb = async (month: string = historyMonth) => {
     setIsLoadingDailyFromDb(true);
     try {
-      const res = await getDailyIncidentsFromDbApi({ monthStr: month, limit: 2000 });
+      const res = await getDailyIncidentsFromDbApi({ monthStr: month });
       if (res.success && res.rows && res.rows.length > 0) {
         setAllDailyIncidents(res.rows);
         saveActiveIncidentDataset(res.rows);
