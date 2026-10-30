@@ -41,6 +41,7 @@ import { cleanSektorName } from '../utils/dailyIncidentParser';
 
 interface FollowUpPageProps {
   userRole?: 'KAWIL' | 'KAOPS' | 'MONITORING';
+  isEmbedded?: boolean;
 }
 
 const DEFAULT_SERVICE_POINTS = ['ACJK', 'ACBT', 'ACCK', 'ACSR', 'ACBS', 'ACRW', 'TAG'];
@@ -56,7 +57,7 @@ const PROGRESS_PRESETS = [
   'Mesin sudah normal kembali dan siap ditransaksikan nasabah'
 ];
 
-export default function FollowUpPage({ userRole }: FollowUpPageProps) {
+export default function FollowUpPage({ userRole, isEmbedded = false }: FollowUpPageProps) {
   const { modernTickets, setModernTickets, addOrUpdateModernTicket, removeModernTicket, rawMasterData } = useDataStore();
 
   // Role detection
@@ -69,9 +70,15 @@ export default function FollowUpPage({ userRole }: FollowUpPageProps) {
 
   const isSupervisorRole = effectiveRole === 'KAWIL' || effectiveRole === 'KAOPS';
 
-  // State Petugas Signature
+  // State Petugas Signature (sinkron dengan sesi Monitoring & Ka Ops)
   const [petugasName, setPetugasName] = useState(() => {
-    return sessionStorage.getItem('PETUGAS_NAME') || '';
+    try {
+      const saved = localStorage.getItem('MONITORING_PETUGAS_NAME') || sessionStorage.getItem('PETUGAS_NAME');
+      if (saved) return saved;
+    } catch (e) {}
+    if (effectiveRole === 'KAWIL') return 'Ka Wil';
+    if (effectiveRole === 'KAOPS') return 'Ka Ops';
+    return '';
   });
   const [showPetugasModal, setShowPetugasModal] = useState(false);
   const [tempPetugasName, setTempPetugasName] = useState('');
@@ -85,10 +92,11 @@ export default function FollowUpPage({ userRole }: FollowUpPageProps) {
 
   // Filter States
   const [selectedSp, setSelectedSp] = useState<string>('ALL');
-  const [statusTab, setStatusTab] = useState<'ALL' | 'ACTION_NEEDED' | 'WAITING_VALIDATION' | 'CLOSED'>('ALL');
+  const [statusTab, setStatusTab] = useState<'ALL' | 'ACTION_NEEDED' | 'RE_OPEN' | 'WAITING_VALIDATION' | 'CLOSED'>('ALL');
   const [priorityFilter, setPriorityFilter] = useState<'ALL' | 'URGENT' | 'HIGH' | 'NORMAL'>('ALL');
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [toastMessage, setToastMessage] = useState<string | null>(null);
+  const [isRefreshing, setIsRefreshing] = useState(false);
 
   // Modals State
   const [showCreateModal, setShowCreateModal] = useState(false);
@@ -163,6 +171,8 @@ export default function FollowUpPage({ userRole }: FollowUpPageProps) {
     // Filter Status Tab
     if (statusTab === 'ACTION_NEEDED') {
       list = list.filter((t) => t.status === 'OPEN' || t.status === 'IN_PROGRESS' || t.status === 'RE_OPEN');
+    } else if (statusTab === 'RE_OPEN') {
+      list = list.filter((t) => t.status === 'RE_OPEN');
     } else if (statusTab === 'WAITING_VALIDATION') {
       list = list.filter((t) => t.status === 'REQ_CLOSE');
     } else if (statusTab === 'CLOSED') {
@@ -236,7 +246,24 @@ export default function FollowUpPage({ userRole }: FollowUpPageProps) {
     if (tempPetugasName.trim()) {
       setPetugasName(tempPetugasName.trim());
       sessionStorage.setItem('PETUGAS_NAME', tempPetugasName.trim());
+      localStorage.setItem('MONITORING_PETUGAS_NAME', tempPetugasName.trim());
       setShowPetugasModal(false);
+    }
+  };
+
+  const handleRefreshTickets = async () => {
+    setIsRefreshing(true);
+    try {
+      const res = await fetchFollowUpTicketsModern();
+      if (res.success && res.tickets) {
+        setModernTickets(res.tickets);
+        setToastMessage('Data tiket berhasil dimutakhirkan dari cloud.');
+        setTimeout(() => setToastMessage(null), 3000);
+      }
+    } catch (e: any) {
+      alert('Gagal memuat ulang tiket: ' + (e?.message || e));
+    } finally {
+      setIsRefreshing(false);
     }
   };
 
@@ -602,7 +629,9 @@ ${ticket.reqCloseInfo ? `*Catatan Penyelesaian:* ${ticket.reqCloseInfo.catatanPe
   };
 
   return (
-    <div className="flex-1 flex flex-col p-4 sm:p-6 bg-[#F5F7FB] min-h-screen text-slate-800 space-y-4">
+    <div className={`flex-1 flex flex-col text-slate-800 space-y-4 ${
+      isEmbedded ? 'w-full pb-8' : 'p-4 sm:p-6 bg-[#F5F7FB] min-h-screen'
+    }`}>
       {/* Toast Notification */}
       {toastMessage && (
         <div className="fixed top-5 right-5 z-50 px-4 py-2.5 rounded-lg bg-slate-900 text-white text-xs font-semibold shadow-lg flex items-center gap-2 animate-in fade-in slide-in-from-top-3">
@@ -621,14 +650,22 @@ ${ticket.reqCloseInfo ? `*Catatan Penyelesaian:* ${ticket.reqCloseInfo.catatanPe
             <div>
               <div className="flex items-center gap-2">
                 <h1 className="text-base font-bold text-[#0D1C2E] tracking-tight">
-                  Pusat Tiket Permintaan ke Monitoring
+                  {effectiveRole === 'MONITORING' ? 'Dashboard Tiket Monitoring' : 'Pusat Tiket Permintaan ke Monitoring'}
                 </h1>
-                <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-blue-50 text-blue-700 border border-blue-200">
+                <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${
+                  effectiveRole === 'MONITORING'
+                    ? 'bg-blue-50 text-blue-700 border border-blue-200'
+                    : effectiveRole === 'KAWIL'
+                    ? 'bg-indigo-50 text-indigo-700 border border-indigo-200'
+                    : 'bg-teal-50 text-teal-700 border border-teal-200'
+                }`}>
                   {effectiveRole === 'KAWIL' ? 'Portal Ka Wil' : effectiveRole === 'KAOPS' ? 'Portal Ka Ops' : 'Tim Monitoring'}
                 </span>
               </div>
               <p className="text-[11px] text-[#555F71]">
-                Koordinasi dan eskalasi penanganan problem mesin antara Supervisor (Ka Wil / Ka Ops) dan Tim Monitoring
+                {effectiveRole === 'MONITORING'
+                  ? 'Antrean permintaan tindak lanjut problem mesin dari Supervisor (Ka Wil / Ka Ops) ke Tim Monitoring'
+                  : 'Koordinasi dan eskalasi penanganan problem mesin antara Supervisor (Ka Wil / Ka Ops) dan Tim Monitoring'}
               </p>
             </div>
           </div>
@@ -647,6 +684,18 @@ ${ticket.reqCloseInfo ? `*Catatan Penyelesaian:* ${ticket.reqCloseInfo.catatanPe
           >
             <User size={13} className="text-blue-600" />
             <span>Petugas: <strong className="text-[#0D1C2E]">{petugasName || 'Belum Diisi'}</strong></span>
+          </button>
+
+          {/* Refresh Tiket dari Cloud */}
+          <button
+            type="button"
+            onClick={handleRefreshTickets}
+            disabled={isRefreshing}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white hover:bg-slate-50 border border-[#E5EAF2] text-xs font-semibold text-slate-700 shadow-2xs transition-colors cursor-pointer"
+            title="Muat ulang tiket terbaru dari Google Spreadsheet"
+          >
+            <RefreshCw size={13} className={`text-blue-600 ${isRefreshing ? 'animate-spin' : ''}`} />
+            <span>{isRefreshing ? 'Memuat...' : 'Refresh'}</span>
           </button>
 
           {/* Export Excel */}
@@ -800,6 +849,21 @@ ${ticket.reqCloseInfo ? `*Catatan Penyelesaian:* ${ticket.reqCloseInfo.catatanPe
             >
               Perlu Tindakan ({countActionNeeded})
             </button>
+            {countReOpen > 0 && (
+              <button
+                type="button"
+                onClick={() => setStatusTab('RE_OPEN')}
+                className={`px-2 py-0.5 rounded-md text-[11px] font-bold transition-all cursor-pointer flex items-center gap-1 ${
+                  statusTab === 'RE_OPEN'
+                    ? 'bg-rose-600 text-white shadow-2xs'
+                    : 'bg-rose-100/80 text-rose-800 hover:bg-rose-200/80 animate-pulse'
+                }`}
+                title="Tiket yang dikembalikan oleh Ka Ops / Ka Wil karena penanganan belum tuntas"
+              >
+                <AlertOctagon size={11} />
+                <span>Re-Open ({countReOpen})</span>
+              </button>
+            )}
             <button
               type="button"
               onClick={() => setStatusTab('WAITING_VALIDATION')}

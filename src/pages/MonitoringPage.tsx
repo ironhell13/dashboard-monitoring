@@ -120,6 +120,7 @@ import {
   loadMonitoringSnapshot
 } from '../utils/dbCache';
 import { useDataStore } from '../store/useDataStore';
+import FollowUpPage from './FollowUpPage';
 
 interface MonitoringPageProps {
   onLogout?: () => void;
@@ -127,7 +128,7 @@ interface MonitoringPageProps {
   userRole?: 'KAWIL' | 'KAOPS' | 'MONITORING';
 }
 
-export type MonitoringTab = 'OPEN' | 'FREKUENSI' | 'GRAFIK_FREKUENSI' | 'GRAFIK_24JAM' | 'HISTORY' | 'UPLOAD';
+export type MonitoringTab = 'OPEN' | 'FREKUENSI' | 'GRAFIK_FREKUENSI' | 'GRAFIK_24JAM' | 'TIKET' | 'HISTORY' | 'UPLOAD';
 
 const LOCAL_STORAGE_ACTIVE_DATA = 'MONITORING_ACTIVE_DATASET';
 const LOCAL_STORAGE_OPEN_CACHE = 'MONITORING_OPEN_CACHE';
@@ -1826,7 +1827,7 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
       if (wa !== wb) return wa - wb;
       return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
     });
-  }, [modernTickets, ticketCenterTab, ticketSearchQuery, ticketLiveTicker]);
+  }, [modernTickets, ticketCenterTab, ticketSearchQuery, ticketCenterSpFilter, ticketLiveTicker]);
 
   const handleOpenKaOpsFollowUp = (item: any, source: 'OPEN_INCIDENT' | 'FREKUENSI' = 'OPEN_INCIDENT') => {
     const target: FollowUpTargetItem = {
@@ -4909,6 +4910,28 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
               )}
             </div>
 
+            {/* TAB BARU: TIKET REQ MONITORING */}
+            <button
+              onClick={() => setActiveTab('TIKET')}
+              className={`inline-flex items-center gap-1.5 h-11 px-2 border-b-2 transition-all text-xs font-semibold cursor-pointer ${
+                activeTab === 'TIKET'
+                  ? 'border-blue-600 text-blue-600'
+                  : 'border-transparent text-[#555F71] hover:text-[#0D1C2E]'
+              }`}
+            >
+              <Ticket size={14} className={activeTab === 'TIKET' ? 'text-blue-600' : 'text-slate-400'} />
+              <span>Tiket Req</span>
+              {reOpenTicketsCount > 0 ? (
+                <span className="px-1.5 py-0.2 rounded-full bg-rose-500 text-white text-[9px] font-bold animate-pulse">
+                  {reOpenTicketsCount} Re-Open
+                </span>
+              ) : openTicketsCount > 0 ? (
+                <span className="px-1.5 py-0.2 rounded-full bg-amber-100 text-amber-800 text-[9px] font-bold">
+                  {openTicketsCount}
+                </span>
+              ) : null}
+            </button>
+
             <button
               onClick={() => setActiveTab('HISTORY')}
               className={`inline-flex items-center gap-1.5 h-11 px-2 border-b-2 transition-all text-xs font-semibold cursor-pointer ${
@@ -4949,12 +4972,14 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
               <ChevronDown size={11} className="text-[#555F71]" />
             </button>
 
-            {/* Tombol Akses Cepat: Pusat Tiket Follow Up */}
+            {/* Tombol Akses Cepat: Dashboard Tiket Follow Up */}
             <button
               type="button"
-              onClick={() => setShowTicketCenterModal(true)}
+              onClick={() => setActiveTab('TIKET')}
               className={`relative flex items-center gap-1.5 px-2.5 h-7 rounded-md text-xs font-semibold transition-all cursor-pointer shadow-2xs border ${
-                reOpenTicketsCount > 0
+                activeTab === 'TIKET'
+                  ? 'bg-blue-50 text-blue-700 border-blue-300 ring-1 ring-blue-300'
+                  : reOpenTicketsCount > 0
                   ? 'bg-rose-600 text-white border-rose-700 animate-pulse'
                   : reqCloseTicketsCount > 0 && isSupervisorRole
                   ? 'bg-purple-600 text-white border-purple-700'
@@ -4962,7 +4987,7 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
                   ? 'bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border-indigo-200'
                   : 'bg-white hover:bg-slate-50 text-slate-700 border-[#E5EAF2]'
               }`}
-              title="Buka Pusat Tiket Follow Up (Ka Ops / Ka Wil ↔ Monitoring)"
+              title="Buka Dashboard Tiket Follow Up"
             >
               <Ticket size={13} />
               <span>Tiket Follow Up</span>
@@ -5062,7 +5087,7 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
             </div>
             <button
               type="button"
-              onClick={() => setShowTicketCenterModal(true)}
+              onClick={() => setActiveTab('TIKET')}
               className={`px-3 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer shadow-2xs shrink-0 flex items-center gap-1.5 ml-3 ${
                 reOpenTicketsCount > 0
                   ? 'bg-rose-600 hover:bg-rose-700 text-white'
@@ -5071,7 +5096,7 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
                   : 'bg-indigo-600 hover:bg-indigo-700 text-white'
               }`}
             >
-              <span>Buka Tiket &rarr;</span>
+              <span>Buka Dashboard Tiket &rarr;</span>
             </button>
           </div>
         </div>
@@ -8717,6 +8742,15 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
                 </div>
               )}
             </div>
+          </div>
+        )}
+
+        {/* ==================================================== */}
+        {/* TAB: DASHBOARD TIKET REQ MONITORING                  */}
+        {/* ==================================================== */}
+        {activeTab === 'TIKET' && (
+          <div className="flex flex-col w-full gap-4 animate-in fade-in duration-150">
+            <FollowUpPage userRole={effectiveRole} isEmbedded={true} />
           </div>
         )}
 
