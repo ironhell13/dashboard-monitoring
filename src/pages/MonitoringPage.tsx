@@ -4218,6 +4218,122 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
     return `${names[m - 1] || parts[1]} ${y}`;
   };
 
+  const handleExportFreqTableExcel = () => {
+    if (!sortedFreqItems || sortedFreqItems.length === 0) {
+      alert('Tidak ada data frekuensi yang sesuai filter untuk diekspor!');
+      return;
+    }
+
+    try {
+      const wb = XLSX.utils.book_new();
+
+      // SHEET 1: Matriks Frekuensi per WSID & Tanggal
+      const s1Aoa: any[][] = [];
+      s1Aoa.push(['MATRIKS FREKUENSI PROBLEM PER WSID PER TANGGAL']);
+      s1Aoa.push([`Tanggal Export: ${new Date().toLocaleString('id-ID')}`]);
+      s1Aoa.push([`Total Data: ${sortedFreqItems.length.toLocaleString('id-ID')} kombinasi WSID & Problem`]);
+      s1Aoa.push([]);
+
+      const s1Headers = [
+        'No',
+        'WSID',
+        'Lokasi',
+        'Service Point - Sektor',
+        'Problem (Event Code)',
+        ...displayedFreqDates.map((d) => `Tgl ${d}`),
+        'Total Frekuensi',
+        'Total Durasi (Menit)',
+        'Rata-rata Durasi (Menit)'
+      ];
+      s1Aoa.push(s1Headers);
+
+      sortedFreqItems.forEach((r, idx) => {
+        const avgDur = Math.round((r.totalDurasi / Math.max(r.totalFrekuensi, 1)) * 10) / 10;
+        const rowData = [
+          idx + 1,
+          r.wsid,
+          r.lokasi || '-',
+          r.servicePointSektor || '-',
+          r.eventCodeDesc || '-',
+          ...displayedFreqDates.map((d) => (r.dateCounts && r.dateCounts[d] !== undefined) ? r.dateCounts[d] : 0),
+          r.totalFrekuensi || 0,
+          r.totalDurasi || 0,
+          avgDur
+        ];
+        s1Aoa.push(rowData);
+      });
+
+      const ws1 = XLSX.utils.aoa_to_sheet(s1Aoa);
+      ws1['!cols'] = [
+        { wch: 6 },
+        { wch: 12 },
+        { wch: 32 },
+        { wch: 25 },
+        { wch: 35 },
+        ...displayedFreqDates.map(() => ({ wch: 10 })),
+        { wch: 16 },
+        { wch: 20 },
+        { wch: 22 }
+      ];
+      XLSX.utils.book_append_sheet(wb, ws1, 'Matriks Frekuensi');
+
+      // SHEET 2: Rincian Raw Insiden Terkait
+      if (frequencyDataset && frequencyDataset.length > 0) {
+        const relevantWsidSet = new Set(sortedFreqItems.map((s) => s.wsid));
+        const filteredIncidents = frequencyDataset.filter((inc) => relevantWsidSet.has(inc.wsid));
+
+        if (filteredIncidents.length > 0) {
+          const s2Aoa: any[][] = [];
+          s2Aoa.push(['DETAIL RAW INSIDEN TERKAIT']);
+          s2Aoa.push([`Total: ${filteredIncidents.length.toLocaleString('id-ID')} insiden`]);
+          s2Aoa.push([]);
+          s2Aoa.push([
+            'No',
+            'WSID',
+            'Lokasi',
+            'Service Point - Sektor',
+            'Tipe Mesin',
+            'Vendor Mesin',
+            'Problem / Event Code',
+            'Start Time',
+            'End Time',
+            'Durasi (Menit)',
+            'Tanggal',
+            'Jam',
+            'Status'
+          ]);
+
+          filteredIncidents.slice(0, 10000).forEach((inc, idx) => {
+            s2Aoa.push([
+              idx + 1,
+              inc.wsid,
+              inc.lokasi || '-',
+              inc.servicePointSektor || '-',
+              inc.typeMesin || '-',
+              inc.vendorMesin || '-',
+              inc.eventCodeDesc || '-',
+              inc.startTime || '-',
+              inc.endTime || '-',
+              inc.durasi || 0,
+              inc.dateStr || '-',
+              inc.hourStr || '-',
+              isEndTimeFilled(inc.endTime) ? 'CLOSED' : 'OPEN'
+            ]);
+          });
+
+          const ws2 = XLSX.utils.aoa_to_sheet(s2Aoa);
+          XLSX.utils.book_append_sheet(wb, ws2, 'Detail Insiden');
+        }
+      }
+
+      const dateStr = new Date().toISOString().slice(0, 10);
+      XLSX.writeFile(wb, `Matriks_Frekuensi_Problem_${dateStr}.xlsx`);
+    } catch (err: any) {
+      console.error('Gagal export excel frekuensi:', err);
+      alert(`Gagal mengekspor file Excel: ${err?.message || String(err)}`);
+    }
+  };
+
   const handleExportGfExcel = () => {
     if (gfAggregatedItems.length === 0) {
       alert('Tidak ada data frekuensi untuk diekspor!');
@@ -6261,21 +6377,9 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
                 {/* Export Excel Button */}
                 <button
                   type="button"
-                  onClick={() => {
-                    const dateStr = new Date().toISOString().slice(0, 10);
-                    exportDailyIncidentsToExcel(
-                      sortedFreqItems.map((r) => ({
-                        wsid: r.wsid,
-                        lokasi: r.lokasi,
-                        servicePointSektor: r.servicePointSektor,
-                        eventCodeDesc: r.eventCodeDesc,
-                        durasi: r.totalDurasi,
-                        dateCounts: r.dateCounts
-                      })) as any,
-                      `Frekuensi_Problem_${dateStr}.xlsx`
-                    );
-                  }}
+                  onClick={handleExportFreqTableExcel}
                   className="inline-flex items-center gap-1.5 h-9 px-3.5 rounded-xl bg-[#EFF4FF] hover:bg-[#E5EEFF] text-blue-600 text-xs font-semibold shadow-2xs transition-all cursor-pointer"
+                  title="Ekspor seluruh matriks data frekuensi problem ke Excel"
                 >
                   <Download size={14} />
                   <span>Export Excel</span>

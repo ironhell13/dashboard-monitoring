@@ -1388,7 +1388,9 @@ export function exportDailyIncidentsToExcel(
   recMap.forEach((grp) => {
     const perDateMap = new Map<string, number>();
     grp.allIncidents.forEach((r) => {
-      perDateMap.set(r.dateStr, (perDateMap.get(r.dateStr) || 0) + 1);
+      if (r.dateStr) {
+        perDateMap.set(r.dateStr, (perDateMap.get(r.dateStr) || 0) + 1);
+      }
     });
 
     let isSameDay = false;
@@ -1400,6 +1402,7 @@ export function exportDailyIncidentsToExcel(
 
     const dateEpochs = grp.allIncidents
       .map((r) => {
+        if (!r.dateStr || typeof r.dateStr !== 'string') return null;
         const parts = r.dateStr.split('/');
         if (parts.length === 3) {
           const d = parseInt(parts[0], 10);
