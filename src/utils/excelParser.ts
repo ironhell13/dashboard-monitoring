@@ -1,4 +1,5 @@
 import * as XLSX from 'xlsx';
+import { cleanWsid } from './dailyIncidentParser';
 
 export interface MasterRow {
   WSID: string;
@@ -204,7 +205,7 @@ export const parseMasterData = async (file: File): Promise<MasterRow[]> => {
             const trimmedKey = k.trim();
             cleanRow[trimmedKey] = v;
             if (trimmedKey.toUpperCase() === 'WSID') {
-              wsid = String(v).trim();
+              wsid = cleanWsid(v);
             }
           }
           if (wsid) {
@@ -302,11 +303,15 @@ const parseUptimeSheet = (worksheet: XLSX.WorkSheet): UptimeRow[] => {
     const rowData = rawData[r];
     if (!rowData) continue;
     const wsidVal = wsidColIdx !== undefined ? rowData[Number(wsidColIdx)] : null;
-    
-    if (!wsidVal || String(wsidVal).trim() === '') continue; // Skip empty WSID
+    const cleanW = cleanWsid(wsidVal);
+    if (!cleanW) continue; // Skip empty or invalid WSID
 
     const rowObj: any = {};
     for (const [colIdx, colName] of Object.entries(columnMapping)) {
+      if (colName === 'WSID') {
+        rowObj[colName] = cleanW;
+        continue;
+      }
       let val = rowData[Number(colIdx)];
       // treat empty or #N/A as 0 for numeric columns
       if (colName.includes('_pct') || colName.includes('_dur') || colName.includes('_frx')) {

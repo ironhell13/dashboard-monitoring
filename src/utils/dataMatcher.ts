@@ -1,7 +1,7 @@
 import type { MachineData, MonthlyProblemData } from '../store/useDataStore';
 import type { MasterRow, ParsedUptimeFile, UptimeRow } from './excelParser';
 import { normalizePeriode, SERVICE_POINT_MAP } from './comprehensiveExporter';
-import { cleanSektorName } from './dailyIncidentParser';
+import { cleanSektorName, cleanWsid } from './dailyIncidentParser';
 
 export const matchData = (
   masterData: MasterRow[],
@@ -11,8 +11,9 @@ export const matchData = (
   // Create a fast lookup map for Master Data
   const masterMap = new Map<string, MasterRow>();
   for (const row of masterData) {
-    if (row.WSID) {
-      masterMap.set(String(row.WSID).trim(), row);
+    const cleanW = cleanWsid(row.WSID);
+    if (cleanW) {
+      masterMap.set(cleanW, row);
     }
   }
 
@@ -31,8 +32,8 @@ export const matchData = (
 
   // Pre-load ALL machines from Master Data (ensures all sectors exist)
   for (const row of masterData) {
-    if (row.WSID) {
-      const wsid = String(row.WSID).trim();
+    const wsid = cleanWsid(row.WSID);
+    if (wsid) {
 
       const klienVal = getValIC(row, 'Klien');
       const isBCA = String(klienVal || '').trim().toUpperCase() === 'BCA';
@@ -84,7 +85,7 @@ export const matchData = (
     const fileNormPeriode = normalizePeriode(file.periode);
 
     const processRow = (row: UptimeRow, jenis: 'ATM' | 'CRM') => {
-      const wsid = String(row.WSID || '').trim();
+      const wsid = cleanWsid(row.WSID);
       if (!wsid) return;
 
       const masterRow = masterMap.get(wsid);

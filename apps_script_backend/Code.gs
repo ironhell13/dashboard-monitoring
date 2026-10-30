@@ -1256,8 +1256,8 @@
 
         for (var r = 1; r < mData.length; r++) {
           var row = mData[r];
-          if (!row[0] || String(row[0]).trim() === '') continue;
-          var wsid = String(row[0]).trim();
+          var wsid = cleanWsidGS(row[0]);
+          if (!wsid) continue;
 
           var hariVal = mColIdx['hari'] !== undefined ? row[mColIdx['hari']] : '';
           var jamVal = mColIdx['jam'] !== undefined ? row[mColIdx['jam']] : (row[9] || '');
@@ -1340,7 +1340,7 @@
 
           var periode = normalizePeriode(row[0]);
           var jenis = String(row[1] || '').trim().toUpperCase();
-          var wsid = String(row[2] || '').trim();
+          var wsid = cleanWsidGS(row[2]);
 
           if (!periode || !wsid) continue;
 
@@ -2210,6 +2210,65 @@
   }
 
   /**
+   * Normalisasi WSID pada Google Apps Script:
+   * 1. Mengubah objek/string Date kembali ke nomor serial Excel WSID (misal: 'Sat Sep 12 1903' -> 1351, 'Sun Apr 22 1900' -> 0113)
+   * 2. Menambahkan leading zero untuk angka murni 1-4 digit (54 -> 0054)
+   * 3. Menolak data korup/tergeser (seperti 1000000000)
+   */
+  function cleanWsidGS(val) {
+    if (val === null || val === undefined) return '';
+    var isDateObj = (Object.prototype.toString.call(val) === '[object Date]') && !isNaN(val.getTime());
+    var str = String(val).trim();
+    if (!str || str === '-' || str === '#N/A' || str.toUpperCase() === 'N/A' || str.toUpperCase() === 'UNKNOWN') return '';
+
+    var dateStrMatch = str.match(/^(?:Mon|Tue|Wed|Thu|Fri|Sat|Sun)\s+([A-Za-z]{3})\s+(\d{1,2})\s+(\d{4})/i);
+    var isoDateMatch = str.match(/^(\d{4})-(\d{2})-(\d{2})/);
+
+    if (isDateObj || dateStrMatch || isoDateMatch) {
+      var yr = 0, mon = 0, day = 0;
+      if (isDateObj) {
+        yr = val.getFullYear();
+        mon = val.getMonth();
+        day = val.getDate();
+      } else if (dateStrMatch) {
+        var monthMap = { jan: 0, feb: 1, mar: 2, apr: 3, may: 4, jun: 5, jul: 6, aug: 7, sep: 8, oct: 9, nov: 10, dec: 11 };
+        mon = monthMap[dateStrMatch[1].toLowerCase()] || 0;
+        day = parseInt(dateStrMatch[2], 10);
+        yr = parseInt(dateStrMatch[3], 10);
+      } else if (isoDateMatch) {
+        yr = parseInt(isoDateMatch[1], 10);
+        mon = parseInt(isoDateMatch[2], 10) - 1;
+        day = parseInt(isoDateMatch[3], 10);
+      }
+
+      if (yr >= 1900 && yr <= 1930) {
+        var excelEpoch = Date.UTC(1899, 11, 30);
+        var targetUtc = Date.UTC(yr, mon, day);
+        var serial = Math.round((targetUtc - excelEpoch) / 86400000);
+        if (serial > 0 && serial < 10000) {
+          var sStr = String(serial);
+          while (sStr.length < 4) sStr = '0' + sStr;
+          return sStr;
+        }
+      }
+    }
+
+    str = str.replace(/^['"]+|['"]+$/g, '').trim();
+    str = str.replace(/\.0+$/, '');
+
+    if (/^\d{1,4}$/.test(str)) {
+      while (str.length < 4) str = '0' + str;
+      return str;
+    }
+
+    if (/^[A-Za-z0-9]{3,6}$/.test(str)) {
+      return str.toUpperCase();
+    }
+
+    return '';
+  }
+
+  /**
   * 1. AUTENTIKASI KA OPS
   */
   function setupKaOpsPassword() {
@@ -3068,7 +3127,8 @@
         for (var j = 0; j < mRows.length; j++) {
           var item = mRows[j];
           var incidentNum = String(item.incidentNumber || '').trim();
-          var wsid = sanitizeCellText(item.wsid || '');
+          var wsid = cleanWsidGS(item.wsid);
+          if (!wsid) continue;
           var eventDesc = sanitizeCellText(item.eventCodeDesc || '');
           var startTime = sanitizeCellText(item.startTime || '');
           var endTime = sanitizeCellText(item.endTime && item.endTime !== '-' ? item.endTime : '-');
@@ -4677,7 +4737,7 @@
   function getWsidPenangananHistory(wsid, monthStr) {
     try {
       var ss = getIncidentDbSpreadsheet();
-      var targetWsid = String(wsid || '').trim().toUpperCase();
+      var targetWsid = cleanWsidGS(wsid) || String(wsid || '').trim().toUpperCase();
       var history = [];
 
       var sheets = [];
@@ -4699,12 +4759,13 @@
           var actVals = actSheet.getRange(2, 1, actSheet.getLastRow() - 1, 11).getValues();
           for (var a = 0; a < actVals.length; a++) {
             var row = actVals[a];
-            if (String(row[3] || '').trim().toUpperCase() === targetWsid) {
+            var rWsid = cleanWsidGS(row[3]);
+            if (rWsid === targetWsid) {
               history.push({
                 logId: String(row[0] || ''),
                 waktu: String(row[1] || ''),
                 incidentKey: String(row[2] || ''),
-                wsid: String(row[3] || ''),
+                wsid: rWsid,
                 eventCodeDesc: String(row[4] || ''),
                 tipe: String(row[5] || 'UPDATE'),
                 isiAction: String(row[6] || ''),
@@ -5027,7 +5088,8 @@
 
             var rRowKey = String(r[0] || '').trim();
             var rRowIncNum = String(r[1] || '').trim();
-            var rRowWsid = String(r[2] || '').trim().toUpperCase();
+            var rRowWsid = cleanWsidGS(r[2]);
+            if (!rRowWsid) continue;
             var rRowEv = String(r[9] || '').trim().toUpperCase();
 
             var resolvedAction = resolveLatestActionForRow(
@@ -5054,7 +5116,7 @@
 
             var rowArray = [
               String(r[1] || '-'),
-              String(r[2] || ''),
+              rRowWsid,
               String(r[3] || ''),
               spSektor,
               sPoint,

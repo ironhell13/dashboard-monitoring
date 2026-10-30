@@ -442,6 +442,74 @@ export function calculateOperationalDuration(
 }
 
 /**
+ * Membersihkan dan menormalisasi WSID BCA:
+ * 1. Mengembalikan WSID yang terkonversi menjadi objek / representasi teks Date kembali ke kode WSID aslinya
+ *    (Contoh: 'Sat Sep 12 1903 ...' -> '1351', 'Sun Apr 22 1900 ...' -> '0113')
+ * 2. Menambahkan leading zero untuk angka murni 1-4 digit (Contoh: '54' -> '0054', '113' -> '0113')
+ * 3. Menghilangkan sisa artefak desimal Excel (Contoh: '1351.0' -> '1351')
+ * 4. Mengeliminasi token sampah / tergeser akibat newline pada komentar CSV (Contoh: '1000000000', detail teknis, dll.)
+ */
+export function cleanWsid(val: any): string {
+  if (val === null || val === undefined) return '';
+  let str = String(val).trim();
+  if (!str || str === '-' || str.toUpperCase() === 'N/A' || str.toUpperCase() === 'UNKNOWN') return '';
+
+  // 1. Cek jika val adalah Date object atau representasi teks Date
+  const isDateObj = val instanceof Date && !isNaN(val.getTime());
+  const dateStrMatch = str.match(/^(?:Mon|Tue|Wed|Thu|Fri|Sat|Sun)\s+([A-Za-z]{3})\s+(\d{1,2})\s+(\d{4})/i);
+  const isoDateMatch = str.match(/^(\d{4})-(\d{2})-(\d{2})/);
+
+  if (isDateObj || dateStrMatch || isoDateMatch) {
+    let yr = 0, mon = 0, day = 0;
+    if (isDateObj) {
+      yr = (val as Date).getFullYear();
+      mon = (val as Date).getMonth();
+      day = (val as Date).getDate();
+    } else if (dateStrMatch) {
+      const monthMap: Record<string, number> = {
+        jan: 0, feb: 1, mar: 2, apr: 3, may: 4, jun: 5,
+        jul: 6, aug: 7, sep: 8, oct: 9, nov: 10, dec: 11
+      };
+      mon = monthMap[dateStrMatch[1].toLowerCase()] ?? 0;
+      day = parseInt(dateStrMatch[2], 10);
+      yr = parseInt(dateStrMatch[3], 10);
+    } else if (isoDateMatch) {
+      yr = parseInt(isoDateMatch[1], 10);
+      mon = parseInt(isoDateMatch[2], 10) - 1;
+      day = parseInt(isoDateMatch[3], 10);
+    }
+
+    // Jika tahun berada di rentang serial Excel wajar untuk nomor WSID 1-9999 (1900 - 1930)
+    if (yr >= 1900 && yr <= 1930) {
+      const excelEpoch = Date.UTC(1899, 11, 30);
+      const targetUtc = Date.UTC(yr, mon, day);
+      const serial = Math.round((targetUtc - excelEpoch) / 86400000);
+      if (serial > 0 && serial < 10000) {
+        return String(serial).padStart(4, '0');
+      }
+    }
+  }
+
+  // Bersihkan tanda kutip pembungkus
+  str = str.replace(/^['"]+|['"]+$/g, '').trim();
+  // Hilangkan desimal excel .0 jika ada
+  str = str.replace(/\.0+$/, '');
+
+  // 2. Angka murni 1-4 digit: tambahkan leading zero sampai 4 digit (misal: 54 -> 0054, 113 -> 0113)
+  if (/^\d{1,4}$/.test(str)) {
+    return str.padStart(4, '0');
+  }
+
+  // 3. WSID alfanumerik BCA standar 3-6 karakter (misal: K012, Z001)
+  if (/^[A-Za-z0-9]{3,6}$/.test(str)) {
+    return str.toUpperCase();
+  }
+
+  // Karakter corrupt/tergeser (seperti 1000000000 dari teks komentar hardware)
+  return '';
+}
+
+/**
  * Resolusi jadwal operasional untuk suatu WSID
  */
 export function resolveOperatingSchedule(
@@ -449,26 +517,26 @@ export function resolveOperatingSchedule(
   customJamMap?: Map<string, { hari: string; jam: string }>,
   masterMap?: Map<string, MasterRow>
 ): { hari: string; jam: string } {
-  const cleanWsid = String(wsid || '').trim();
-  if (!cleanWsid) return { hari: 'MON-SUN', jam: '(00:00 - 23:59)' };
+  const cleanWsidVal = cleanWsid(wsid) || String(wsid || '').trim();
+  if (!cleanWsidVal) return { hari: 'MON-SUN', jam: '(00:00 - 23:59)' };
 
   // 1. Cek dari customJamMap (jika user mengunggah Master Jam Operasional custom)
-  if (customJamMap && customJamMap.has(cleanWsid)) {
-    return customJamMap.get(cleanWsid)!;
+  if (customJamMap && customJamMap.has(cleanWsidVal)) {
+    return customJamMap.get(cleanWsidVal)!;
   }
-  if (customJamMap && cleanWsid.startsWith('0')) {
-    const zWsid = 'Z' + cleanWsid.substring(1);
+  if (customJamMap && cleanWsidVal.startsWith('0')) {
+    const zWsid = 'Z' + cleanWsidVal.substring(1);
     if (customJamMap.has(zWsid)) return customJamMap.get(zWsid)!;
   }
 
   // 2. Cek default bundled operating hours (7.577 WSID)
-  const defaultHours = (defaultOperatingHoursJson as Record<string, string>)[cleanWsid];
+  const defaultHours = (defaultOperatingHoursJson as Record<string, string>)[cleanWsidVal];
   if (defaultHours) {
     const [h, j] = defaultHours.split('|');
     return { hari: h || 'MON-SUN', jam: j || '(00:00 - 23:59)' };
   }
-  if (cleanWsid.startsWith('0')) {
-    const zWsid = 'Z' + cleanWsid.substring(1);
+  if (cleanWsidVal.startsWith('0')) {
+    const zWsid = 'Z' + cleanWsidVal.substring(1);
     const zDefault = (defaultOperatingHoursJson as Record<string, string>)[zWsid];
     if (zDefault) {
       const [h, j] = zDefault.split('|');
@@ -477,8 +545,8 @@ export function resolveOperatingSchedule(
   }
 
   // 3. Cek dari Master Data Mesin jika ada
-  if (masterMap && masterMap.has(cleanWsid)) {
-    const m = masterMap.get(cleanWsid)!;
+  if (masterMap && masterMap.has(cleanWsidVal)) {
+    const m = masterMap.get(cleanWsidVal)!;
     const h = m.Hari || 'MON-SUN';
     const j = m.Jam || m['Jam Operasi'] || '';
     if (j) return { hari: h, jam: String(j) };
@@ -486,6 +554,55 @@ export function resolveOperatingSchedule(
 
   // Default: 24 Jam
   return { hari: 'MON-SUN', jam: '(00:00 - 23:59)' };
+}
+
+/**
+ * Mem-parsing konten CSV utuh menjadi array of records yang mematuhi RFC 4180:
+ * Menangani baris baru (\r, \n) di dalam tanda kutip (seperti detail/komentar multi-baris OASE)
+ * sehingga kolom tidak tergeser dan WSID tidak rusak oleh token baris berikutnya.
+ */
+export function parseCsvIntoRecords(content: string): string[][] {
+  const records: string[][] = [];
+  let row: string[] = [];
+  let cur = '';
+  let inQuotes = false;
+  const len = content.length;
+
+  for (let i = 0; i < len; i++) {
+    const char = content[i];
+    if (char === '"') {
+      if (inQuotes && content[i + 1] === '"') {
+        cur += '"';
+        i++;
+      } else {
+        inQuotes = !inQuotes;
+      }
+    } else if (char === ',' && !inQuotes) {
+      row.push(cur.trim());
+      cur = '';
+    } else if ((char === '\r' || char === '\n') && !inQuotes) {
+      if (char === '\r' && content[i + 1] === '\n') {
+        i++;
+      }
+      row.push(cur.trim());
+      cur = '';
+      if (row.length > 1 || (row.length === 1 && row[0] !== '')) {
+        records.push(row);
+      }
+      row = [];
+    } else {
+      cur += char;
+    }
+  }
+
+  if (cur.length > 0 || row.length > 0) {
+    row.push(cur.trim());
+    if (row.length > 1 || (row.length === 1 && row[0] !== '')) {
+      records.push(row);
+    }
+  }
+
+  return records;
 }
 
 /**
@@ -608,18 +725,26 @@ export async function parseDailyIncidentCsv(
   const masterMap = new Map<string, MasterRow>();
   if (options?.masterData) {
     for (const m of options.masterData) {
-      if (m.WSID) {
-        masterMap.set(String(m.WSID).trim(), m);
+      const cWsid = cleanWsid(m.WSID);
+      if (cWsid) {
+        masterMap.set(cWsid, m);
       }
     }
   }
 
-  const lines = content.split(/\r?\n/);
-  if (lines.length < 2) {
-    return { rows: [], totalRawLines: 0, matchedCount: 0 };
+  const records = parseCsvIntoRecords(content);
+  if (records.length < 2) {
+    return {
+      rows: [],
+      totalRawLines: 0,
+      matchedCount: 0,
+      reportDateStr: reportDateStr || `${dStr}/${mStr}/${yStr}`,
+      reportDefaultEndDate: finalEndDate,
+      reportEndStr
+    };
   }
 
-  const headerParts = splitCsvLine(lines[0]);
+  const headerParts = records[0];
   const colIdx: Record<string, number> = {};
   headerParts.forEach((h, idx) => {
     colIdx[h.trim().toLowerCase()] = idx;
@@ -636,18 +761,19 @@ export async function parseDailyIncidentCsv(
   };
 
   const rows: DailyIncidentRow[] = [];
-  const totalLines = lines.length;
+  const totalLines = records.length;
 
   for (let i = 1; i < totalLines; i++) {
-    const line = lines[i];
-    if (!line || line.trim() === '') continue;
+    const parts = records[i];
+    if (!parts || parts.length === 0 || (parts.length === 1 && parts[0] === '')) continue;
 
-    const parts = splitCsvLine(line);
     const eventDesc = getCol(parts, 'Event Code Description', 'event code description', 'event_code_description', 'event desc', 'event code desc');
     if (!eventDesc) continue;
 
     // Tampilkan seluruh problem yang ada (tidak dibatasi 35 problem whitelist)
-    const wsid = getCol(parts, 'WSID', 'wsid');
+    const rawWsid = getCol(parts, 'WSID', 'wsid');
+    const wsid = cleanWsid(rawWsid);
+    if (!wsid) continue; // Abaikan jika WSID kosong / corrupt / tergeser
     const rawStartTimeStr = getCol(parts, 'Start Time', 'start time', 'start_time', 'start', 'start date', 'waktu mulai');
     const rawEndTimeStr = getCol(parts, 'End Time', 'end time', 'end_time', 'end', 'end date', 'waktu selesai');
     const rawDurStr = getCol(parts, 'Duration', 'duration', 'durasi');
@@ -787,15 +913,16 @@ export function aggregateByWsidProblemDate(
   const datesSet = new Set<string>();
 
   for (const r of rows) {
-    if (!r.wsid) continue;
-    const key = `${r.wsid}__${r.eventCodeDesc}`;
+    const cleanW = cleanWsid(r.wsid);
+    if (!cleanW) continue;
+    const key = `${cleanW}__${r.eventCodeDesc}`;
     if (r.dateStr && r.dateStr !== '-') {
       datesSet.add(r.dateStr);
     }
 
     if (!map[key]) {
       map[key] = {
-        wsid: r.wsid,
+        wsid: cleanW,
         lokasi: r.lokasi,
         servicePointSektor: r.servicePointSektor,
         typeMesin: r.typeMesin,

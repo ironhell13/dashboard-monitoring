@@ -104,6 +104,7 @@ import {
   parseDateTime,
   TARGET_EVENT_CODES,
   cleanSektorName,
+  cleanWsid,
   isDateInRange,
   isEndTimeFilled,
   toComparableDate,
@@ -1640,7 +1641,8 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
     const map = new Map<string, any>();
     if (rawMasterData && Array.isArray(rawMasterData)) {
       for (const m of rawMasterData) {
-        if (m.WSID) map.set(String(m.WSID).trim(), m);
+        const cleanW = cleanWsid(m.WSID);
+        if (cleanW) map.set(cleanW, m);
       }
     }
     return map;

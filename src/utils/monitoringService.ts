@@ -1,5 +1,6 @@
 import { isGasEnvironment } from './spreadsheetService';
 import { apiGet, apiPost, isBackendConfigured } from './apiClient';
+import { cleanWsid } from './dailyIncidentParser';
 
 export interface OpenIncidentItem {
   incidentKey: string;
@@ -63,19 +64,37 @@ const LOCAL_STORAGE_UPLOAD_LOGS = 'MONITORING_UPLOAD_LOGS_LOCAL';
 
 /**
  * Helper untuk memetakan format tabular compact array ke array of object
+ * dengan normalisasi otomatis WSID dan pembersihan baris corrupt.
  */
 function unpackCompactTabular(res: any): any[] {
   if (res && res.data && res.headers && (!res.rows || res.rows.length === 0)) {
     const h = res.headers;
-    return res.data.map((r: any[]) => {
+    const wsidIdx = h.indexOf('wsid');
+    const result: any[] = [];
+    for (let j = 0; j < res.data.length; j++) {
+      const r = res.data[j];
+      const rawW = wsidIdx !== -1 ? r[wsidIdx] : '';
+      const cleanW = cleanWsid(rawW);
+      if (!cleanW) continue; // skip baris WSID korup / bergeser
+
       const obj: any = {};
       for (let i = 0; i < h.length; i++) {
-        obj[h[i]] = r[i];
+        if (i === wsidIdx) {
+          obj[h[i]] = cleanW;
+        } else {
+          obj[h[i]] = r[i];
+        }
       }
-      return obj;
-    });
+      result.push(obj);
+    }
+    return result;
   }
-  return res.rows || [];
+  if (res && res.rows && Array.isArray(res.rows)) {
+    return res.rows
+      .map((r: any) => ({ ...r, wsid: cleanWsid(r.wsid) }))
+      .filter((r: any) => Boolean(r.wsid));
+  }
+  return [];
 }
 
 /**
