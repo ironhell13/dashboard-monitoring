@@ -24,8 +24,11 @@ interface LayoutProps {
 
 export default function Layout({ onLogout, userRole }: LayoutProps) {
   const location = useLocation();
-  const { machines } = useDataStore();
+  const { machines, modernTickets } = useDataStore();
   const effectiveRole = userRole || (sessionStorage.getItem('USER_ROLE') as any) || 'KAOPS';
+
+  const pendingValidationCount = (modernTickets || []).filter((t) => t.status === 'REQ_CLOSE').length;
+  const activeTicketsCount = (modernTickets || []).filter((t) => t.status !== 'CLOSED').length;
 
   // Persist sidebar collapsed preference in localStorage
   const [isCollapsed, setIsCollapsed] = useState<boolean>(() => {
@@ -63,7 +66,7 @@ export default function Layout({ onLogout, userRole }: LayoutProps) {
       title: 'OPERASIONAL & TIKET',
       items: [
         { name: 'Cek Daily Incident', path: '/cek-daily', icon: CalendarCheck },
-        { name: 'Need to Follow Up', path: '/follow-up', icon: ClipboardCheck },
+        { name: 'Tiket Req Monitoring', path: '/follow-up', icon: ClipboardCheck },
       ]
     },
     {
@@ -200,8 +203,33 @@ export default function Layout({ onLogout, userRole }: LayoutProps) {
                             isActive ? 'text-blue-600' : 'text-slate-400 group-hover:text-slate-600'
                           }`}
                         />
-                        {!isCollapsed && <span className="truncate">{item.name}</span>}
+                        {!isCollapsed && (
+                          <div className="flex items-center justify-between w-full min-w-0">
+                            <span className="truncate">{item.name}</span>
+                            {item.path === '/follow-up' && (pendingValidationCount > 0 || activeTicketsCount > 0) && (
+                              <span
+                                className={`ml-auto px-1.5 py-0.2 rounded-full text-[9px] font-bold ${
+                                  pendingValidationCount > 0
+                                    ? 'bg-purple-100 text-purple-800 animate-pulse'
+                                    : 'bg-amber-100 text-amber-800'
+                                }`}
+                                title={
+                                  pendingValidationCount > 0
+                                    ? `${pendingValidationCount} tiket menunggu validasi Anda`
+                                    : `${activeTicketsCount} tiket aktif`
+                                }
+                              >
+                                {pendingValidationCount > 0 ? `${pendingValidationCount} Val` : activeTicketsCount}
+                              </span>
+                            )}
+                          </div>
+                        )}
                       </NavLink>
+
+                      {/* Dot alert when collapsed */}
+                      {isCollapsed && item.path === '/follow-up' && (pendingValidationCount > 0 || activeTicketsCount > 0) && (
+                        <span className="absolute top-1 right-1 w-2 h-2 rounded-full bg-purple-600" />
+                      )}
 
                       {/* Tooltip on hover when collapsed */}
                       {isCollapsed && (

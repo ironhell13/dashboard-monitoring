@@ -1729,6 +1729,7 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
   // Modal Pusat Tiket Follow Up
   const [showTicketCenterModal, setShowTicketCenterModal] = useState(false);
   const [ticketCenterTab, setTicketCenterTab] = useState<'ALL' | 'ACTION_NEEDED' | 'WAITING_VALIDATION' | 'CLOSED'>('ALL');
+  const [ticketCenterSpFilter, setTicketCenterSpFilter] = useState('ALL');
   const [ticketSearchQuery, setTicketSearchQuery] = useState('');
   const [selectedTicketForDetail, setSelectedTicketForDetail] = useState<FollowUpTicketItem | null>(null);
 
@@ -1795,6 +1796,11 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
       list = list.filter(t => t.status === 'CLOSED');
     }
 
+    if (ticketCenterSpFilter !== 'ALL') {
+      const sp = ticketCenterSpFilter.toUpperCase();
+      list = list.filter(t => (t.servicePoint || '').trim().toUpperCase().includes(sp));
+    }
+
     if (ticketSearchQuery.trim()) {
       const q = ticketSearchQuery.trim().toLowerCase();
       list = list.filter(t =>
@@ -1835,11 +1841,23 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
       sumberProblem: source
     };
     setKaOpsFollowUpTarget(target);
-    setKaOpsFollowUpNote(`Mohon percepatan tindak lanjut problem ${target.problem} pada WSID ${target.wsid} (Lokasi: ${target.lokasi})`);
+    if (source === 'FREKUENSI' && item.frekuensi) {
+      setKaOpsFollowUpNote(`Problem ${target.problem} terdeteksi berulang ${item.frekuensi}x pada WSID ${target.wsid} (Lokasi: ${target.lokasi}). Mohon koordinasi dengan vendor untuk pengecekan / swap part.`);
+    } else {
+      setKaOpsFollowUpNote(`Mohon percepatan tindak lanjut problem ${target.problem} pada WSID ${target.wsid} (Lokasi: ${target.lokasi})`);
+    }
   };
 
   const handleSubmitKaOpsFollowUp = async () => {
     if (!kaOpsFollowUpTarget) return;
+
+    // Kunci anti-duplikasi
+    const isAlreadyActive = activeTicketByWsidMap.has(kaOpsFollowUpTarget.wsid.trim().toUpperCase());
+    if (isAlreadyActive) {
+      alert(`Peringatan: WSID ${kaOpsFollowUpTarget.wsid} sudah memiliki tiket follow up yang aktif.`);
+      return;
+    }
+
     setIsSubmittingTicket(true);
     const d = new Date();
     const y = d.getFullYear();
@@ -6900,24 +6918,68 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
                             </td>
 
                             <td className="py-1 px-3 text-center whitespace-nowrap border-l border-slate-100">
-                              {(() => {
-                                const pCount = wsidPenangananCountMap.get(item.wsid.trim().toUpperCase()) || 0;
-                                return (
+                              <div className="flex items-center justify-center gap-1.5">
+                                {(() => {
+                                  const pCount = wsidPenangananCountMap.get(item.wsid.trim().toUpperCase()) || 0;
+                                  return (
+                                    <button
+                                      type="button"
+                                      onClick={() => handleOpenFreqDetail(item)}
+                                      className={`inline-flex items-center gap-1.5 px-2 py-1 rounded-lg text-[11px] font-bold transition-all shadow-2xs cursor-pointer ${
+                                        pCount > 0
+                                          ? 'bg-blue-50 hover:bg-[#cbfbf0] text-blue-600 border border-blue-200 hover:scale-[1.02]'
+                                          : 'bg-[#F8F9FF] hover:bg-[#EFF4FF] text-[#555F71] border border-[#EFF4FF]'
+                                      }`}
+                                      title="Klik untuk melihat detail penanganan tiap tanggal kejadian"
+                                    >
+                                      <Wrench size={12} className={pCount > 0 ? 'text-blue-600' : 'text-slate-400'} />
+                                      <span>{pCount > 0 ? `${pCount} Catatan` : 'Detail'}</span>
+                                    </button>
+                                  );
+                                })()}
+
+                                {/* Tombol Req Follow Up atau Tiket Aktif */}
+                                {activeTicketByWsidMap.has(item.wsid.trim().toUpperCase()) ? (
                                   <button
                                     type="button"
-                                    onClick={() => handleOpenFreqDetail(item)}
-                                    className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-xl text-xs font-bold transition-all shadow-2xs cursor-pointer ${
-                                      pCount > 0
-                                        ? 'bg-blue-50 hover:bg-[#cbfbf0] text-blue-600 border border-blue-200 hover:scale-[1.02]'
-                                        : 'bg-[#F8F9FF] hover:bg-[#EFF4FF] text-[#555F71] border border-[#EFF4FF]'
-                                    }`}
-                                    title="Klik untuk melihat detail penanganan tiap tanggal kejadian"
+                                    onClick={() => {
+                                      setSelectedTicketForDetail(activeTicketByWsidMap.get(item.wsid.trim().toUpperCase())!);
+                                      setShowTicketCenterModal(true);
+                                    }}
+                                    className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-indigo-50 hover:bg-indigo-100 text-indigo-700 text-[11px] font-bold border border-indigo-200 transition-colors cursor-pointer shadow-2xs"
+                                    title="Lihat & Tindak Lanjut Tiket Follow Up Aktif"
                                   >
-                                    <Wrench size={13} className={pCount > 0 ? 'text-blue-600' : 'text-slate-400'} />
-                                    <span>{pCount > 0 ? `${pCount} Penanganan` : 'Detail / Catat'}</span>
+                                    <Ticket size={12} className="text-indigo-600" />
+                                    <span>Tiket Aktif</span>
                                   </button>
-                                );
-                              })()}
+                                ) : isSupervisorRole ? (
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      handleOpenKaOpsFollowUp(
+                                        {
+                                          wsid: item.wsid,
+                                          lokasi: item.lokasi,
+                                          servicePointSektor: item.servicePointSektor,
+                                          servicePoint: item.servicePoint,
+                                          sektor: item.sektor,
+                                          typeMesin: item.typeMesin || 'ATM',
+                                          vendor: item.vendorMesin || 'ATM/CRM',
+                                          problem: item.eventCodeDesc,
+                                          durasi: item.totalDurasi,
+                                          frekuensi: item.totalFrekuensi
+                                        },
+                                        'FREKUENSI'
+                                      );
+                                    }}
+                                    className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white text-[11px] font-bold transition-colors cursor-pointer shadow-2xs"
+                                    title="Req Follow Up ke Monitoring untuk problem berulang ini"
+                                  >
+                                    <Send size={12} />
+                                    <span>Req Follow Up</span>
+                                  </button>
+                                ) : null}
+                              </div>
                             </td>
                           </tr>
                         );
@@ -10727,16 +10789,34 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
                 </button>
               </div>
 
-              {/* Search Box */}
-              <div className="relative w-full md:w-64">
-                <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-                <input
-                  type="text"
-                  value={ticketSearchQuery}
-                  onChange={(e) => setTicketSearchQuery(e.target.value)}
-                  placeholder="Cari tiket, WSID, lokasi..."
-                  className="w-full pl-9 pr-3 py-1.5 rounded-xl border border-slate-300 text-xs text-slate-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white"
-                />
+              {/* Controls: Filter SP & Search Box */}
+              <div className="flex items-center gap-2 w-full md:w-auto">
+                <select
+                  value={ticketCenterSpFilter}
+                  onChange={(e) => setTicketCenterSpFilter(e.target.value)}
+                  className="px-2.5 py-1.5 rounded-xl border border-slate-300 text-xs font-semibold text-slate-700 bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500 shadow-2xs"
+                >
+                  <option value="ALL">Semua SP</option>
+                  <option value="ACJK">ACJK</option>
+                  <option value="ACBT">ACBT</option>
+                  <option value="ACCK">ACCK</option>
+                  <option value="ACSR">ACSR</option>
+                  <option value="ACBS">ACBS</option>
+                  <option value="ACRW">ACRW</option>
+                  <option value="TAG">TAG</option>
+                </select>
+
+                {/* Search Box */}
+                <div className="relative w-full md:w-64">
+                  <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                  <input
+                    type="text"
+                    value={ticketSearchQuery}
+                    onChange={(e) => setTicketSearchQuery(e.target.value)}
+                    placeholder="Cari tiket, WSID, lokasi..."
+                    className="w-full pl-9 pr-3 py-1.5 rounded-xl border border-slate-300 text-xs text-slate-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white"
+                  />
+                </div>
               </div>
             </div>
 

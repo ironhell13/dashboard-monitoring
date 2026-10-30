@@ -316,7 +316,7 @@ function App() {
             <Route path="/dashboard" element={<DashboardPage />} />
             <Route path="/upload" element={<UploadPage />} />
             <Route path="/cek-daily" element={<CekDailyPage userRole={currentRole} />} />
-            <Route path="/follow-up" element={<FollowUpPage />} />
+            <Route path="/follow-up" element={<FollowUpPage userRole={currentRole} />} />
             <Route path="/sektor-mesin" element={<MesinPerSektorPage />} />
             <Route path="/service-point" element={<ServicePointPage />} />
             <Route path="/all-wsid" element={<AllWsidPage />} />
