@@ -339,13 +339,13 @@ export default function AllWsidPage() {
       </div>
 
       {/* ======================================================== */}
-      {/* 2. 4 EXECUTIVE KPI METRIC CARDS (INTERACTIVE QUICK FILTER) */}
+      {/* 2. 4 EXECUTIVE KPI METRIC CARDS (COMPACT 92-105px)       */}
       {/* ======================================================== */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2.5">
         {/* Card 1: Total WSID Aktif */}
         <div
           onClick={() => setSlaFilter('ALL')}
-          className={`p-4 rounded-lg border transition-all cursor-pointer bg-white shadow-2xs relative overflow-hidden ${
+          className={`p-3 rounded-lg border transition-all cursor-pointer bg-white shadow-2xs relative overflow-hidden min-h-[92px] max-h-[105px] flex flex-col justify-between ${
             slaFilter === 'ALL'
               ? 'border-blue-600 ring-1 ring-blue-500 bg-blue-50/20'
               : 'border-[#E5EAF2] hover:border-slate-300'
@@ -356,24 +356,24 @@ export default function AllWsidPage() {
               <span className="text-[10px] font-semibold text-slate-500 uppercase tracking-wider block">
                 Total WSID Aktif (BCA)
               </span>
-              <h3 className="text-2xl font-bold text-slate-900 font-mono mt-0.5">
+              <h3 className="text-2xl font-bold text-slate-900 font-mono mt-0.5 leading-tight">
                 {kpiStats.total.toLocaleString('id-ID')}
               </h3>
-              <p className="text-[11px] text-slate-500 mt-1 flex items-center gap-1">
-                <span>Rata-rata Uptime:</span>
-                <strong className="text-blue-700 font-semibold">{kpiStats.avgUptime.toFixed(2)}%</strong>
-              </p>
             </div>
             <div
-              className={`w-9 h-9 rounded-md flex items-center justify-center transition-colors ${
+              className={`w-7 h-7 rounded-md flex items-center justify-center transition-colors ${
                 slaFilter === 'ALL'
-                  ? 'bg-blue-600 text-white shadow-xs'
+                  ? 'bg-blue-600 text-white shadow-2xs'
                   : 'bg-blue-50 text-blue-600 border border-blue-200/60'
               }`}
             >
-              <Server size={17} />
+              <Server size={15} />
             </div>
           </div>
+          <p className="text-[10px] text-slate-500 flex items-center gap-1 mt-0.5">
+            <span>Rata-rata Uptime:</span>
+            <strong className="text-blue-700 font-semibold">{kpiStats.avgUptime.toFixed(2)}%</strong>
+          </p>
           {slaFilter === 'ALL' && (
             <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-blue-600" />
           )}
@@ -382,7 +382,7 @@ export default function AllWsidPage() {
         {/* Card 2: Status Aman (Safe) */}
         <div
           onClick={() => setSlaFilter(slaFilter === 'SAFE' ? 'ALL' : 'SAFE')}
-          className={`p-4 rounded-lg border transition-all cursor-pointer bg-white shadow-2xs relative overflow-hidden ${
+          className={`p-3 rounded-lg border transition-all cursor-pointer bg-white shadow-2xs relative overflow-hidden min-h-[92px] max-h-[105px] flex flex-col justify-between ${
             slaFilter === 'SAFE'
               ? 'border-emerald-600 ring-1 ring-emerald-500 bg-emerald-50/20'
               : 'border-[#E5EAF2] hover:border-slate-300'
@@ -393,27 +393,27 @@ export default function AllWsidPage() {
               <span className="text-[10px] font-semibold text-emerald-700 uppercase tracking-wider block">
                 SLA Aman (Safe)
               </span>
-              <h3 className="text-2xl font-bold text-emerald-700 font-mono mt-0.5">
+              <h3 className="text-2xl font-bold text-emerald-700 font-mono mt-0.5 leading-tight">
                 {kpiStats.safe.toLocaleString('id-ID')}
               </h3>
-              <p className="text-[11px] text-slate-500 mt-1 flex items-center gap-1">
-                <span>Persentase:</span>
-                <strong className="text-emerald-700 font-semibold">
-                  {((kpiStats.safe / (kpiStats.total || 1)) * 100).toFixed(1)}%
-                </strong>
-                <span>mesin sehat</span>
-              </p>
             </div>
             <div
-              className={`w-9 h-9 rounded-md flex items-center justify-center transition-colors ${
+              className={`w-7 h-7 rounded-md flex items-center justify-center transition-colors ${
                 slaFilter === 'SAFE'
-                  ? 'bg-emerald-600 text-white shadow-xs'
+                  ? 'bg-emerald-600 text-white shadow-2xs'
                   : 'bg-emerald-50 text-emerald-700 border border-emerald-200'
               }`}
             >
-              <ShieldCheck size={17} />
+              <ShieldCheck size={15} />
             </div>
           </div>
+          <p className="text-[10px] text-slate-500 flex items-center gap-1 mt-0.5">
+            <span>Persentase:</span>
+            <strong className="text-emerald-700 font-semibold">
+              {((kpiStats.safe / (kpiStats.total || 1)) * 100).toFixed(1)}%
+            </strong>
+            <span>mesin sehat</span>
+          </p>
           {slaFilter === 'SAFE' && (
             <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-emerald-600" />
           )}
@@ -422,7 +422,7 @@ export default function AllWsidPage() {
         {/* Card 3: Perlu Perhatian (Warning) */}
         <div
           onClick={() => setSlaFilter(slaFilter === 'WARNING' ? 'ALL' : 'WARNING')}
-          className={`p-4 rounded-lg border transition-all cursor-pointer bg-white shadow-2xs relative overflow-hidden ${
+          className={`p-3 rounded-lg border transition-all cursor-pointer bg-white shadow-2xs relative overflow-hidden min-h-[92px] max-h-[105px] flex flex-col justify-between ${
             slaFilter === 'WARNING'
               ? 'border-amber-600 ring-1 ring-amber-500 bg-amber-50/20'
               : 'border-[#E5EAF2] hover:border-slate-300'
@@ -433,23 +433,23 @@ export default function AllWsidPage() {
               <span className="text-[10px] font-semibold text-amber-700 uppercase tracking-wider block">
                 Perlu Perhatian (Warning)
               </span>
-              <h3 className="text-2xl font-bold text-amber-700 font-mono mt-0.5">
+              <h3 className="text-2xl font-bold text-amber-700 font-mono mt-0.5 leading-tight">
                 {kpiStats.warning.toLocaleString('id-ID')}
               </h3>
-              <p className="text-[11px] text-slate-500 mt-1">
-                Mendekati ambang / 2 bln berturut-turut
-              </p>
             </div>
             <div
-              className={`w-9 h-9 rounded-md flex items-center justify-center transition-colors ${
+              className={`w-7 h-7 rounded-md flex items-center justify-center transition-colors ${
                 slaFilter === 'WARNING'
-                  ? 'bg-amber-600 text-white shadow-xs'
+                  ? 'bg-amber-600 text-white shadow-2xs'
                   : 'bg-amber-50 text-amber-700 border border-amber-200'
               }`}
             >
-              <AlertTriangle size={17} />
+              <AlertTriangle size={15} />
             </div>
           </div>
+          <p className="text-[10px] text-slate-500 mt-0.5 truncate">
+            Mendekati ambang / 2 bln berturut-turut
+          </p>
           {slaFilter === 'WARNING' && (
             <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-amber-600" />
           )}
@@ -458,7 +458,7 @@ export default function AllWsidPage() {
         {/* Card 4: Status Kritis (Critical) */}
         <div
           onClick={() => setSlaFilter(slaFilter === 'CRITICAL' ? 'ALL' : 'CRITICAL')}
-          className={`p-4 rounded-lg border transition-all cursor-pointer bg-white shadow-2xs relative overflow-hidden ${
+          className={`p-3 rounded-lg border transition-all cursor-pointer bg-white shadow-2xs relative overflow-hidden min-h-[92px] max-h-[105px] flex flex-col justify-between ${
             slaFilter === 'CRITICAL'
               ? 'border-rose-600 ring-1 ring-rose-500 bg-rose-50/20'
               : 'border-[#E5EAF2] hover:border-slate-300'
@@ -469,23 +469,23 @@ export default function AllWsidPage() {
               <span className="text-[10px] font-semibold text-rose-700 uppercase tracking-wider block">
                 Status Kritis (Critical)
               </span>
-              <h3 className="text-2xl font-bold text-rose-700 font-mono mt-0.5">
+              <h3 className="text-2xl font-bold text-rose-700 font-mono mt-0.5 leading-tight">
                 {kpiStats.critical.toLocaleString('id-ID')}
               </h3>
-              <p className="text-[11px] text-slate-500 mt-1">
-                Di bawah batas SLA / kronis &gt; 2 bulan
-              </p>
             </div>
             <div
-              className={`w-9 h-9 rounded-md flex items-center justify-center transition-colors ${
+              className={`w-7 h-7 rounded-md flex items-center justify-center transition-colors ${
                 slaFilter === 'CRITICAL'
-                  ? 'bg-rose-600 text-white shadow-xs'
+                  ? 'bg-rose-600 text-white shadow-2xs'
                   : 'bg-rose-50 text-rose-700 border border-rose-200'
               }`}
             >
-              <Flame size={17} />
+              <Flame size={15} />
             </div>
           </div>
+          <p className="text-[10px] text-slate-500 mt-0.5 truncate">
+            Di bawah batas SLA / kronis &gt; 2 bulan
+          </p>
           {slaFilter === 'CRITICAL' && (
             <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-rose-600" />
           )}
@@ -495,16 +495,16 @@ export default function AllWsidPage() {
       {/* ======================================================== */}
       {/* 3. SMART FILTER TOOLBAR                                   */}
       {/* ======================================================== */}
-      <div className="bg-white p-3.5 rounded-lg border border-[#E5EAF2] shadow-2xs space-y-3">
-        <div className="flex flex-col lg:flex-row items-stretch lg:items-center justify-between gap-2.5">
+      <div className="bg-white p-2.5 rounded-lg border border-[#E5EAF2] shadow-2xs space-y-2">
+        <div className="flex flex-col lg:flex-row items-stretch lg:items-center justify-between gap-2">
           {/* Search Box */}
           <div className="relative flex-1 max-w-md">
-            <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-400">
-              <Search size={14} />
+            <div className="absolute inset-y-0 left-0 pl-2.5 flex items-center pointer-events-none text-slate-400">
+              <Search size={13} />
             </div>
             <input
               type="text"
-              className="pl-8 pr-8 py-1.5 bg-slate-50 border border-[#E5EAF2] rounded-md w-full text-xs text-slate-800 placeholder-slate-400 focus:outline-none focus:border-blue-600 focus:ring-1 focus:ring-blue-600 transition-colors"
+              className="pl-8 pr-7 h-8 bg-slate-50 border border-[#E5EAF2] rounded-md w-full text-xs text-slate-800 placeholder-slate-400 focus:outline-none focus:border-blue-600 focus:ring-1 focus:ring-blue-600 transition-colors"
               placeholder="Cari WSID, Lokasi, Vendor, atau Sektor..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
@@ -516,20 +516,20 @@ export default function AllWsidPage() {
                 className="absolute inset-y-0 right-0 pr-2.5 flex items-center text-slate-400 hover:text-slate-600 cursor-pointer"
                 title="Hapus kata kunci pencarian"
               >
-                <X size={13} />
+                <X size={12} />
               </button>
             )}
           </div>
 
           {/* Filter Dropdowns */}
-          <div className="flex flex-wrap items-center gap-2">
+          <div className="flex flex-wrap items-center gap-1.5">
             {/* Status SLA */}
-            <div className="flex items-center gap-1.5 bg-slate-50 border border-slate-200 px-2.5 py-1.5 rounded-xl text-xs">
-              <span className="text-slate-400 font-medium">Status:</span>
+            <div className="flex items-center gap-1 bg-slate-50 border border-[#E5EAF2] px-2 h-8 rounded-md text-xs">
+              <span className="text-slate-500 font-medium">Status:</span>
               <select
                 value={slaFilter}
                 onChange={(e) => setSlaFilter(e.target.value as any)}
-                className="bg-transparent text-slate-800 text-xs font-bold outline-none cursor-pointer"
+                className="bg-transparent text-slate-800 text-xs font-semibold outline-none cursor-pointer"
               >
                 <option value="ALL">Semua Status</option>
                 <option value="SAFE">Aman (Safe)</option>
@@ -539,12 +539,12 @@ export default function AllWsidPage() {
             </div>
 
             {/* Jenis Mesin */}
-            <div className="flex items-center gap-1.5 bg-slate-50 border border-slate-200 px-2.5 py-1.5 rounded-xl text-xs">
-              <span className="text-slate-400 font-medium">Jenis:</span>
+            <div className="flex items-center gap-1 bg-slate-50 border border-[#E5EAF2] px-2 h-8 rounded-md text-xs">
+              <span className="text-slate-500 font-medium">Jenis:</span>
               <select
                 value={jenisFilter}
                 onChange={(e) => setJenisFilter(e.target.value as any)}
-                className="bg-transparent text-slate-800 text-xs font-bold outline-none cursor-pointer"
+                className="bg-transparent text-slate-800 text-xs font-semibold outline-none cursor-pointer"
               >
                 <option value="ALL">Semua Jenis</option>
                 <option value="ATM">ATM (Target 99%)</option>
@@ -553,12 +553,12 @@ export default function AllWsidPage() {
             </div>
 
             {/* Vendor */}
-            <div className="flex items-center gap-1.5 bg-slate-50 border border-slate-200 px-2.5 py-1.5 rounded-xl text-xs">
-              <span className="text-slate-400 font-medium">Vendor:</span>
+            <div className="flex items-center gap-1 bg-slate-50 border border-[#E5EAF2] px-2 h-8 rounded-md text-xs">
+              <span className="text-slate-500 font-medium">Vendor:</span>
               <select
                 value={vendorFilter}
                 onChange={(e) => setVendorFilter(e.target.value)}
-                className="bg-transparent text-slate-800 text-xs font-bold outline-none cursor-pointer max-w-[120px] truncate"
+                className="bg-transparent text-slate-800 text-xs font-semibold outline-none cursor-pointer max-w-[120px] truncate"
               >
                 <option value="ALL">Semua Vendor</option>
                 {uniqueVendors.map((v) => (
@@ -570,12 +570,12 @@ export default function AllWsidPage() {
             </div>
 
             {/* Service Point */}
-            <div className="flex items-center gap-1.5 bg-slate-50 border border-slate-200 px-2.5 py-1.5 rounded-xl text-xs">
-              <span className="text-slate-400 font-medium">SP:</span>
+            <div className="flex items-center gap-1 bg-slate-50 border border-[#E5EAF2] px-2 h-8 rounded-md text-xs">
+              <span className="text-slate-500 font-medium">SP:</span>
               <select
                 value={servicePointFilter}
                 onChange={(e) => setServicePointFilter(e.target.value)}
-                className="bg-transparent text-slate-800 text-xs font-bold outline-none cursor-pointer max-w-[130px] truncate"
+                className="bg-transparent text-slate-800 text-xs font-semibold outline-none cursor-pointer max-w-[130px] truncate"
               >
                 <option value="ALL">Semua SP</option>
                 {uniqueServicePoints.map((sp) => (
@@ -587,12 +587,12 @@ export default function AllWsidPage() {
             </div>
 
             {/* Page Size */}
-            <div className="flex items-center gap-1.5 bg-slate-50 border border-slate-200 px-2.5 py-1.5 rounded-xl text-xs">
-              <span className="text-slate-400 font-medium">Tampil:</span>
+            <div className="flex items-center gap-1 bg-slate-50 border border-[#E5EAF2] px-2 h-8 rounded-md text-xs">
+              <span className="text-slate-500 font-medium">Tampil:</span>
               <select
                 value={pageSize}
                 onChange={(e) => setPageSize(Number(e.target.value))}
-                className="bg-transparent text-slate-800 text-xs font-bold outline-none cursor-pointer"
+                className="bg-transparent text-slate-800 text-xs font-semibold outline-none cursor-pointer"
               >
                 <option value={15}>15</option>
                 <option value={25}>25</option>
@@ -607,10 +607,10 @@ export default function AllWsidPage() {
               <button
                 type="button"
                 onClick={handleResetFilters}
-                className="px-2.5 py-1.5 bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1 shadow-2xs"
+                className="px-2 h-8 bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 rounded-md text-xs font-semibold transition-all cursor-pointer flex items-center gap-1 shadow-2xs"
                 title="Reset semua filter ke default"
               >
-                <RotateCcw size={12} />
+                <RotateCcw size={11} />
                 <span>Reset</span>
               </button>
             )}
@@ -625,16 +625,16 @@ export default function AllWsidPage() {
         ref={tableTopRef}
         className={`grid grid-cols-1 ${
           selectedWsid ? 'xl:grid-cols-3' : ''
-        } gap-6 transition-all duration-300 items-start`}
+        } gap-4 transition-all duration-300 items-start`}
       >
         {/* Main Table Card */}
         <div
-          className={`bg-white rounded-2xl shadow-xs border border-slate-200/90 overflow-hidden ${
+          className={`bg-white rounded-lg shadow-2xs border border-[#E5EAF2] overflow-hidden ${
             selectedWsid ? 'xl:col-span-2' : ''
           }`}
         >
           {/* Table Header Info Bar */}
-          <div className="p-4 bg-slate-50/80 border-b border-slate-200/80 flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs">
+          <div className="px-3 py-2 bg-slate-50/80 border-b border-[#E5EAF2] flex flex-col sm:flex-row sm:items-center justify-between gap-1.5 text-xs">
             <div className="text-slate-500 font-medium">
               Menampilkan{' '}
               <strong className="text-slate-800 font-mono font-bold">
@@ -663,41 +663,41 @@ export default function AllWsidPage() {
           <div className="overflow-x-auto">
             <table className="w-full text-left text-xs border-collapse">
               <thead>
-                <tr className="bg-slate-50/90 text-slate-500 font-bold uppercase tracking-wider text-[11px] select-none border-b border-slate-200/80">
+                <tr className="h-8 bg-[#F8FAFC] text-slate-600 font-semibold uppercase tracking-wider text-[11px] select-none border-b border-[#E5EAF2]">
                   <th
-                    className="py-3 px-4 w-28 cursor-pointer group whitespace-nowrap"
+                    className="py-1.5 px-3 w-28 cursor-pointer group whitespace-nowrap"
                     onClick={() => handleSort('wsid')}
                   >
                     WSID {renderSortIcon('wsid')}
                   </th>
                   <th
-                    className="py-3 px-3 w-28 cursor-pointer group whitespace-nowrap"
+                    className="py-1.5 px-3 w-28 cursor-pointer group whitespace-nowrap"
                     onClick={() => handleSort('jenisMesin')}
                   >
                     Jenis & Vendor {renderSortIcon('jenisMesin')}
                   </th>
                   <th
-                    className="py-3 px-4 min-w-[150px] cursor-pointer group whitespace-nowrap"
+                    className="py-1.5 px-3 min-w-[140px] cursor-pointer group whitespace-nowrap"
                     onClick={() => handleSort('sektor')}
                   >
                     Sektor - Service Point {renderSortIcon('sektor')}
                   </th>
                   <th
-                    className="py-3 px-4 min-w-[200px] cursor-pointer group"
+                    className="py-1.5 px-3 min-w-[180px] cursor-pointer group"
                     onClick={() => handleSort('lokasi')}
                   >
                     Lokasi Mesin {renderSortIcon('lokasi')}
                   </th>
-                  <th className="py-3 px-4 w-36 whitespace-nowrap text-center">
+                  <th className="py-1.5 px-3 w-32 whitespace-nowrap text-center">
                     Status SLA
                   </th>
                   <th
-                    className="py-3 px-4 w-36 text-right cursor-pointer group whitespace-nowrap"
+                    className="py-1.5 px-3 w-32 text-right cursor-pointer group whitespace-nowrap"
                     onClick={() => handleSort('total')}
                   >
                     Downtime (%) {renderSortIcon('total')}
                   </th>
-                  <th className="py-3 px-3 text-center w-20">Aksi</th>
+                  <th className="py-1.5 px-2 text-center w-16">Aksi</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
@@ -747,7 +747,7 @@ export default function AllWsidPage() {
                         }`}
                       >
                         {/* WSID */}
-                        <td className="py-2.5 px-3.5 whitespace-nowrap font-mono font-bold text-slate-900">
+                        <td className="py-1.5 px-3 whitespace-nowrap font-mono font-bold text-slate-900">
                           <span
                             className={
                               isSelected ? 'text-blue-600 font-bold' : ''
@@ -758,10 +758,10 @@ export default function AllWsidPage() {
                         </td>
 
                         {/* Jenis & Vendor */}
-                        <td className="py-2.5 px-3 whitespace-nowrap">
-                          <div className="flex flex-col gap-1 items-start">
+                        <td className="py-1.5 px-3 whitespace-nowrap">
+                          <div className="flex flex-col gap-0.5 items-start">
                             <span
-                              className={`px-1.5 py-0.2 rounded text-[10px] font-semibold font-mono uppercase tracking-wider ${
+                              className={`px-1.5 py-0.2 rounded text-[9px] font-semibold font-mono uppercase tracking-wider ${
                                 isCrm
                                   ? 'bg-blue-50 text-blue-700 border border-blue-200/70'
                                   : 'bg-slate-100 text-slate-700 border border-slate-200'
@@ -770,7 +770,7 @@ export default function AllWsidPage() {
                               {m.jenisMesin || 'ATM'}
                             </span>
                             {m.vendor && m.vendor !== '-' && (
-                              <span className="text-[10px] text-slate-500 font-semibold px-1.5 py-0.2 bg-slate-100 rounded border border-slate-200/60">
+                              <span className="text-[9px] text-slate-500 font-semibold px-1 py-0.2 bg-slate-100 rounded border border-slate-200/60">
                                 {m.vendor}
                               </span>
                             )}
@@ -778,20 +778,20 @@ export default function AllWsidPage() {
                         </td>
 
                         {/* Sektor & SP */}
-                        <td className="py-3 px-4 whitespace-nowrap">
+                        <td className="py-1.5 px-3 whitespace-nowrap">
                           <div className="flex flex-col">
-                            <span className="font-bold text-slate-700">
+                            <span className="font-semibold text-slate-700 text-xs">
                               {cleanSektorName(m.sektorBCA) !== '-' ? cleanSektorName(m.sektorBCA) : (m.sektorBCA || '-')}
                             </span>
-                            <span className="text-[11px] text-slate-400">
+                            <span className="text-[10px] text-slate-400">
                               SP: {spLabel}
                             </span>
                           </div>
                         </td>
 
                         {/* Lokasi Mesin */}
-                        <td className="py-3 px-4 text-slate-600 max-w-xs truncate" title={m.lokasi}>
-                          <span className="text-slate-800 font-medium">{m.lokasi || '-'}</span>
+                        <td className="py-1.5 px-3 text-slate-600 max-w-xs truncate" title={m.lokasi}>
+                          <span className="text-slate-800 font-medium text-xs">{m.lokasi || '-'}</span>
                           {m.wilayahOperasional && (
                             <span className="block text-[10px] text-slate-400 truncate">
                               {m.wilayahOperasional}
@@ -800,26 +800,26 @@ export default function AllWsidPage() {
                         </td>
 
                         {/* Status SLA */}
-                        <td className="py-3 px-4 whitespace-nowrap text-center">
+                        <td className="py-1.5 px-3 whitespace-nowrap text-center">
                           <div className="inline-flex flex-col items-center gap-0.5">
                             <span
-                              className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-[10px] font-bold border ${mHealth.badgeColor}`}
+                              className={`inline-flex items-center px-1.5 py-0.2 rounded text-[9px] font-semibold border ${mHealth.badgeColor}`}
                               title={mHealth.primaryReason}
                             >
                               {mHealth.status === 'SAFE' && (
-                                <CheckCircle2 size={11} className="mr-1 text-emerald-600" />
+                                <CheckCircle2 size={10} className="mr-1 text-emerald-600" />
                               )}
                               {mHealth.status === 'WARNING' && (
-                                <AlertTriangle size={11} className="mr-1 text-amber-600" />
+                                <AlertTriangle size={10} className="mr-1 text-amber-600" />
                               )}
                               {mHealth.status === 'CRITICAL' && (
-                                <Flame size={11} className="mr-1 text-rose-600" />
+                                <Flame size={10} className="mr-1 text-rose-600" />
                               )}
                               <span>{mHealth.statusLabel}</span>
                             </span>
                             {mHealth.status !== 'SAFE' && (
                               <span
-                                className="text-[10px] text-slate-400 truncate max-w-[130px]"
+                                className="text-[9px] text-slate-400 truncate max-w-[120px]"
                                 title={mHealth.primaryReason}
                               >
                                 {mHealth.primaryReason}
@@ -829,10 +829,10 @@ export default function AllWsidPage() {
                         </td>
 
                         {/* Nilai Downtime (%) */}
-                        <td className="py-3 px-4 text-right whitespace-nowrap">
-                          <div className="flex flex-col items-end gap-1">
+                        <td className="py-1.5 px-3 text-right whitespace-nowrap">
+                          <div className="flex flex-col items-end gap-0.5">
                             <span
-                              className={`font-mono font-bold ${
+                              className={`font-mono font-bold text-xs ${
                                 totalPct > 2.0
                                   ? 'text-rose-600'
                                   : totalPct > 1.0
@@ -843,14 +843,14 @@ export default function AllWsidPage() {
                               {totalPct.toFixed(2)}%
                             </span>
                             {/* Visual Progress Bar */}
-                            <div className="w-20 bg-slate-100 rounded-full h-1.5 overflow-hidden">
+                            <div className="w-16 bg-slate-100 rounded-full h-1 overflow-hidden">
                               <div
                                 className={`h-full rounded-full ${
                                   totalPct > 2.0
-                                    ? 'bg-gradient-to-r from-rose-500 to-rose-600'
+                                    ? 'bg-rose-500'
                                     : totalPct > 1.0
-                                    ? 'bg-gradient-to-r from-amber-400 to-amber-500'
-                                    : 'bg-gradient-to-r from-emerald-400 to-emerald-500'
+                                    ? 'bg-amber-400'
+                                    : 'bg-emerald-400'
                                 }`}
                                 style={{
                                   width: `${Math.min(100, Math.max(5, (totalPct / 5) * 100))}%`

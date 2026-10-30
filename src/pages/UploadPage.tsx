@@ -257,31 +257,31 @@ export default function UploadPage() {
   };
 
   return (
-    <div className="min-h-screen bg-[#F5F7FB] flex items-center justify-center p-6 animate-fade-in">
-      <div className="bg-white rounded-lg max-w-4xl w-full p-6 sm:p-8 border border-[#E5EAF2] shadow-2xs">
+    <div className="min-h-screen bg-[#F5F7FB] flex items-center justify-center p-4 sm:p-6 animate-fade-in">
+      <div className="bg-white rounded-lg max-w-4xl w-full p-5 sm:p-6 border border-[#E5EAF2] shadow-2xs">
         {/* Header with back button */}
-        <div className="flex items-center justify-between mb-6">
+        <div className="flex items-center justify-between mb-4">
           {hasExistingData ? (
             <button
               onClick={() => navigate('/dashboard')}
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-slate-700 bg-white border border-[#E5EAF2] rounded-lg hover:bg-slate-50 transition-colors shadow-2xs cursor-pointer"
+              className="inline-flex items-center gap-1.5 px-3 h-8 text-xs font-medium text-slate-700 bg-white border border-[#E5EAF2] rounded-md hover:bg-slate-50 transition-colors shadow-2xs cursor-pointer"
             >
-              <ArrowLeft size={14} />
+              <ArrowLeft size={13} />
               <span>Kembali ke Dashboard</span>
             </button>
           ) : (
             <div></div>
           )}
 
-          <div className="inline-flex items-center gap-2 px-2.5 py-1 bg-slate-50 border border-[#E5EAF2] rounded-md text-xs text-slate-600 font-medium">
-            <Database size={13} className={(isGasEnvironment() || isBackendConfigured()) ? "text-emerald-600" : "text-amber-600"} />
+          <div className="inline-flex items-center gap-1.5 px-2.5 h-8 bg-slate-50 border border-[#E5EAF2] rounded-md text-xs text-slate-600 font-medium">
+            <Database size={12} className={(isGasEnvironment() || isBackendConfigured()) ? "text-emerald-600" : "text-amber-600"} />
             <span>{(isGasEnvironment() || isBackendConfigured()) ? "Tersambung ke Google Spreadsheet Backend" : "Database Mode Lokal (Tersimpan)"}</span>
           </div>
         </div>
 
-        <div className="text-center mb-6">
-          <h1 className="text-2xl font-bold text-slate-900 tracking-tight">Database & Upload Data</h1>
-          <p className="text-xs text-slate-500 mt-1 max-w-xl mx-auto">
+        <div className="text-center mb-5">
+          <h1 className="text-xl font-bold text-slate-900 tracking-tight">Database & Upload Data</h1>
+          <p className="text-xs text-slate-500 mt-0.5 max-w-xl mx-auto">
             Data tersimpan permanen di Google Spreadsheet. Master Data dapat diupdate kapan saja, dan data uptime bulanan yang sudah masuk otomatis dikunci agar tidak tertimpa.
           </p>
         </div>

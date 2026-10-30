@@ -156,10 +156,10 @@ export default function MesinPerSektorPage() {
   };
 
   return (
-    <div className="space-y-5 animate-fade-in pb-12">
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+    <div className="space-y-3.5 animate-fade-in pb-8">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
         <div>
-          <h2 className="text-xl font-bold text-slate-900">
+          <h2 className="text-lg font-bold text-slate-900">
             Distribusi Mesin per Sektor
           </h2>
           <p className="text-slate-500 text-xs mt-0.5">
@@ -167,9 +167,9 @@ export default function MesinPerSektorPage() {
           </p>
         </div>
         
-        <div className="flex items-center gap-2.5 self-start sm:self-auto flex-wrap">
-          <div className="flex items-center gap-1.5 bg-white px-2.5 py-1.5 rounded-md border border-[#E5EAF2] text-xs shadow-2xs">
-            <MapPin size={13} className="text-slate-400" />
+        <div className="flex items-center gap-2 self-start sm:self-auto flex-wrap">
+          <div className="flex items-center gap-1.5 bg-white px-2 h-8 rounded-md border border-[#E5EAF2] text-xs shadow-2xs">
+            <MapPin size={12} className="text-slate-400" />
             <select
               value={selectedSPFilter}
               onChange={(e) => setSelectedSPFilter(e.target.value)}
@@ -184,9 +184,9 @@ export default function MesinPerSektorPage() {
 
           <button 
             onClick={handleExport}
-            className="flex items-center gap-1.5 px-3.5 py-1.5 bg-blue-600 hover:bg-blue-700 active:bg-blue-800 text-white font-medium rounded-lg transition-colors text-xs shadow-xs cursor-pointer"
+            className="flex items-center gap-1.5 px-3 h-8 bg-blue-600 hover:bg-blue-700 active:bg-blue-800 text-white font-medium rounded-md transition-colors text-xs shadow-2xs cursor-pointer"
           >
-            <Download size={14} />
+            <Download size={13} />
             <span>Export Excel</span>
           </button>
         </div>
@@ -195,9 +195,9 @@ export default function MesinPerSektorPage() {
       <div className="bg-white rounded-lg overflow-hidden shadow-2xs border border-[#E5EAF2]">
         <div className="overflow-x-auto">
           <table className="w-full text-xs text-left">
-            <thead className="bg-[#F8FAFC] text-slate-600 font-semibold border-b border-[#E5EAF2] select-none">
+            <thead className="bg-[#F8FAFC] text-slate-600 font-semibold border-b border-[#E5EAF2] select-none text-[11px]">
               <tr>
-                <th className="px-4 py-2.5 cursor-pointer hover:bg-slate-100" onClick={() => handleSort('sektor')}>
+                <th className="px-3 py-1.5 cursor-pointer hover:bg-slate-100" onClick={() => handleSort('sektor')}>
                   Sektor {renderSortIcon('sektor')}
                 </th>
                 <th className="px-4 py-2.5 cursor-pointer hover:bg-slate-100" onClick={() => handleSort('servicePoint')}>

@@ -76,56 +76,56 @@ export default function TotalUptimeBulanPage() {
   }, [chartData]);
 
   return (
-    <div className="space-y-5 animate-fade-in">
+    <div className="space-y-3.5 animate-fade-in pb-8">
       {/* Header & Export Action */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
         <div>
-          <h1 className="text-xl font-bold text-slate-900 tracking-tight">Total Uptime & Mesin (Abacus Jakarta)</h1>
+          <h1 className="text-lg font-bold text-slate-900 tracking-tight">Total Uptime & Mesin (Abacus Jakarta)</h1>
           <p className="text-xs text-slate-500 mt-0.5">Perhitungan performa terpisah antara mesin ATM dan CRM dengan grafik tren bulanan</p>
         </div>
 
         <button
           onClick={handleExportAll}
-          className="inline-flex items-center gap-2 px-3.5 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-xs font-medium transition-colors shadow-2xs cursor-pointer self-start sm:self-auto"
+          className="inline-flex items-center gap-1.5 px-3 h-8 bg-blue-600 hover:bg-blue-700 text-white rounded-md text-xs font-medium transition-colors shadow-2xs cursor-pointer self-start sm:self-auto"
         >
-          <Download size={14} />
+          <Download size={13} />
           <span>Export Laporan Lengkap (.xlsx)</span>
         </button>
       </div>
 
-      {/* KPI Cards: Separated ATM & CRM Performance */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+      {/* KPI Cards: Separated ATM & CRM Performance (Compact 92-105px) */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-2.5">
         {/* ATM SLA Card */}
-        <div className="bg-white rounded-lg p-4 border border-[#E5EAF2] shadow-2xs transition-colors">
-          <div className="flex items-center justify-between mb-2">
-            <span className="text-[11px] font-semibold tracking-wider text-slate-500 uppercase">
+        <div className="bg-white rounded-lg p-3 border border-[#E5EAF2] shadow-2xs min-h-[92px] max-h-[105px] flex flex-col justify-between">
+          <div className="flex items-center justify-between">
+            <span className="text-[10px] font-semibold tracking-wider text-slate-500 uppercase">
               Mesin ATM BCA
             </span>
-            <span className="text-[11px] text-slate-400 font-medium">
+            <span className="text-[10px] text-slate-400 font-medium">
               {latestMonth ? latestMonth.periodeLabel : '-'}
             </span>
           </div>
           
-          <div className="flex items-baseline gap-2 mb-2">
-            <span className="text-2xl font-bold text-slate-900">
+          <div className="flex items-baseline gap-2 my-0.5">
+            <span className="text-2xl font-bold text-slate-900 leading-tight">
               {latestMonth?.uptimeATM ? `${latestMonth.uptimeATM.toFixed(2)}%` : '-'}
             </span>
-            <span className="text-xs font-medium text-slate-500">
+            <span className="text-[11px] font-medium text-slate-500">
               SLA: {SLA_ATM}%
             </span>
           </div>
 
-          <div className="flex items-center justify-between pt-2 border-t border-[#E5EAF2]">
-            <div className="flex items-center gap-1.5">
+          <div className="flex items-center justify-between pt-1.5 border-t border-[#E5EAF2]">
+            <div className="flex items-center gap-1">
               {latestMonth && latestMonth.uptimeATM !== null ? (
                 latestMonth.uptimeATM >= SLA_ATM ? (
-                  <span className="inline-flex items-center gap-1 text-[11px] font-medium text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200">
-                    <CheckCircle2 size={12} />
+                  <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-emerald-700 bg-emerald-50 px-1.5 py-0.2 rounded border border-emerald-200">
+                    <CheckCircle2 size={11} />
                     ACHIEVED (+{(latestMonth.uptimeATM - SLA_ATM).toFixed(2)}%)
                   </span>
                 ) : (
-                  <span className="inline-flex items-center gap-1 text-[11px] font-medium text-rose-700 bg-rose-50 px-2 py-0.5 rounded border border-rose-200">
-                    <AlertTriangle size={12} />
+                  <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-rose-700 bg-rose-50 px-1.5 py-0.2 rounded border border-rose-200">
+                    <AlertTriangle size={11} />
                     NOT ACHIEVED ({(latestMonth.uptimeATM - SLA_ATM).toFixed(2)}%)
                   </span>
                 )
@@ -133,43 +133,43 @@ export default function TotalUptimeBulanPage() {
                 <span className="text-xs text-slate-400">-</span>
               )}
             </div>
-            <span className="text-[11px] font-medium text-slate-500">
+            <span className="text-[10px] font-medium text-slate-500">
               Populasi: <strong className="text-slate-700 font-semibold">{latestMonth?.mesinATM?.toLocaleString() || 0}</strong>
             </span>
           </div>
         </div>
 
         {/* CRM SLA Card */}
-        <div className="bg-white rounded-lg p-4 border border-[#E5EAF2] shadow-2xs transition-colors">
-          <div className="flex items-center justify-between mb-2">
-            <span className="text-[11px] font-semibold tracking-wider text-slate-500 uppercase">
+        <div className="bg-white rounded-lg p-3 border border-[#E5EAF2] shadow-2xs min-h-[92px] max-h-[105px] flex flex-col justify-between">
+          <div className="flex items-center justify-between">
+            <span className="text-[10px] font-semibold tracking-wider text-slate-500 uppercase">
               Mesin CRM / ATS BCA
             </span>
-            <span className="text-[11px] text-slate-400 font-medium">
+            <span className="text-[10px] text-slate-400 font-medium">
               {latestMonth ? latestMonth.periodeLabel : '-'}
             </span>
           </div>
           
-          <div className="flex items-baseline gap-2 mb-2">
-            <span className="text-2xl font-bold text-slate-900">
+          <div className="flex items-baseline gap-2 my-0.5">
+            <span className="text-2xl font-bold text-slate-900 leading-tight">
               {latestMonth?.uptimeCRM ? `${latestMonth.uptimeCRM.toFixed(2)}%` : '-'}
             </span>
-            <span className="text-xs font-medium text-slate-500">
+            <span className="text-[11px] font-medium text-slate-500">
               SLA: {SLA_CRM}%
             </span>
           </div>
 
-          <div className="flex items-center justify-between pt-2 border-t border-[#E5EAF2]">
-            <div className="flex items-center gap-1.5">
+          <div className="flex items-center justify-between pt-1.5 border-t border-[#E5EAF2]">
+            <div className="flex items-center gap-1">
               {latestMonth && latestMonth.uptimeCRM !== null ? (
                 latestMonth.uptimeCRM >= SLA_CRM ? (
-                  <span className="inline-flex items-center gap-1 text-[11px] font-medium text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200">
-                    <CheckCircle2 size={12} />
+                  <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-emerald-700 bg-emerald-50 px-1.5 py-0.2 rounded border border-emerald-200">
+                    <CheckCircle2 size={11} />
                     ACHIEVED (+{(latestMonth.uptimeCRM - SLA_CRM).toFixed(2)}%)
                   </span>
                 ) : (
-                  <span className="inline-flex items-center gap-1 text-[11px] font-medium text-rose-700 bg-rose-50 px-2 py-0.5 rounded border border-rose-200">
-                    <AlertTriangle size={12} />
+                  <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-rose-700 bg-rose-50 px-1.5 py-0.2 rounded border border-rose-200">
+                    <AlertTriangle size={11} />
                     NOT ACHIEVED ({(latestMonth.uptimeCRM - SLA_CRM).toFixed(2)}%)
                   </span>
                 )
@@ -177,31 +177,31 @@ export default function TotalUptimeBulanPage() {
                 <span className="text-xs text-slate-400">-</span>
               )}
             </div>
-            <span className="text-[11px] font-medium text-slate-500">
+            <span className="text-[10px] font-medium text-slate-500">
               Populasi: <strong className="text-slate-700 font-semibold">{latestMonth?.mesinCRM?.toLocaleString() || 0}</strong>
             </span>
           </div>
         </div>
 
         {/* Total Active Machines Card */}
-        <div className="bg-white rounded-lg p-4 border border-[#E5EAF2] shadow-2xs transition-colors">
-          <div className="flex items-center justify-between mb-2">
-            <span className="text-[11px] font-semibold tracking-wider text-slate-500 uppercase">
+        <div className="bg-white rounded-lg p-3 border border-[#E5EAF2] shadow-2xs min-h-[92px] max-h-[105px] flex flex-col justify-between">
+          <div className="flex items-center justify-between">
+            <span className="text-[10px] font-semibold tracking-wider text-slate-500 uppercase">
               Total Populasi Mesin
             </span>
-            <span className="text-[11px] text-slate-400 font-medium">Abacus Jakarta</span>
+            <span className="text-[10px] text-slate-400 font-medium">Abacus Jakarta</span>
           </div>
           
-          <div className="flex items-baseline gap-2 mb-2">
-            <span className="text-2xl font-bold text-slate-900">
+          <div className="flex items-baseline gap-2 my-0.5">
+            <span className="text-2xl font-bold text-slate-900 leading-tight">
               {latestMonth?.totalMesin?.toLocaleString() || 0}
             </span>
-            <span className="text-xs font-medium text-slate-500">
+            <span className="text-[11px] font-medium text-slate-500">
               Mesin Aktif
             </span>
           </div>
 
-          <div className="flex items-center justify-between pt-2 border-t border-[#E5EAF2] text-[11px] text-slate-500">
+          <div className="flex items-center justify-between pt-1.5 border-t border-[#E5EAF2] text-[10px] text-slate-500">
             <span>ATM: <strong className="text-blue-600 font-semibold">{latestMonth?.mesinATM || 0}</strong></span>
             <span>CRM: <strong className="text-slate-700 font-semibold">{latestMonth?.mesinCRM || 0}</strong></span>
             <span>Periode: <strong className="text-slate-700 font-semibold">{chartData.length} Bulan</strong></span>
@@ -372,22 +372,22 @@ export default function TotalUptimeBulanPage() {
 
         <div className="overflow-x-auto">
           <table className="w-full text-xs text-left">
-            <thead className="bg-[#F8FAFC] text-slate-600 font-semibold border-b border-[#E5EAF2]">
+            <thead className="bg-[#F8FAFC] text-slate-600 font-semibold border-b border-[#E5EAF2] text-[11px]">
               <tr>
-                <th className="px-4 py-2.5">Periode Bulan</th>
-                <th className="px-4 py-2.5 text-center">Populasi ATM</th>
-                <th className="px-4 py-2.5 text-center">Uptime ATM (%)</th>
-                <th className="px-4 py-2.5 text-center">Status SLA ATM</th>
-                <th className="px-4 py-2.5 text-center">Populasi CRM</th>
-                <th className="px-4 py-2.5 text-center">Uptime CRM (%)</th>
-                <th className="px-4 py-2.5 text-center">Status SLA CRM</th>
-                <th className="px-4 py-2.5 text-center font-bold text-slate-800">Total Mesin</th>
+                <th className="px-3 py-1.5">Periode Bulan</th>
+                <th className="px-3 py-1.5 text-center">Populasi ATM</th>
+                <th className="px-3 py-1.5 text-center">Uptime ATM (%)</th>
+                <th className="px-3 py-1.5 text-center">Status SLA ATM</th>
+                <th className="px-3 py-1.5 text-center">Populasi CRM</th>
+                <th className="px-3 py-1.5 text-center">Uptime CRM (%)</th>
+                <th className="px-3 py-1.5 text-center">Status SLA CRM</th>
+                <th className="px-3 py-1.5 text-center font-bold text-slate-800">Total Mesin</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-[#E5EAF2]">
               {chartData.length === 0 ? (
                 <tr>
-                  <td colSpan={8} className="px-4 py-10 text-center text-slate-400">
+                  <td colSpan={8} className="px-3 py-8 text-center text-slate-400">
                     Tidak ada data bulanan yang tersedia.
                   </td>
                 </tr>
@@ -398,46 +398,46 @@ export default function TotalUptimeBulanPage() {
 
                   return (
                     <tr key={data.periodeRaw} className="hover:bg-slate-50/70 transition-colors">
-                      <td className="px-4 py-2.5 font-semibold text-slate-900">{data.periodeLabel}</td>
+                      <td className="px-3 py-1.5 font-semibold text-slate-900">{data.periodeLabel}</td>
                       
                       {/* ATM Info */}
-                      <td className="px-4 py-2.5 text-center text-slate-600">
+                      <td className="px-3 py-1.5 text-center text-slate-600">
                         {data.mesinATM.toLocaleString()}
                       </td>
-                      <td className="px-4 py-2.5 text-center font-bold text-blue-600">
+                      <td className="px-3 py-1.5 text-center font-bold text-blue-600">
                         {data.uptimeATM !== null ? `${data.uptimeATM.toFixed(2)}%` : '-'}
                       </td>
-                      <td className="px-4 py-2.5 text-center">
+                      <td className="px-3 py-1.5 text-center">
                         {data.uptimeATM !== null ? (
-                          <span className={`inline-flex items-center gap-1 text-[10px] font-semibold px-2 py-0.5 rounded ${
+                          <span className={`inline-flex items-center gap-1 text-[10px] font-semibold px-1.5 py-0.2 rounded ${
                             atmAchieved ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' : 'bg-rose-50 text-rose-700 border border-rose-200'
                           }`}>
-                            {atmAchieved ? <CheckCircle2 size={11} /> : <AlertTriangle size={11} />}
+                            {atmAchieved ? <CheckCircle2 size={10} /> : <AlertTriangle size={10} />}
                             {atmAchieved ? 'ACHIEVED' : 'NOT ACHIEVED'}
                           </span>
                         ) : '-'}
                       </td>
 
                       {/* CRM Info */}
-                      <td className="px-4 py-2.5 text-center text-slate-600">
+                      <td className="px-3 py-1.5 text-center text-slate-600">
                         {data.mesinCRM.toLocaleString()}
                       </td>
-                      <td className="px-4 py-2.5 text-center font-bold text-blue-600">
+                      <td className="px-3 py-1.5 text-center font-bold text-blue-600">
                         {data.uptimeCRM !== null ? `${data.uptimeCRM.toFixed(2)}%` : '-'}
                       </td>
-                      <td className="px-4 py-2.5 text-center">
+                      <td className="px-3 py-1.5 text-center">
                         {data.uptimeCRM !== null ? (
-                          <span className={`inline-flex items-center gap-1 text-[10px] font-semibold px-2 py-0.5 rounded ${
+                          <span className={`inline-flex items-center gap-1 text-[10px] font-semibold px-1.5 py-0.2 rounded ${
                             crmAchieved ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' : 'bg-rose-50 text-rose-700 border border-rose-200'
                           }`}>
-                            {crmAchieved ? <CheckCircle2 size={11} /> : <AlertTriangle size={11} />}
+                            {crmAchieved ? <CheckCircle2 size={10} /> : <AlertTriangle size={10} />}
                             {crmAchieved ? 'ACHIEVED' : 'NOT ACHIEVED'}
                           </span>
                         ) : '-'}
                       </td>
 
                       {/* Total */}
-                      <td className="px-4 py-2.5 text-center font-bold text-slate-900">
+                      <td className="px-3 py-1.5 text-center font-bold text-slate-900">
                         {data.totalMesin.toLocaleString()}
                       </td>
                     </tr>

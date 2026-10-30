@@ -775,70 +775,70 @@ export default function FollowUpPage() {
         </div>
       </div>
 
-      {/* KPI Stats Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+      {/* KPI Stats Cards (Compact 92-105px) */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2.5">
         {/* Card 1: Critical */}
-        <div className="bg-white rounded-lg p-4 border border-[#E5EAF2] shadow-2xs">
+        <div className="bg-white rounded-lg p-3 border border-[#E5EAF2] shadow-2xs min-h-[92px] max-h-[105px] flex flex-col justify-between">
           <div className="flex justify-between items-start">
             <div>
-              <p className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider">Prioritas Kritis</p>
-              <h3 className="text-2xl font-bold text-rose-600 mt-1">{criticalCount}</h3>
-              <p className="text-[11px] text-slate-500 mt-1">
-                {selectedPeriode === 'ALL' 
-                  ? 'Rata-rata < 99.00% / 98.00% atau Kronis > 2 Bulan' 
-                  : `Kritis pada ${formatBulanTahun(selectedPeriode)} atau Kronis > 2 Bulan`}
-              </p>
+              <p className="text-[10px] font-semibold text-slate-500 uppercase tracking-wider">Prioritas Kritis</p>
+              <h3 className="text-2xl font-bold text-rose-600 mt-0.5 leading-tight">{criticalCount}</h3>
             </div>
-            <div className="p-2 bg-rose-50 text-rose-600 rounded-lg border border-rose-100">
-              <ShieldAlert size={18} />
+            <div className="p-1.5 bg-rose-50 text-rose-600 rounded-md border border-rose-100">
+              <ShieldAlert size={15} />
             </div>
           </div>
+          <p className="text-[10px] text-slate-400 truncate mt-0.5">
+            {selectedPeriode === 'ALL' 
+              ? 'Rata-rata < 99.00% / 98.00% atau Kronis > 2 Bulan' 
+              : `Kritis pada ${formatBulanTahun(selectedPeriode)} atau Kronis > 2 Bulan`}
+          </p>
         </div>
 
         {/* Card 2: Warning */}
-        <div className="bg-white rounded-lg p-4 border border-[#E5EAF2] shadow-2xs">
+        <div className="bg-white rounded-lg p-3 border border-[#E5EAF2] shadow-2xs min-h-[92px] max-h-[105px] flex flex-col justify-between">
           <div className="flex justify-between items-start">
             <div>
-              <p className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider">Prioritas Warning</p>
-              <h3 className="text-2xl font-bold text-amber-600 mt-1">{warningCount}</h3>
-              <p className="text-[11px] text-slate-500 mt-1">
-                {selectedPeriode === 'ALL'
-                  ? 'Rata-rata di Bawah SLA, Waspada 2 Bulan, / Spike'
-                  : `Di Bawah SLA pada ${formatBulanTahun(selectedPeriode)} / Lonjakan`}
-              </p>
+              <p className="text-[10px] font-semibold text-slate-500 uppercase tracking-wider">Prioritas Warning</p>
+              <h3 className="text-2xl font-bold text-amber-600 mt-0.5 leading-tight">{warningCount}</h3>
             </div>
-            <div className="p-2 bg-amber-50 text-amber-600 rounded-lg border border-amber-100">
-              <AlertTriangle size={18} />
+            <div className="p-1.5 bg-amber-50 text-amber-600 rounded-md border border-amber-100">
+              <AlertTriangle size={15} />
             </div>
           </div>
+          <p className="text-[10px] text-slate-400 truncate mt-0.5">
+            {selectedPeriode === 'ALL'
+              ? 'Rata-rata di Bawah SLA, Waspada 2 Bulan, / Spike'
+              : `Di Bawah SLA pada ${formatBulanTahun(selectedPeriode)} / Lonjakan`}
+          </p>
         </div>
 
         {/* Card 3: Active Tickets */}
-        <div className="bg-white rounded-lg p-4 border border-[#E5EAF2] shadow-2xs">
+        <div className="bg-white rounded-lg p-3 border border-[#E5EAF2] shadow-2xs min-h-[92px] max-h-[105px] flex flex-col justify-between">
           <div className="flex justify-between items-start">
             <div>
-              <p className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider">Tiket Aktif & Pantau</p>
-              <h3 className="text-2xl font-bold text-blue-600 mt-1">{inProgressCount}</h3>
-              <p className="text-[11px] text-slate-500 mt-1">Status OPEN / IN PROGRESS / PANTAU</p>
+              <p className="text-[10px] font-semibold text-slate-500 uppercase tracking-wider">Tiket Aktif & Pantau</p>
+              <h3 className="text-2xl font-bold text-blue-600 mt-0.5 leading-tight">{inProgressCount}</h3>
             </div>
-            <div className="p-2 bg-blue-50 text-blue-600 rounded-lg border border-blue-100">
-              <Clock size={18} />
+            <div className="p-1.5 bg-blue-50 text-blue-600 rounded-md border border-blue-100">
+              <Clock size={15} />
             </div>
           </div>
+          <p className="text-[10px] text-slate-400 mt-0.5 truncate">Status OPEN / IN PROGRESS / PANTAU</p>
         </div>
 
         {/* Card 4: Target SLA Tercapai (Aman) */}
-        <div className="bg-white rounded-lg p-4 border border-[#E5EAF2] shadow-2xs">
+        <div className="bg-white rounded-lg p-3 border border-[#E5EAF2] shadow-2xs min-h-[92px] max-h-[105px] flex flex-col justify-between">
           <div className="flex justify-between items-start">
             <div>
-              <p className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider">Target SLA Tercapai</p>
-              <h3 className="text-2xl font-bold text-emerald-600 mt-1">{safeCount}</h3>
-              <p className="text-[11px] text-slate-500 mt-1">BCA Aktif: ATM &ge; 99.00% • CRM &ge; 98.50%</p>
+              <p className="text-[10px] font-semibold text-slate-500 uppercase tracking-wider">Target SLA Tercapai</p>
+              <h3 className="text-2xl font-bold text-emerald-600 mt-0.5 leading-tight">{safeCount}</h3>
             </div>
-            <div className="p-2 bg-emerald-50 text-emerald-600 rounded-lg border border-emerald-100">
-              <CheckCircle2 size={18} />
+            <div className="p-1.5 bg-emerald-50 text-emerald-600 rounded-md border border-emerald-100">
+              <CheckCircle2 size={15} />
             </div>
           </div>
+          <p className="text-[10px] text-slate-400 mt-0.5 truncate">BCA Aktif: ATM &ge; 99.00% • CRM &ge; 98.50%</p>
         </div>
       </div>
 

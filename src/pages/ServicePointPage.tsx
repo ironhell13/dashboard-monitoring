@@ -180,10 +180,10 @@ export default function ServicePointPage() {
   };
 
   return (
-    <div className="space-y-5 animate-fade-in">
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-3">
+    <div className="space-y-3.5 animate-fade-in pb-8">
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-2.5">
         <div>
-          <h2 className="text-xl font-bold text-slate-900 tracking-tight">
+          <h2 className="text-lg font-bold text-slate-900 tracking-tight">
             Distribusi Mesin per Service Point
           </h2>
           <p className="text-slate-500 text-xs mt-0.5">
@@ -193,30 +193,30 @@ export default function ServicePointPage() {
         <div className="flex items-center gap-2">
           <button 
             onClick={handleExport}
-            className="flex items-center gap-2 px-3.5 py-1.5 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-lg transition-colors text-xs shadow-2xs"
+            className="flex items-center gap-1.5 px-3 h-8 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-md transition-colors text-xs shadow-2xs cursor-pointer"
           >
-            <Download size={14} />
-            Export Excel
+            <Download size={13} />
+            <span>Export Excel</span>
           </button>
         </div>
       </div>
 
-      <div className={`grid grid-cols-1 ${selectedMachine ? 'xl:grid-cols-3' : ''} gap-5 transition-all duration-200`}>
+      <div className={`grid grid-cols-1 ${selectedMachine ? 'xl:grid-cols-3' : ''} gap-4 transition-all duration-200`}>
         <div className={`bg-white rounded-lg border border-[#E5EAF2] shadow-2xs overflow-hidden ${selectedMachine ? 'xl:col-span-2' : ''}`}>
           <div className="overflow-x-auto">
             <table className="w-full text-xs text-left">
-              <thead className="bg-[#F8FAFC] text-slate-600 font-semibold border-b border-[#E5EAF2] select-none">
+              <thead className="bg-[#F8FAFC] text-slate-600 font-semibold border-b border-[#E5EAF2] select-none text-[11px]">
                 <tr>
-                  <th className="px-4 py-3 cursor-pointer hover:bg-slate-100/70 transition-colors" onClick={() => handleSort('servicePoint')}>
+                  <th className="px-3 py-1.5 cursor-pointer hover:bg-slate-100/70 transition-colors" onClick={() => handleSort('servicePoint')}>
                     Service Point {renderSortIcon('servicePoint')}
                   </th>
-                  <th className="px-4 py-3 text-center cursor-pointer hover:bg-slate-100/70 transition-colors" onClick={() => handleSort('jumlahSektor')}>
+                  <th className="px-3 py-1.5 text-center cursor-pointer hover:bg-slate-100/70 transition-colors" onClick={() => handleSort('jumlahSektor')}>
                     Jumlah Sektor {renderSortIcon('jumlahSektor')}
                   </th>
-                  <th className="px-4 py-3 text-center cursor-pointer hover:bg-slate-100/70 transition-colors" onClick={() => handleSort('jumlahMesin')}>
+                  <th className="px-3 py-1.5 text-center cursor-pointer hover:bg-slate-100/70 transition-colors" onClick={() => handleSort('jumlahMesin')}>
                     Jumlah Mesin Aktif {renderSortIcon('jumlahMesin')}
                   </th>
-                  <th className="px-4 py-3 text-center cursor-pointer hover:bg-slate-100/70 transition-colors" onClick={() => handleSort('rataRataUptime')}>
+                  <th className="px-3 py-1.5 text-center cursor-pointer hover:bg-slate-100/70 transition-colors" onClick={() => handleSort('rataRataUptime')}>
                     Rata-rata Uptime (%) {renderSortIcon('rataRataUptime')}
                   </th>
                 </tr>
@@ -224,7 +224,7 @@ export default function ServicePointPage() {
               <tbody className="divide-y divide-[#E5EAF2]">
                 {dataServicePoint.length === 0 ? (
                   <tr>
-                    <td colSpan={4} className="px-4 py-10 text-center text-slate-500">
+                    <td colSpan={4} className="px-3 py-8 text-center text-slate-500">
                       Tidak ada data yang tersedia untuk filter saat ini.
                     </td>
                   </tr>
@@ -238,17 +238,17 @@ export default function ServicePointPage() {
                           onClick={() => toggleExpand(row.servicePoint)}
                           className={`cursor-pointer transition-colors ${isExpanded ? 'bg-blue-50/30' : 'hover:bg-slate-50/70'}`}
                         >
-                          <td className="px-4 py-3 font-semibold text-slate-900">
-                            <div className="flex items-center gap-2">
-                              {isExpanded ? <ChevronUp size={15} className="text-blue-600" /> : <ChevronDown size={15} className="text-slate-400" />}
+                          <td className="px-3 py-1.5 font-semibold text-slate-900">
+                            <div className="flex items-center gap-1.5">
+                              {isExpanded ? <ChevronUp size={14} className="text-blue-600" /> : <ChevronDown size={14} className="text-slate-400" />}
                               {row.servicePoint}
                             </div>
                           </td>
-                          <td className="px-4 py-3 text-center">
-                            <span className="font-medium text-slate-700 bg-slate-100 px-2.5 py-0.5 rounded text-[11px] border border-slate-200">{row.jumlahSektor}</span>
+                          <td className="px-3 py-1.5 text-center">
+                            <span className="font-medium text-slate-700 bg-slate-100 px-2 py-0.2 rounded text-[10px] border border-slate-200">{row.jumlahSektor}</span>
                           </td>
-                          <td className="px-4 py-3 text-center font-semibold text-slate-800">{row.jumlahMesin.toLocaleString()}</td>
-                          <td className="px-4 py-3 text-center font-semibold text-emerald-700">{row.rataRataUptime.toFixed(2)}%</td>
+                          <td className="px-3 py-1.5 text-center font-semibold text-slate-800">{row.jumlahMesin.toLocaleString()}</td>
+                          <td className="px-3 py-1.5 text-center font-semibold text-emerald-700">{row.rataRataUptime.toFixed(2)}%</td>
                         </tr>
                         {isExpanded && (
                           <tr>

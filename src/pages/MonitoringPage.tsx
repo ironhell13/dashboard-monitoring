@@ -4226,32 +4226,32 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
       isSupervisorRole ? 'bg-transparent min-h-0' : 'min-h-screen bg-[#F5F7FB]'
     }`}>
       {/* ==================================================== */}
-      {/* 1. TOP HEADER (56px HEIGHT, CLEAN PURITY SLATE)     */}
+      {/* 1. TOP HEADER (44px COMPACT ENTERPRISE DENSITY)      */}
       {/* ==================================================== */}
       <header className={`w-full bg-white/95 backdrop-blur-md transition-all ${
         isSupervisorRole
-          ? 'rounded-2xl border border-slate-100 shadow-[0px_3.5px_5.5px_rgba(0,0,0,0.02)] mb-4 sticky top-0 z-20'
-          : 'sticky top-0 z-40 h-14 shadow-[0_1px_8px_rgba(0,0,0,0.04)] border-b border-[#E5EAF2]'
+          ? 'rounded-lg border border-[#E5EAF2] shadow-2xs mb-3 sticky top-0 z-20'
+          : 'sticky top-0 z-40 h-11 shadow-2xs border-b border-[#E5EAF2]'
       }`}>
-        <div className={`w-full h-full flex items-center justify-between gap-4 ${
-          isSupervisorRole ? 'px-4 sm:px-6' : 'max-w-[1440px] mx-auto px-4 sm:px-8'
+        <div className={`w-full h-full flex items-center justify-between gap-3 ${
+          isSupervisorRole ? 'px-3 sm:px-4' : 'max-w-[1440px] mx-auto px-3 sm:px-6'
         }`}>
           {/* Brand Logo & Title */}
-          <div className="flex items-center gap-3 shrink-0">
-            <div className={`w-8 h-8 rounded-lg flex items-center justify-center font-bold shadow-2xs ${
+          <div className="flex items-center gap-2.5 shrink-0">
+            <div className={`w-7 h-7 rounded-md flex items-center justify-center font-bold shadow-2xs ${
               effectiveRole === 'KAWIL'
                 ? 'bg-indigo-100 text-indigo-700'
                 : effectiveRole === 'KAOPS'
                 ? 'bg-teal-100 text-blue-600'
                 : 'bg-blue-50 text-blue-600'
             }`}>
-              <Server size={18} />
+              <Server size={15} />
             </div>
             <div className="flex items-center gap-1.5">
-              <span className="font-bold text-sm sm:text-base text-[#0D1C2E] tracking-tight">
+              <span className="font-bold text-xs sm:text-sm text-[#0D1C2E] tracking-tight">
                 {isSupervisorRole ? 'Cek Daily Incident' : 'Mons Monitoring'}
               </span>
-              <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold tracking-wider uppercase ${
+              <span className={`px-1.5 py-0.2 rounded text-[9px] font-bold tracking-wider uppercase ${
                 effectiveRole === 'KAWIL'
                   ? 'bg-indigo-100 text-indigo-800'
                   : effectiveRole === 'KAOPS'
@@ -4263,18 +4263,18 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
             </div>
           </div>
 
-          {/* Navigation Tabs */}
-          <nav className="hidden md:flex items-center gap-6 h-full">
+          {/* Navigation Tabs (Compact 44px) */}
+          <nav className="hidden md:flex items-center gap-4 h-full">
             <button
               onClick={() => setActiveTab('OPEN')}
-              className={`inline-flex items-center gap-1.5 h-14 border-b-2 transition-all text-xs font-semibold cursor-pointer ${
+              className={`inline-flex items-center gap-1.5 h-11 px-2 border-b-2 transition-all text-xs font-semibold cursor-pointer ${
                 activeTab === 'OPEN'
                   ? 'border-blue-600 text-blue-600'
                   : 'border-transparent text-[#555F71] hover:text-[#0D1C2E]'
               }`}
             >
               <span>Problem Open</span>
-              <span className="px-1.5 py-0.2 rounded-full bg-[#FFDAD6] text-[#BA1A1A] text-[10px] font-bold">
+              <span className="px-1.5 py-0.2 rounded-full bg-[#FFDAD6] text-[#BA1A1A] text-[9px] font-bold">
                 {countOpenTotal}
               </span>
             </button>
@@ -4284,7 +4284,7 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
               <button
                 type="button"
                 onClick={() => setIsFrekuensiMenuOpen((prev) => !prev)}
-                className={`inline-flex items-center gap-1.5 h-14 border-b-2 transition-all text-xs font-semibold cursor-pointer ${
+                className={`inline-flex items-center gap-1.5 h-11 px-2 border-b-2 transition-all text-xs font-semibold cursor-pointer ${
                   activeTab === 'FREKUENSI' || activeTab === 'GRAFIK_FREKUENSI' || activeTab === 'GRAFIK_24JAM'
                     ? 'border-blue-600 text-blue-600'
                     : 'border-transparent text-[#555F71] hover:text-[#0D1C2E]'
@@ -4292,24 +4292,24 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
               >
                 {activeTab === 'GRAFIK_FREKUENSI' ? (
                   <>
-                    <TrendingUp size={15} className="text-blue-600" />
+                    <TrendingUp size={14} className="text-blue-600" />
                     <span>Grafik Frekuensi</span>
                   </>
                 ) : activeTab === 'GRAFIK_24JAM' ? (
                   <>
-                    <BarChart3 size={15} className="text-blue-600" />
+                    <BarChart3 size={14} className="text-blue-600" />
                     <span>Grafik 24 Jam</span>
                   </>
                 ) : (
                   <>
                     <span>Frekuensi</span>
-                    <span className="px-1.5 py-0.2 rounded-full bg-[#EFF4FF] text-[#555F71] text-[10px] font-bold">
+                    <span className="px-1.5 py-0.2 rounded-full bg-[#EFF4FF] text-[#555F71] text-[9px] font-bold">
                       {aggFreqItems.length}
                     </span>
                   </>
                 )}
                 <ChevronDown
-                  size={13}
+                  size={12}
                   className={`transition-transform duration-200 ${
                     isFrekuensiMenuOpen ? 'rotate-180 text-blue-600' : 'text-slate-400'
                   }`}
@@ -4318,8 +4318,8 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
 
               {/* Popover Dropdown */}
               {isFrekuensiMenuOpen && (
-                <div className="absolute left-0 top-full mt-1 w-72 bg-white rounded-2xl shadow-xl border border-slate-100 py-2 z-50 animate-in fade-in zoom-in-95 duration-150">
-                  <div className="px-3.5 py-1 text-[10px] font-bold text-slate-400 uppercase tracking-wider">
+                <div className="absolute left-0 top-full mt-1 w-64 bg-white rounded-lg shadow-xl border border-[#E5EAF2] py-1.5 z-50 animate-in fade-in zoom-in-95 duration-150">
+                  <div className="px-3 py-1 text-[9px] font-bold text-slate-400 uppercase tracking-wider">
                     Menu Frekuensi
                   </div>
 
@@ -4329,23 +4329,23 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
                       setActiveTab('FREKUENSI');
                       setIsFrekuensiMenuOpen(false);
                     }}
-                    className={`w-full px-3.5 py-2.5 text-left flex items-start gap-3 transition-colors cursor-pointer ${
+                    className={`w-full px-3 py-2 text-left flex items-start gap-2.5 transition-colors cursor-pointer ${
                       activeTab === 'FREKUENSI'
                         ? 'bg-blue-50/50 text-blue-600'
                         : 'hover:bg-slate-50 text-slate-700'
                     }`}
                   >
-                    <div className="p-2 rounded-xl bg-slate-100 text-slate-600 mt-0.5">
-                      <Table size={16} />
+                    <div className="p-1.5 rounded-md bg-slate-100 text-slate-600 mt-0.5">
+                      <Table size={14} />
                     </div>
                     <div className="flex-1 min-w-0">
                       <div className="text-xs font-bold flex items-center justify-between">
                         <span>Frekuensi</span>
-                        <span className="px-1.5 py-0.2 text-[10px] font-bold rounded-full bg-[#EFF4FF] text-blue-600">
+                        <span className="px-1.5 py-0.2 text-[9px] font-bold rounded-full bg-[#EFF4FF] text-blue-600">
                           {aggFreqItems.length}
                         </span>
                       </div>
-                      <div className="text-[11px] text-[#555F71] mt-0.5 leading-snug">
+                      <div className="text-[10px] text-[#555F71] mt-0.5 leading-snug">
                         Tabel matriks WSID, Problem & Tanggal
                       </div>
                     </div>
@@ -4357,23 +4357,23 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
                       setActiveTab('GRAFIK_FREKUENSI');
                       setIsFrekuensiMenuOpen(false);
                     }}
-                    className={`w-full px-3.5 py-2.5 text-left flex items-start gap-3 transition-colors cursor-pointer ${
+                    className={`w-full px-3 py-2 text-left flex items-start gap-2.5 transition-colors cursor-pointer ${
                       activeTab === 'GRAFIK_FREKUENSI'
                         ? 'bg-blue-50/50 text-blue-600'
                         : 'hover:bg-slate-50 text-slate-700'
                     }`}
                   >
-                    <div className="p-2 rounded-xl bg-blue-50 text-blue-600 mt-0.5">
-                      <TrendingUp size={16} />
+                    <div className="p-1.5 rounded-md bg-blue-50 text-blue-600 mt-0.5">
+                      <TrendingUp size={14} />
                     </div>
                     <div className="flex-1 min-w-0">
                       <div className="text-xs font-bold flex items-center justify-between">
                         <span>Grafik Frekuensi</span>
-                        <span className="px-1.5 py-0.2 text-[9px] font-extrabold rounded-full bg-emerald-100 text-emerald-700">
+                        <span className="px-1.5 py-0.2 text-[8px] font-extrabold rounded-full bg-emerald-100 text-emerald-700">
                           GRAFIK
                         </span>
                       </div>
-                      <div className="text-[11px] text-[#555F71] mt-0.5 leading-snug">
+                      <div className="text-[10px] text-[#555F71] mt-0.5 leading-snug">
                         Grafik tren periode, Top Problem & WSID
                       </div>
                     </div>
@@ -4387,20 +4387,20 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
                       setActiveTab('GRAFIK_24JAM');
                       setIsFrekuensiMenuOpen(false);
                     }}
-                    className={`w-full px-3.5 py-2 text-left flex items-start gap-3 transition-colors cursor-pointer ${
+                    className={`w-full px-3 py-1.5 text-left flex items-start gap-2.5 transition-colors cursor-pointer ${
                       activeTab === 'GRAFIK_24JAM'
                         ? 'bg-blue-50/50 text-blue-600'
                         : 'hover:bg-slate-50 text-slate-700'
                     }`}
                   >
-                    <div className="p-2 rounded-xl bg-indigo-50 text-indigo-600 mt-0.5">
-                      <BarChart3 size={16} />
+                    <div className="p-1.5 rounded-md bg-indigo-50 text-indigo-600 mt-0.5">
+                      <BarChart3 size={14} />
                     </div>
                     <div className="flex-1 min-w-0">
                       <div className="text-xs font-bold text-slate-700">
                         <span>Grafik 24 Jam</span>
                       </div>
-                      <div className="text-[11px] text-slate-400 mt-0.5 leading-snug">
+                      <div className="text-[10px] text-slate-400 mt-0.5 leading-snug">
                         Distribusi problem per jam (00:00 - 23:00)
                       </div>
                     </div>
@@ -4411,7 +4411,7 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
 
             <button
               onClick={() => setActiveTab('HISTORY')}
-              className={`inline-flex items-center gap-1.5 h-14 border-b-2 transition-all text-xs font-semibold cursor-pointer ${
+              className={`inline-flex items-center gap-1.5 h-11 px-2 border-b-2 transition-all text-xs font-semibold cursor-pointer ${
                 activeTab === 'HISTORY'
                   ? 'border-blue-600 text-blue-600'
                   : 'border-transparent text-[#555F71] hover:text-[#0D1C2E]'
@@ -4422,7 +4422,7 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
 
             <button
               onClick={() => setActiveTab('UPLOAD')}
-              className={`inline-flex items-center gap-1.5 h-14 border-b-2 transition-all text-xs font-semibold cursor-pointer ${
+              className={`inline-flex items-center gap-1.5 h-11 px-2 border-b-2 transition-all text-xs font-semibold cursor-pointer ${
                 activeTab === 'UPLOAD'
                   ? 'border-blue-600 text-blue-600'
                   : 'border-transparent text-[#555F71] hover:text-[#0D1C2E]'
@@ -4433,9 +4433,9 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
           </nav>
 
           {/* Right Utility Bar */}
-          <div className="flex items-center gap-2.5 sm:gap-3">
+          <div className="flex items-center gap-2 sm:gap-2.5">
             {/* Live Sync Pill */}
-            <div className="hidden lg:flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-[#EFF4FF] text-[#555F71] text-[11px] font-medium">
+            <div className="hidden lg:flex items-center gap-1.5 px-2 py-0.5 rounded-md bg-[#EFF4FF] text-[#555F71] text-[10px] font-medium border border-[#E5EAF2]">
               <span className="w-1.5 h-1.5 rounded-full bg-blue-600 animate-pulse"></span>
               <span>Tersinkronisasi &bull; {new Date().toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })} WIB</span>
             </div>
@@ -4443,30 +4443,30 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
             {/* Petugas Capsule */}
             <button
               onClick={openDutyModal}
-              className={`flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium transition-all cursor-pointer ${
+              className={`flex items-center gap-1.5 px-2.5 h-7 rounded-md text-xs font-medium transition-all cursor-pointer border border-[#E5EAF2] ${
                 !petugasName.trim() || petugasInputHighlight
-                  ? 'bg-rose-100 text-rose-800 ring-2 ring-rose-300 animate-pulse font-bold'
-                  : 'bg-[#EFF4FF] hover:bg-[#E5EEFF] text-[#0D1C2E]'
+                  ? 'bg-rose-100 text-rose-800 ring-1 ring-rose-300 animate-pulse font-bold'
+                  : 'bg-white hover:bg-slate-50 text-[#0D1C2E]'
               }`}
               title="Klik untuk mengubah petugas jaga"
             >
-              <User size={13} className={!petugasName.trim() ? 'text-rose-600' : 'text-blue-600'} />
+              <User size={12} className={!petugasName.trim() ? 'text-rose-600' : 'text-blue-600'} />
               <span>Petugas: <strong>{petugasName.trim() || 'Wajib Diisi'}</strong></span>
-              <ChevronDown size={13} className="text-[#555F71]" />
+              <ChevronDown size={11} className="text-[#555F71]" />
             </button>
 
             {/* Tombol Akses Cepat: Pusat Tiket Follow Up */}
             <button
               type="button"
               onClick={() => setShowTicketCenterModal(true)}
-              className={`relative flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-bold transition-all cursor-pointer shadow-xs border ${
+              className={`relative flex items-center gap-1.5 px-2.5 h-7 rounded-md text-xs font-semibold transition-all cursor-pointer shadow-2xs border ${
                 reOpenTicketsCount > 0
                   ? 'bg-rose-600 text-white border-rose-700 animate-pulse'
                   : reqCloseTicketsCount > 0 && isSupervisorRole
                   ? 'bg-purple-600 text-white border-purple-700'
                   : activeTickets.length > 0
                   ? 'bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border-indigo-200'
-                  : 'bg-slate-50 hover:bg-slate-100 text-slate-700 border-slate-200'
+                  : 'bg-white hover:bg-slate-50 text-slate-700 border-[#E5EAF2]'
               }`}
               title="Buka Pusat Tiket Follow Up (Ka Ops / Ka Wil ↔ Monitoring)"
             >
@@ -4699,140 +4699,140 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
               </div>
             </div>
 
-            {/* Row of 5 Clickable Filter KPI Cards (88px compact height) */}
-            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3.5">
+            {/* Row of 5 Clickable Filter KPI Cards (Compact 92-102px height) */}
+            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-2.5">
               {/* Card 1: Total Open */}
               <div
                 onClick={() => handleCardFilterClick('ALL')}
-                className={`cursor-pointer bg-white p-3.5 rounded-2xl shadow-sm flex items-center justify-between transition-all select-none border ${
+                className={`cursor-pointer bg-white p-3 rounded-lg shadow-2xs flex items-center justify-between transition-all select-none border min-h-[92px] max-h-[102px] ${
                   openCardFilter === 'ALL'
-                    ? 'border-blue-600 bg-blue-50/30 ring-2 ring-blue-400/50 shadow-md'
-                    : 'border-[#EFF4FF] hover:border-slate-300 hover:shadow-md'
+                    ? 'border-blue-600 bg-blue-50/30 ring-1 ring-blue-500'
+                    : 'border-[#E5EAF2] hover:border-slate-300'
                 }`}
               >
                 <div className="flex flex-col min-w-0">
-                  <span className="text-[11px] font-bold text-blue-600 uppercase tracking-wider truncate">
+                  <span className="text-[11px] font-semibold text-blue-600 uppercase tracking-wider truncate">
                     Total Open
                   </span>
-                  <span className="text-2xl sm:text-3xl font-extrabold text-[#0D1C2E] leading-tight mt-0.5">
+                  <span className="text-2xl font-bold text-[#0D1C2E] leading-tight my-0.5">
                     {countOpenTotal}
                   </span>
-                  <div className="flex items-center gap-1 mt-1">
-                    <span className="inline-flex items-center px-1.5 py-0.2 rounded-full bg-blue-50 text-blue-600 text-[9px] font-bold">
+                  <div className="flex items-center gap-1">
+                    <span className="inline-flex items-center px-1.5 py-0.2 rounded bg-blue-50 text-blue-600 text-[9px] font-semibold border border-blue-200/60">
                       {openCardFilter === 'ALL' ? 'Aktif Dipilih' : 'Semua Problem'}
                     </span>
                   </div>
                 </div>
-                <div className="w-11 h-11 rounded-xl bg-blue-600 text-blue-700 flex items-center justify-center shrink-0">
-                  <Server size={22} />
+                <div className="w-8 h-8 rounded-lg bg-blue-50 text-blue-600 flex items-center justify-center shrink-0 border border-blue-100">
+                  <Server size={17} />
                 </div>
               </div>
 
               {/* Card 2: Lebih dari 60 Menit */}
               <div
                 onClick={() => handleCardFilterClick('OVER_60')}
-                className={`cursor-pointer bg-white p-3.5 rounded-2xl shadow-sm flex items-center justify-between transition-all select-none border group ${
+                className={`cursor-pointer bg-white p-3 rounded-lg shadow-2xs flex items-center justify-between transition-all select-none border group min-h-[92px] max-h-[102px] ${
                   openCardFilter === 'OVER_60'
-                    ? 'border-rose-400 bg-rose-50/40 ring-2 ring-rose-300 shadow-md'
-                    : 'border-[#EFF4FF] hover:border-rose-200 hover:shadow-md'
+                    ? 'border-rose-400 bg-rose-50/40 ring-1 ring-rose-400'
+                    : 'border-[#E5EAF2] hover:border-rose-200'
                 }`}
               >
                 <div className="flex flex-col min-w-0">
-                  <span className="text-[11px] font-bold text-[#555F71] uppercase tracking-wider truncate group-hover:text-rose-600">
+                  <span className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider truncate group-hover:text-rose-600">
                     &gt; 60 Menit
                   </span>
-                  <span className="text-2xl sm:text-3xl font-extrabold text-[#BA1A1A] leading-tight mt-0.5">
+                  <span className="text-2xl font-bold text-[#BA1A1A] leading-tight my-0.5">
                     {countOver60}
                   </span>
-                  <div className="flex items-center gap-1 mt-1">
-                    <span className="inline-flex items-center px-1.5 py-0.2 rounded-full bg-[#FFDAD6] text-[#BA1A1A] text-[9px] font-bold">
+                  <div className="flex items-center gap-1">
+                    <span className="inline-flex items-center px-1.5 py-0.2 rounded bg-rose-50 text-rose-700 text-[9px] font-semibold border border-rose-200">
                       Prioritas Tinggi
                     </span>
                   </div>
                 </div>
-                <div className="w-11 h-11 rounded-xl bg-[#FFDAD6] text-[#BA1A1A] flex items-center justify-center shrink-0 group-hover:scale-105 transition-transform">
-                  <Timer size={22} />
+                <div className="w-8 h-8 rounded-lg bg-rose-50 text-rose-600 flex items-center justify-center shrink-0 border border-rose-100">
+                  <Timer size={17} />
                 </div>
               </div>
 
               {/* Card 3: Chronic 3x Sehari */}
               <div
                 onClick={() => handleCardFilterClick('CHRONIC_3X_SEHARI')}
-                className={`cursor-pointer bg-white p-3.5 rounded-2xl shadow-sm flex items-center justify-between transition-all select-none border group ${
+                className={`cursor-pointer bg-white p-3 rounded-lg shadow-2xs flex items-center justify-between transition-all select-none border group min-h-[92px] max-h-[102px] ${
                   openCardFilter === 'CHRONIC_3X_SEHARI'
-                    ? 'border-amber-400 bg-amber-50/40 ring-2 ring-amber-300 shadow-md'
-                    : 'border-[#EFF4FF] hover:border-amber-200 hover:shadow-md'
+                    ? 'border-amber-400 bg-amber-50/40 ring-1 ring-amber-400'
+                    : 'border-[#E5EAF2] hover:border-amber-200'
                 }`}
               >
                 <div className="flex flex-col min-w-0">
-                  <span className="text-[11px] font-bold text-[#555F71] uppercase tracking-wider truncate group-hover:text-amber-700">
+                  <span className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider truncate group-hover:text-amber-700">
                     Chronic 3x Sehari
                   </span>
-                  <span className="text-2xl sm:text-3xl font-extrabold text-[#B7791F] leading-tight mt-0.5">
+                  <span className="text-2xl font-bold text-[#B7791F] leading-tight my-0.5">
                     {count3xSehari}
                   </span>
-                  <div className="flex items-center gap-1 mt-1">
-                    <span className="inline-flex items-center px-1.5 py-0.2 rounded-full bg-amber-100 text-amber-900 text-[9px] font-bold">
+                  <div className="flex items-center gap-1">
+                    <span className="inline-flex items-center px-1.5 py-0.2 rounded bg-amber-50 text-amber-800 text-[9px] font-semibold border border-amber-200">
                       Hari Ini
                     </span>
                   </div>
                 </div>
-                <div className="w-11 h-11 rounded-xl bg-amber-100 text-amber-700 flex items-center justify-center shrink-0 group-hover:scale-105 transition-transform">
-                  <Flame size={22} />
+                <div className="w-8 h-8 rounded-lg bg-amber-50 text-amber-600 flex items-center justify-center shrink-0 border border-amber-100">
+                  <Flame size={17} />
                 </div>
               </div>
 
               {/* Card 4: Chronic 3x dalam 5 Hari */}
               <div
                 onClick={() => handleCardFilterClick('CHRONIC_3X_5HARI')}
-                className={`cursor-pointer bg-white p-3.5 rounded-2xl shadow-sm flex items-center justify-between transition-all select-none border group ${
+                className={`cursor-pointer bg-white p-3 rounded-lg shadow-2xs flex items-center justify-between transition-all select-none border group min-h-[92px] max-h-[102px] ${
                   openCardFilter === 'CHRONIC_3X_5HARI'
-                    ? 'border-indigo-400 bg-indigo-50/40 ring-2 ring-indigo-300 shadow-md'
-                    : 'border-[#EFF4FF] hover:border-slate-300 hover:shadow-md'
+                    ? 'border-indigo-400 bg-indigo-50/40 ring-1 ring-indigo-400'
+                    : 'border-[#E5EAF2] hover:border-slate-300'
                 }`}
               >
                 <div className="flex flex-col min-w-0">
-                  <span className="text-[11px] font-bold text-[#555F71] uppercase tracking-wider truncate group-hover:text-slate-800">
+                  <span className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider truncate group-hover:text-slate-800">
                     Chronic 3x / 5 Hari
                   </span>
-                  <span className="text-2xl sm:text-3xl font-extrabold text-[#0D1C2E] leading-tight mt-0.5">
+                  <span className="text-2xl font-bold text-[#0D1C2E] leading-tight my-0.5">
                     {count3x5Hari}
                   </span>
-                  <div className="flex items-center gap-1 mt-1">
-                    <span className="inline-flex items-center px-1.5 py-0.2 rounded-full bg-[#EFF4FF] text-[#555F71] text-[9px] font-bold">
+                  <div className="flex items-center gap-1">
+                    <span className="inline-flex items-center px-1.5 py-0.2 rounded bg-slate-100 text-slate-600 text-[9px] font-semibold border border-slate-200">
                       5 Hari Terakhir
                     </span>
                   </div>
                 </div>
-                <div className="w-11 h-11 rounded-xl bg-[#EFF4FF] text-[#555F71] flex items-center justify-center shrink-0 group-hover:scale-105 transition-transform">
-                  <Repeat size={22} />
+                <div className="w-8 h-8 rounded-lg bg-slate-100 text-slate-600 flex items-center justify-center shrink-0 border border-slate-200">
+                  <Repeat size={17} />
                 </div>
               </div>
 
               {/* Card 5: Belum Di-update */}
               <div
                 onClick={() => handleCardFilterClick('NO_ACTION')}
-                className={`cursor-pointer bg-white p-3.5 rounded-2xl shadow-sm flex items-center justify-between transition-all select-none border group col-span-2 md:col-span-1 ${
+                className={`cursor-pointer bg-white p-3 rounded-lg shadow-2xs flex items-center justify-between transition-all select-none border group col-span-2 md:col-span-1 min-h-[92px] max-h-[102px] ${
                   openCardFilter === 'NO_ACTION'
-                    ? 'border-blue-400 bg-blue-50/40 ring-2 ring-blue-300 shadow-md'
-                    : 'border-[#EFF4FF] hover:border-slate-300 hover:shadow-md'
+                    ? 'border-blue-400 bg-blue-50/40 ring-1 ring-blue-400'
+                    : 'border-[#E5EAF2] hover:border-slate-300'
                 }`}
               >
                 <div className="flex flex-col min-w-0">
-                  <span className="text-[11px] font-bold text-[#555F71] uppercase tracking-wider truncate group-hover:text-blue-700">
+                  <span className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider truncate group-hover:text-blue-700">
                     Belum Di-update
                   </span>
-                  <span className="text-2xl sm:text-3xl font-extrabold text-[#555F71] leading-tight mt-0.5">
+                  <span className="text-2xl font-bold text-slate-600 leading-tight my-0.5">
                     {countNoAction}
                   </span>
-                  <div className="flex items-center gap-1 mt-1">
-                    <span className="inline-flex items-center px-1.5 py-0.2 rounded-full bg-[#E5EEFF] text-blue-600 text-[9px] font-bold">
+                  <div className="flex items-center gap-1">
+                    <span className="inline-flex items-center px-1.5 py-0.2 rounded bg-blue-50 text-blue-700 text-[9px] font-semibold border border-blue-200">
                       Perlu Tindakan
                     </span>
                   </div>
                 </div>
-                <div className="w-11 h-11 rounded-xl bg-[#EFF4FF] text-[#555F71] flex items-center justify-center shrink-0 group-hover:scale-105 transition-transform">
-                  <FileText size={22} />
+                <div className="w-8 h-8 rounded-lg bg-blue-50 text-blue-600 flex items-center justify-center shrink-0 border border-blue-100">
+                  <FileText size={17} />
                 </div>
               </div>
             </div>
@@ -4861,12 +4861,12 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
               </div>
             )}
 
-            {/* Clean Filter Deck (Non-overlapping, responsive, high-z popovers) */}
-            <div className="bg-white rounded-2xl p-4 shadow-sm border border-[#EFF4FF] flex flex-col gap-3">
+            {/* Clean Enterprise Filter Deck (Compact 2-row layout) */}
+            <div className="bg-white rounded-lg p-3 shadow-2xs border border-[#E5EAF2] flex flex-col gap-2">
               {/* Row 1: Search, Active Count Badge, Sort, and Reset */}
-              <div className="flex flex-col md:flex-row md:items-center justify-between gap-3">
-                <div className="relative flex-1 min-w-[260px] max-w-xl">
-                  <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-[#555F71]" />
+              <div className="flex flex-col md:flex-row md:items-center justify-between gap-2">
+                <div className="relative flex-1 min-w-[240px] max-w-xl">
+                  <Search size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400" />
                   <input
                     type="text"
                     value={openSearch}
@@ -4875,23 +4875,23 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
                       setCurrentPageOpen(1);
                     }}
                     placeholder="Cari WSID, lokasi, atau ATM/CRM..."
-                    className="w-full h-9 pl-9 pr-8 rounded-xl bg-[#F8F9FF] text-xs text-[#0D1C2E] placeholder:text-[#555F71]/70 border border-[#EFF4FF] focus:outline-none focus:ring-1 focus:ring-blue-500 focus:bg-white transition-all"
+                    className="w-full h-8 pl-8 pr-7 rounded-md bg-slate-50 text-xs text-slate-800 placeholder:text-slate-400 border border-[#E5EAF2] focus:outline-none focus:ring-1 focus:ring-blue-500 focus:bg-white transition-all"
                   />
                   {openSearch && (
                     <button
                       type="button"
                       onClick={() => setOpenSearch('')}
-                      className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 cursor-pointer"
+                      className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 cursor-pointer"
                     >
-                      <X size={13} />
+                      <X size={12} />
                     </button>
                   )}
                 </div>
 
-                <div className="flex items-center gap-2.5 shrink-0 self-end md:self-auto flex-wrap">
+                <div className="flex items-center gap-2 shrink-0 self-end md:self-auto flex-wrap">
                   {/* Result Count Indicator */}
-                  <span className="text-[11px] font-semibold text-[#555F71] bg-[#F8F9FF] px-2.5 py-1.5 rounded-lg border border-[#EFF4FF]">
-                    <strong className="text-[#0D1C2E]">{filteredOpenIncidents.length}</strong> dari {countOpenTotal} open
+                  <span className="text-[11px] font-medium text-slate-600 bg-slate-50 px-2 h-8 inline-flex items-center rounded-md border border-[#E5EAF2]">
+                    <strong className="text-slate-900 mr-1">{filteredOpenIncidents.length}</strong> dari {countOpenTotal} open
                   </span>
 
                   {/* Sort Dropdown */}
@@ -4899,14 +4899,14 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
                     <select
                       value={openSortBy}
                       onChange={(e) => handleOpenSortByChange(e.target.value as any)}
-                      className="h-9 px-3 pr-7 rounded-xl bg-[#EFF4FF] hover:bg-[#E5EEFF] text-[#0D1C2E] text-xs font-semibold outline-none cursor-pointer appearance-none border border-transparent"
+                      className="h-8 px-2.5 pr-6 rounded-md bg-slate-50 hover:bg-slate-100 text-slate-800 text-xs font-medium outline-none cursor-pointer appearance-none border border-[#E5EAF2]"
                     >
                       <option value="DURASI_DESC">Sort: Durasi Terlama &darr;</option>
                       <option value="DURASI_ASC">Sort: Durasi Tercepat &uarr;</option>
                       <option value="WSID_ASC">Sort: WSID (A-Z)</option>
                       <option value="TIME_DESC">Sort: Start Time Terbaru</option>
                     </select>
-                    <ChevronDown size={13} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-[#555F71] pointer-events-none" />
+                    <ChevronDown size={12} className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
                   </div>
 
                   {/* Reset All Filters Button */}
@@ -4914,47 +4914,47 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
                     <button
                       type="button"
                       onClick={handleResetOpenFilters}
-                      className="inline-flex items-center gap-1 text-[#BA1A1A] hover:bg-rose-50 border border-rose-200 text-xs font-semibold px-2.5 h-9 rounded-xl transition-colors shrink-0 cursor-pointer"
+                      className="inline-flex items-center gap-1 text-rose-700 hover:bg-rose-50 border border-rose-200 text-xs font-semibold px-2.5 h-8 rounded-md transition-colors shrink-0 cursor-pointer"
                       title="Reset semua filter"
                     >
-                      <RotateCcw size={13} />
+                      <RotateCcw size={12} />
                       <span>Reset</span>
                     </button>
                   )}
                 </div>
               </div>
 
-              {/* Row 2: Secondary Filter Controls (Grid/Flex, no overflow clipping) */}
-              <div className="flex items-center gap-2 flex-wrap pt-2 border-t border-[#EFF4FF]/80">
+              {/* Row 2: Secondary Filter Controls (Compact Toolbar) */}
+              <div className="flex items-center gap-1.5 flex-wrap pt-1.5 border-t border-[#E5EAF2]">
                 {/* 1. Multi-Select Event Code Dropdown (Standar 35 Event Codes) */}
                 <div className="relative" ref={eventCodeDropdownRefOpen}>
                   <button
                     type="button"
                     onClick={() => setIsEventCodeDropdownOpenOpen((prev) => !prev)}
-                    className={`inline-flex items-center gap-1.5 h-9 px-3 rounded-xl text-xs font-medium transition-colors shrink-0 border cursor-pointer ${
+                    className={`inline-flex items-center gap-1 h-8 px-2.5 rounded-md text-xs font-medium transition-colors shrink-0 border cursor-pointer ${
                       selectedEventCodesOpen.length > 0
                         ? 'bg-blue-50 text-blue-600 border-blue-600 font-semibold'
-                        : 'bg-[#F8F9FF] hover:bg-[#EFF4FF] text-[#0D1C2E] border-[#EFF4FF]'
+                        : 'bg-white hover:bg-slate-50 text-slate-700 border-[#E5EAF2]'
                     }`}
                   >
-                    <SlidersHorizontal size={13} className={selectedEventCodesOpen.length > 0 ? 'text-blue-600' : 'text-[#555F71]'} />
-                    <span className="text-[#555F71]">Event:</span>
-                    <span className="font-semibold truncate max-w-[130px]">
+                    <SlidersHorizontal size={12} className={selectedEventCodesOpen.length > 0 ? 'text-blue-600' : 'text-slate-400'} />
+                    <span className="text-slate-500">Event:</span>
+                    <span className="font-semibold truncate max-w-[120px]">
                       {selectedEventCodesOpen.length === 0
                         ? `Semua (${openAvailableEvents.length})`
                         : selectedEventCodesOpen.length === 1
                         ? selectedEventCodesOpen[0]
                         : `${selectedEventCodesOpen.length} Dipilih`}
                     </span>
-                    <ChevronDown size={13} className="text-[#555F71]" />
+                    <ChevronDown size={12} className="text-slate-400" />
                   </button>
 
                   {isEventCodeDropdownOpenOpen && (
-                    <div className="absolute left-0 mt-1.5 w-80 sm:w-96 bg-white rounded-2xl shadow-2xl border border-slate-200 z-50 p-3 flex flex-col gap-2.5 animate-in fade-in zoom-in-95 duration-150">
-                      <div className="flex items-center justify-between gap-2 border-b border-slate-100 pb-2">
-                        <div className="flex items-center gap-1.5">
-                          <span className="font-bold text-xs text-[#0D1C2E]">Filter Problem (Standar 35)</span>
-                          <span className="text-[11px] text-[#555F71]">
+                    <div className="absolute left-0 mt-1 w-80 sm:w-96 bg-white rounded-lg shadow-xl border border-[#E5EAF2] z-50 p-2.5 flex flex-col gap-2 animate-in fade-in zoom-in-95 duration-150">
+                      <div className="flex items-center justify-between gap-2 border-b border-slate-100 pb-1.5">
+                        <div className="flex items-center gap-1">
+                          <span className="font-bold text-xs text-slate-800">Filter Problem (Standar 35)</span>
+                          <span className="text-[11px] text-slate-400">
                             ({selectedEventCodesOpen.length}/{openAvailableEvents.length})
                           </span>
                         </div>
@@ -4962,7 +4962,7 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
                           <button
                             type="button"
                             onClick={selectAllEventCodesOpen}
-                            className="text-[11px] text-blue-600 hover:underline font-semibold px-2 py-0.5 rounded cursor-pointer"
+                            className="text-[11px] text-blue-600 hover:underline font-semibold px-1.5 py-0.5 rounded cursor-pointer"
                           >
                             Pilih Semua
                           </button>
@@ -4970,7 +4970,7 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
                           <button
                             type="button"
                             onClick={clearAllEventCodesOpen}
-                            className="text-[11px] text-rose-600 hover:underline font-semibold px-2 py-0.5 rounded cursor-pointer"
+                            className="text-[11px] text-rose-600 hover:underline font-semibold px-1.5 py-0.5 rounded cursor-pointer"
                           >
                             Reset
                           </button>
@@ -4978,13 +4978,13 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
                       </div>
 
                       <div className="relative">
-                        <Search size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400" />
+                        <Search size={13} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400" />
                         <input
                           type="text"
                           placeholder="Cari deskripsi problem..."
                           value={eventCodeSearchOpen}
                           onChange={(e) => setEventCodeSearchOpen(e.target.value)}
-                          className="w-full pl-8 pr-7 py-1.5 text-xs bg-slate-50 border border-slate-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-blue-500"
+                          className="w-full pl-7 pr-6 py-1 text-xs bg-slate-50 border border-slate-200 rounded-md focus:outline-none focus:ring-1 focus:ring-blue-500"
                         />
                         {eventCodeSearchOpen && (
                           <button
@@ -4992,12 +4992,12 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
                             onClick={() => setEventCodeSearchOpen('')}
                             className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 cursor-pointer"
                           >
-                            <X size={12} />
+                            <X size={11} />
                           </button>
                         )}
                       </div>
 
-                      <div className="max-h-60 overflow-y-auto divide-y divide-slate-100 pr-1">
+                      <div className="max-h-56 overflow-y-auto divide-y divide-slate-100 pr-1">
                         {openAvailableEvents
                           .filter((code) => code.toLowerCase().includes(eventCodeSearchOpen.toLowerCase()))
                           .map((code) => {
@@ -5006,11 +5006,11 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
                             return (
                               <label
                                 key={code}
-                                className={`flex items-start justify-between gap-2 px-2 py-1.5 rounded-lg cursor-pointer text-xs transition-colors ${
+                                className={`flex items-start justify-between gap-2 px-2 py-1.5 rounded cursor-pointer text-xs transition-colors ${
                                   isChecked ? 'bg-blue-50 text-blue-600 font-semibold' : 'hover:bg-slate-50 text-slate-700'
                                 }`}
                               >
-                                <div className="flex items-start gap-2">
+                                <div className="flex items-start gap-1.5">
                                   <input
                                     type="checkbox"
                                     checked={isChecked}
@@ -5045,30 +5045,30 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
                       setIsVendorDropdownOpenOpen(false);
                       setIsTipeDropdownOpenOpen(false);
                     }}
-                    className={`inline-flex items-center gap-1.5 h-9 px-3 rounded-xl text-xs font-medium transition-colors shrink-0 border cursor-pointer ${
+                    className={`inline-flex items-center gap-1 h-8 px-2.5 rounded-md text-xs font-medium transition-colors shrink-0 border cursor-pointer ${
                       selectedOpenSPs.length > 0
                         ? 'bg-blue-50 text-blue-600 border-blue-600 font-semibold'
-                        : 'bg-[#F8F9FF] hover:bg-[#EFF4FF] text-[#0D1C2E] border-[#EFF4FF]'
+                        : 'bg-white hover:bg-slate-50 text-slate-700 border-[#E5EAF2]'
                     }`}
                   >
-                    <MapPin size={13} className={selectedOpenSPs.length > 0 ? 'text-blue-600' : 'text-[#555F71]'} />
-                    <span className="text-[#555F71]">SP:</span>
-                    <span className="font-semibold truncate max-w-[120px]">
+                    <MapPin size={12} className={selectedOpenSPs.length > 0 ? 'text-blue-600' : 'text-slate-400'} />
+                    <span className="text-slate-500">SP:</span>
+                    <span className="font-semibold truncate max-w-[110px]">
                       {selectedOpenSPs.length === 0
                         ? `Semua (${openAvailableSPs.length})`
                         : selectedOpenSPs.length === 1
                         ? selectedOpenSPs[0]
                         : `${selectedOpenSPs.length} Dipilih`}
                     </span>
-                    <ChevronDown size={13} className="text-[#555F71]" />
+                    <ChevronDown size={12} className="text-slate-400" />
                   </button>
 
                   {isSpDropdownOpenOpen && (
-                    <div className="absolute left-0 mt-1.5 w-72 sm:w-80 bg-white rounded-2xl shadow-2xl border border-slate-200 z-50 p-3 flex flex-col gap-2.5 animate-in fade-in zoom-in-95 duration-150">
-                      <div className="flex items-center justify-between gap-2 border-b border-slate-100 pb-2">
-                        <div className="flex items-center gap-1.5">
-                          <span className="font-bold text-xs text-[#0D1C2E]">Filter Service Point</span>
-                          <span className="text-[11px] text-[#555F71]">
+                    <div className="absolute left-0 mt-1 w-72 sm:w-80 bg-white rounded-lg shadow-xl border border-[#E5EAF2] z-50 p-2.5 flex flex-col gap-2 animate-in fade-in zoom-in-95 duration-150">
+                      <div className="flex items-center justify-between gap-2 border-b border-slate-100 pb-1.5">
+                        <div className="flex items-center gap-1">
+                          <span className="font-bold text-xs text-slate-800">Filter Service Point</span>
+                          <span className="text-[11px] text-slate-400">
                             ({selectedOpenSPs.length}/{openAvailableSPs.length})
                           </span>
                         </div>
@@ -5076,7 +5076,7 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
                           <button
                             type="button"
                             onClick={selectAllOpenSPs}
-                            className="text-[11px] text-blue-600 hover:underline font-semibold px-2 py-0.5 rounded cursor-pointer"
+                            className="text-[11px] text-blue-600 hover:underline font-semibold px-1.5 py-0.5 rounded cursor-pointer"
                           >
                             Pilih Semua
                           </button>
@@ -5084,7 +5084,7 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
                           <button
                             type="button"
                             onClick={clearAllOpenSPs}
-                            className="text-[11px] text-rose-600 hover:underline font-semibold px-2 py-0.5 rounded cursor-pointer"
+                            className="text-[11px] text-rose-600 hover:underline font-semibold px-1.5 py-0.5 rounded cursor-pointer"
                           >
                             Reset
                           </button>
@@ -5092,13 +5092,13 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
                       </div>
 
                       <div className="relative">
-                        <Search size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400" />
+                        <Search size={13} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400" />
                         <input
                           type="text"
                           placeholder="Cari Service Point..."
                           value={spSearchOpen}
                           onChange={(e) => setSpSearchOpen(e.target.value)}
-                          className="w-full pl-8 pr-7 py-1.5 text-xs bg-slate-50 border border-slate-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-blue-500"
+                          className="w-full pl-7 pr-6 py-1 text-xs bg-slate-50 border border-slate-200 rounded-md focus:outline-none focus:ring-1 focus:ring-blue-500"
                         />
                         {spSearchOpen && (
                           <button
@@ -5106,12 +5106,12 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
                             onClick={() => setSpSearchOpen('')}
                             className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 cursor-pointer"
                           >
-                            <X size={12} />
+                            <X size={11} />
                           </button>
                         )}
                       </div>
 
-                      <div className="max-h-60 overflow-y-auto divide-y divide-slate-100 pr-1">
+                      <div className="max-h-56 overflow-y-auto divide-y divide-slate-100 pr-1">
                         {openAvailableSPs
                           .filter((sp) => sp.toLowerCase().includes(spSearchOpen.toLowerCase()))
                           .map((sp) => {
@@ -5122,11 +5122,11 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
                             return (
                               <label
                                 key={sp}
-                                className={`flex items-start justify-between gap-2 px-2 py-1.5 rounded-lg cursor-pointer text-xs transition-colors ${
+                                className={`flex items-start justify-between gap-2 px-2 py-1.5 rounded cursor-pointer text-xs transition-colors ${
                                   isChecked ? 'bg-blue-50 text-blue-600 font-semibold' : 'hover:bg-slate-50 text-slate-700'
                                 }`}
                               >
-                                <div className="flex items-start gap-2">
+                                <div className="flex items-start gap-1.5">
                                   <input
                                     type="checkbox"
                                     checked={isChecked}
@@ -5161,30 +5161,30 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
                       setIsVendorDropdownOpenOpen(false);
                       setIsTipeDropdownOpenOpen(false);
                     }}
-                    className={`inline-flex items-center gap-1.5 h-9 px-3 rounded-xl text-xs font-medium transition-colors shrink-0 border cursor-pointer ${
+                    className={`inline-flex items-center gap-1 h-8 px-2.5 rounded-md text-xs font-medium transition-colors shrink-0 border cursor-pointer ${
                       selectedOpenSektors.length > 0
                         ? 'bg-blue-50 text-blue-600 border-blue-600 font-semibold'
-                        : 'bg-[#F8F9FF] hover:bg-[#EFF4FF] text-[#0D1C2E] border-[#EFF4FF]'
+                        : 'bg-white hover:bg-slate-50 text-slate-700 border-[#E5EAF2]'
                     }`}
                   >
-                    <Layers size={13} className={selectedOpenSektors.length > 0 ? 'text-blue-600' : 'text-[#555F71]'} />
-                    <span className="text-[#555F71]">Sektor:</span>
-                    <span className="font-semibold truncate max-w-[120px]">
+                    <Layers size={12} className={selectedOpenSektors.length > 0 ? 'text-blue-600' : 'text-slate-400'} />
+                    <span className="text-slate-500">Sektor:</span>
+                    <span className="font-semibold truncate max-w-[110px]">
                       {selectedOpenSektors.length === 0
                         ? `Semua (${openAvailableSektors.length})`
                         : selectedOpenSektors.length === 1
                         ? selectedOpenSektors[0]
                         : `${selectedOpenSektors.length} Dipilih`}
                     </span>
-                    <ChevronDown size={13} className="text-[#555F71]" />
+                    <ChevronDown size={12} className="text-slate-400" />
                   </button>
 
                   {isSektorDropdownOpenOpen && (
-                    <div className="absolute left-0 mt-1.5 w-72 sm:w-80 bg-white rounded-2xl shadow-2xl border border-slate-200 z-50 p-3 flex flex-col gap-2.5 animate-in fade-in zoom-in-95 duration-150">
-                      <div className="flex items-center justify-between gap-2 border-b border-slate-100 pb-2">
-                        <div className="flex items-center gap-1.5">
-                          <span className="font-bold text-xs text-[#0D1C2E]">Filter Sektor</span>
-                          <span className="text-[11px] text-[#555F71]">
+                    <div className="absolute left-0 mt-1 w-72 sm:w-80 bg-white rounded-lg shadow-xl border border-[#E5EAF2] z-50 p-2.5 flex flex-col gap-2 animate-in fade-in zoom-in-95 duration-150">
+                      <div className="flex items-center justify-between gap-2 border-b border-slate-100 pb-1.5">
+                        <div className="flex items-center gap-1">
+                          <span className="font-bold text-xs text-slate-800">Filter Sektor</span>
+                          <span className="text-[11px] text-slate-400">
                             ({selectedOpenSektors.length}/{openAvailableSektors.length})
                           </span>
                         </div>
@@ -5192,7 +5192,7 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
                           <button
                             type="button"
                             onClick={selectAllOpenSektors}
-                            className="text-[11px] text-blue-600 hover:underline font-semibold px-2 py-0.5 rounded cursor-pointer"
+                            className="text-[11px] text-blue-600 hover:underline font-semibold px-1.5 py-0.5 rounded cursor-pointer"
                           >
                             Pilih Semua
                           </button>
@@ -5200,7 +5200,7 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
                           <button
                             type="button"
                             onClick={clearAllOpenSektors}
-                            className="text-[11px] text-rose-600 hover:underline font-semibold px-2 py-0.5 rounded cursor-pointer"
+                            className="text-[11px] text-rose-600 hover:underline font-semibold px-1.5 py-0.5 rounded cursor-pointer"
                           >
                             Reset
                           </button>
@@ -5208,13 +5208,13 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
                       </div>
 
                       <div className="relative">
-                        <Search size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400" />
+                        <Search size={13} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400" />
                         <input
                           type="text"
                           placeholder="Cari Sektor..."
                           value={sektorSearchOpen}
                           onChange={(e) => setSektorSearchOpen(e.target.value)}
-                          className="w-full pl-8 pr-7 py-1.5 text-xs bg-slate-50 border border-slate-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-blue-500"
+                          className="w-full pl-7 pr-6 py-1 text-xs bg-slate-50 border border-slate-200 rounded-md focus:outline-none focus:ring-1 focus:ring-blue-500"
                         />
                         {sektorSearchOpen && (
                           <button
@@ -5222,12 +5222,12 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
                             onClick={() => setSektorSearchOpen('')}
                             className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 cursor-pointer"
                           >
-                            <X size={12} />
+                            <X size={11} />
                           </button>
                         )}
                       </div>
 
-                      <div className="max-h-60 overflow-y-auto divide-y divide-slate-100 pr-1">
+                      <div className="max-h-56 overflow-y-auto divide-y divide-slate-100 pr-1">
                         {openAvailableSektors
                           .filter((sk) => sk.toLowerCase().includes(sektorSearchOpen.toLowerCase()))
                           .map((sk) => {
@@ -5236,11 +5236,11 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
                             return (
                               <label
                                 key={sk}
-                                className={`flex items-start justify-between gap-2 px-2 py-1.5 rounded-lg cursor-pointer text-xs transition-colors ${
+                                className={`flex items-start justify-between gap-2 px-2 py-1.5 rounded cursor-pointer text-xs transition-colors ${
                                   isChecked ? 'bg-blue-50 text-blue-600 font-semibold' : 'hover:bg-slate-50 text-slate-700'
                                 }`}
                               >
-                                <div className="flex items-start gap-2">
+                                <div className="flex items-start gap-1.5">
                                   <input
                                     type="checkbox"
                                     checked={isChecked}
@@ -5275,30 +5275,30 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
                       setIsSektorDropdownOpenOpen(false);
                       setIsTipeDropdownOpenOpen(false);
                     }}
-                    className={`inline-flex items-center gap-1.5 h-9 px-3 rounded-xl text-xs font-medium transition-colors shrink-0 border cursor-pointer ${
+                    className={`inline-flex items-center gap-1 h-8 px-2.5 rounded-md text-xs font-medium transition-colors shrink-0 border cursor-pointer ${
                       selectedOpenVendors.length > 0
                         ? 'bg-blue-50 text-blue-600 border-blue-600 font-semibold'
-                        : 'bg-[#F8F9FF] hover:bg-[#EFF4FF] text-[#0D1C2E] border-[#EFF4FF]'
+                        : 'bg-white hover:bg-slate-50 text-slate-700 border-[#E5EAF2]'
                     }`}
                   >
-                    <Wrench size={13} className={selectedOpenVendors.length > 0 ? 'text-blue-600' : 'text-[#555F71]'} />
-                    <span className="text-[#555F71]">Vendor:</span>
-                    <span className="font-semibold truncate max-w-[120px]">
+                    <Wrench size={12} className={selectedOpenVendors.length > 0 ? 'text-blue-600' : 'text-slate-400'} />
+                    <span className="text-slate-500">Vendor:</span>
+                    <span className="font-semibold truncate max-w-[110px]">
                       {selectedOpenVendors.length === 0
                         ? `Semua (${openAvailableVendors.length})`
                         : selectedOpenVendors.length === 1
                         ? selectedOpenVendors[0]
                         : `${selectedOpenVendors.length} Dipilih`}
                     </span>
-                    <ChevronDown size={13} className="text-[#555F71]" />
+                    <ChevronDown size={12} className="text-slate-400" />
                   </button>
 
                   {isVendorDropdownOpenOpen && (
-                    <div className="absolute left-0 mt-1.5 w-72 sm:w-80 bg-white rounded-2xl shadow-2xl border border-slate-200 z-50 p-3 flex flex-col gap-2.5 animate-in fade-in zoom-in-95 duration-150">
-                      <div className="flex items-center justify-between gap-2 border-b border-slate-100 pb-2">
-                        <div className="flex items-center gap-1.5">
-                          <span className="font-bold text-xs text-[#0D1C2E]">Filter Vendor</span>
-                          <span className="text-[11px] text-[#555F71]">
+                    <div className="absolute left-0 mt-1 w-72 sm:w-80 bg-white rounded-lg shadow-xl border border-[#E5EAF2] z-50 p-2.5 flex flex-col gap-2 animate-in fade-in zoom-in-95 duration-150">
+                      <div className="flex items-center justify-between gap-2 border-b border-slate-100 pb-1.5">
+                        <div className="flex items-center gap-1">
+                          <span className="font-bold text-xs text-slate-800">Filter Vendor</span>
+                          <span className="text-[11px] text-slate-400">
                             ({selectedOpenVendors.length}/{openAvailableVendors.length})
                           </span>
                         </div>
@@ -5306,7 +5306,7 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
                           <button
                             type="button"
                             onClick={selectAllOpenVendors}
-                            className="text-[11px] text-blue-600 hover:underline font-semibold px-2 py-0.5 rounded cursor-pointer"
+                            className="text-[11px] text-blue-600 hover:underline font-semibold px-1.5 py-0.5 rounded cursor-pointer"
                           >
                             Pilih Semua
                           </button>
@@ -5314,7 +5314,7 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
                           <button
                             type="button"
                             onClick={clearAllOpenVendors}
-                            className="text-[11px] text-rose-600 hover:underline font-semibold px-2 py-0.5 rounded cursor-pointer"
+                            className="text-[11px] text-rose-600 hover:underline font-semibold px-1.5 py-0.5 rounded cursor-pointer"
                           >
                             Reset
                           </button>
@@ -5322,13 +5322,13 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
                       </div>
 
                       <div className="relative">
-                        <Search size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400" />
+                        <Search size={13} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400" />
                         <input
                           type="text"
                           placeholder="Cari Vendor..."
                           value={vendorSearchOpen}
                           onChange={(e) => setVendorSearchOpen(e.target.value)}
-                          className="w-full pl-8 pr-7 py-1.5 text-xs bg-slate-50 border border-slate-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-blue-500"
+                          className="w-full pl-7 pr-6 py-1 text-xs bg-slate-50 border border-slate-200 rounded-md focus:outline-none focus:ring-1 focus:ring-blue-500"
                         />
                         {vendorSearchOpen && (
                           <button
@@ -5336,12 +5336,12 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
                             onClick={() => setVendorSearchOpen('')}
                             className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 cursor-pointer"
                           >
-                            <X size={12} />
+                            <X size={11} />
                           </button>
                         )}
                       </div>
 
-                      <div className="max-h-60 overflow-y-auto divide-y divide-slate-100 pr-1">
+                      <div className="max-h-56 overflow-y-auto divide-y divide-slate-100 pr-1">
                         {openAvailableVendors
                           .filter((vd) => vd.toLowerCase().includes(vendorSearchOpen.toLowerCase()))
                           .map((vd) => {
@@ -5350,11 +5350,11 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
                             return (
                               <label
                                 key={vd}
-                                className={`flex items-start justify-between gap-2 px-2 py-1.5 rounded-lg cursor-pointer text-xs transition-colors ${
+                                className={`flex items-start justify-between gap-2 px-2 py-1.5 rounded cursor-pointer text-xs transition-colors ${
                                   isChecked ? 'bg-blue-50 text-blue-600 font-semibold' : 'hover:bg-slate-50 text-slate-700'
                                 }`}
                               >
-                                <div className="flex items-start gap-2">
+                                <div className="flex items-start gap-1.5">
                                   <input
                                     type="checkbox"
                                     checked={isChecked}
@@ -5389,33 +5389,33 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
                       setIsSektorDropdownOpenOpen(false);
                       setIsVendorDropdownOpenOpen(false);
                     }}
-                    className={`inline-flex items-center gap-1.5 h-9 px-3 rounded-xl text-xs font-medium transition-colors shrink-0 border cursor-pointer ${
+                    className={`inline-flex items-center gap-1 h-8 px-2.5 rounded-md text-xs font-medium transition-colors shrink-0 border cursor-pointer ${
                       selectedOpenTipes.length > 0
                         ? 'bg-blue-50 text-blue-600 border-blue-600 font-semibold'
-                        : 'bg-[#F8F9FF] hover:bg-[#EFF4FF] text-[#0D1C2E] border-[#EFF4FF]'
+                        : 'bg-white hover:bg-slate-50 text-slate-700 border-[#E5EAF2]'
                     }`}
                   >
-                    <Cpu size={13} className={selectedOpenTipes.length > 0 ? 'text-blue-600' : 'text-[#555F71]'} />
-                    <span className="text-[#555F71]">Tipe:</span>
-                    <span className="font-semibold truncate max-w-[120px]">
+                    <Cpu size={12} className={selectedOpenTipes.length > 0 ? 'text-blue-600' : 'text-slate-400'} />
+                    <span className="text-slate-500">Tipe:</span>
+                    <span className="font-semibold truncate max-w-[100px]">
                       {selectedOpenTipes.length === 0
                         ? 'Semua'
                         : selectedOpenTipes.length === 1
                         ? selectedOpenTipes[0]
                         : `${selectedOpenTipes.length} Dipilih`}
                     </span>
-                    <ChevronDown size={13} className="text-[#555F71]" />
+                    <ChevronDown size={12} className="text-slate-400" />
                   </button>
 
                   {isTipeDropdownOpenOpen && (
-                    <div className="absolute left-0 mt-1.5 w-60 bg-white rounded-2xl shadow-2xl border border-slate-200 z-50 p-3 flex flex-col gap-2.5 animate-in fade-in zoom-in-95 duration-150">
-                      <div className="flex items-center justify-between gap-2 border-b border-slate-100 pb-2">
-                        <span className="font-bold text-xs text-[#0D1C2E]">Filter Tipe Mesin</span>
+                    <div className="absolute left-0 mt-1 w-56 bg-white rounded-lg shadow-xl border border-[#E5EAF2] z-50 p-2.5 flex flex-col gap-2 animate-in fade-in zoom-in-95 duration-150">
+                      <div className="flex items-center justify-between gap-2 border-b border-slate-100 pb-1.5">
+                        <span className="font-bold text-xs text-slate-800">Filter Tipe Mesin</span>
                         <div className="flex items-center gap-1">
                           <button
                             type="button"
                             onClick={selectAllOpenTipes}
-                            className="text-[11px] text-blue-600 hover:underline font-semibold px-2 py-0.5 rounded cursor-pointer"
+                            className="text-[11px] text-blue-600 hover:underline font-semibold px-1.5 py-0.5 rounded cursor-pointer"
                           >
                             Pilih Semua
                           </button>
@@ -5423,7 +5423,7 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
                           <button
                             type="button"
                             onClick={clearAllOpenTipes}
-                            className="text-[11px] text-rose-600 hover:underline font-semibold px-2 py-0.5 rounded cursor-pointer"
+                            className="text-[11px] text-rose-600 hover:underline font-semibold px-1.5 py-0.5 rounded cursor-pointer"
                           >
                             Reset
                           </button>
@@ -5442,11 +5442,11 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
                           return (
                             <label
                               key={tipe}
-                              className={`flex items-center justify-between gap-2 px-2 py-2 rounded-lg cursor-pointer text-xs transition-colors ${
+                              className={`flex items-center justify-between gap-2 px-2 py-1.5 rounded cursor-pointer text-xs transition-colors ${
                                 isChecked ? 'bg-blue-50 text-blue-600 font-semibold' : 'hover:bg-slate-50 text-slate-700'
                               }`}
                             >
-                              <div className="flex items-center gap-2">
+                              <div className="flex items-center gap-1.5">
                                 <input
                                   type="checkbox"
                                   checked={isChecked}
@@ -5478,10 +5478,10 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
                       setOpenDurationFilter(e.target.value as any);
                       setCurrentPageOpen(1);
                     }}
-                    className={`h-9 px-3 pr-7 rounded-xl text-xs font-medium border outline-none cursor-pointer appearance-none ${
+                    className={`h-8 px-2.5 pr-6 rounded-md text-xs font-medium border outline-none cursor-pointer appearance-none ${
                       openDurationFilter !== 'ALL'
                         ? 'bg-[#FFDAD6] text-[#BA1A1A] border-[#BA1A1A]/40 font-semibold'
-                        : 'bg-[#F8F9FF] hover:bg-[#EFF4FF] text-[#0D1C2E] border-[#EFF4FF]'
+                        : 'bg-white hover:bg-slate-50 text-slate-700 border-[#E5EAF2]'
                     }`}
                   >
                     <option value="ALL">Durasi: Semua</option>
@@ -5489,7 +5489,7 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
                     <option value="OVER_60">Durasi: &gt; 60 Menit</option>
                     <option value="OVER_180">Durasi: &gt; 180 Menit</option>
                   </select>
-                  <ChevronDown size={13} className="absolute right-2 top-1/2 -translate-y-1/2 text-[#555F71] pointer-events-none" />
+                  <ChevronDown size={12} className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
                 </div>
 
                 {/* 7. Action Filter */}
@@ -5500,22 +5500,22 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
                       setOpenActionFilter(e.target.value as any);
                       setCurrentPageOpen(1);
                     }}
-                    className={`h-9 px-3 pr-7 rounded-xl text-xs font-medium border outline-none cursor-pointer appearance-none ${
+                    className={`h-8 px-2.5 pr-6 rounded-md text-xs font-medium border outline-none cursor-pointer appearance-none ${
                       openActionFilter !== 'ALL'
                         ? 'bg-blue-50 text-blue-600 border-blue-600 font-semibold'
-                        : 'bg-[#F8F9FF] hover:bg-[#EFF4FF] text-[#0D1C2E] border-[#EFF4FF]'
+                        : 'bg-white hover:bg-slate-50 text-slate-700 border-[#E5EAF2]'
                     }`}
                   >
                     <option value="ALL">Tindakan: Semua</option>
                     <option value="NO_ACTION">Belum Ada Action</option>
                     <option value="HAS_ACTION">Sudah Ada Action</option>
                   </select>
-                  <ChevronDown size={13} className="absolute right-2 top-1/2 -translate-y-1/2 text-[#555F71] pointer-events-none" />
+                  <ChevronDown size={12} className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
                 </div>
 
                 {/* 8. Filter Periode Tanggal (Dari & Sampai) */}
-                <div className="flex items-center gap-1.5 bg-white border border-[#E5EAF2] rounded-xl px-2.5 h-9 shrink-0">
-                  <Calendar size={13} className="text-[#555F71]" />
+                <div className="flex items-center gap-1.5 bg-white border border-[#E5EAF2] rounded-md px-2 h-8 shrink-0">
+                  <Calendar size={12} className="text-slate-400" />
                   <span className="text-[10px] font-bold text-slate-400 uppercase">Dari:</span>
                   <input
                     type="date"
@@ -5524,7 +5524,7 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
                       setOpenStartDate(e.target.value || 'ALL');
                       setCurrentPageOpen(1);
                     }}
-                    className="bg-transparent text-xs font-semibold text-slate-700 focus:outline-none cursor-pointer"
+                    className="bg-transparent text-xs font-medium text-slate-700 focus:outline-none cursor-pointer"
                   />
                   <span className="text-slate-300">|</span>
                   <span className="text-[10px] font-bold text-slate-400 uppercase">Sampai:</span>
@@ -5535,7 +5535,7 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
                       setOpenEndDate(e.target.value || 'ALL');
                       setCurrentPageOpen(1);
                     }}
-                    className="bg-transparent text-xs font-semibold text-slate-700 focus:outline-none cursor-pointer"
+                    className="bg-transparent text-xs font-medium text-slate-700 focus:outline-none cursor-pointer"
                   />
                   {(openStartDate !== 'ALL' || openEndDate !== 'ALL') && (
                     <button
@@ -5548,7 +5548,7 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
                       className="text-slate-400 hover:text-slate-600 ml-0.5 cursor-pointer"
                       title="Reset filter tanggal"
                     >
-                      <X size={12} />
+                      <X size={11} />
                     </button>
                   )}
                 </div>
@@ -5556,8 +5556,8 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
 
               {/* Active Removable Filter Chips Sub-row */}
               {hasActiveOpenFilters && (
-                <div className="flex items-center gap-2 pt-2 border-t border-[#EFF4FF] flex-wrap text-xs">
-                  <span className="text-[#555F71] font-medium mr-1">Filter Aktif:</span>
+                <div className="flex items-center gap-1.5 pt-1.5 border-t border-[#E5EAF2] flex-wrap text-xs">
+                  <span className="text-slate-500 font-medium mr-1 text-[11px]">Filter Aktif:</span>
 
                   {(openStartDate !== 'ALL' || openEndDate !== 'ALL') && (
                     <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-blue-50 text-blue-600 font-medium">
@@ -5667,115 +5667,115 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
               )}
             </div>
 
-            {/* Main Incident Table Container (40px compact row height) */}
-            <div className="bg-white rounded-2xl p-4 shadow-sm border border-[#EFF4FF] flex flex-col">
+            {/* Main Incident Table Container (Enterprise Compact Table) */}
+            <div className="bg-white rounded-lg p-3 shadow-2xs border border-[#E5EAF2] flex flex-col">
               <div className="overflow-x-auto w-full">
-                <table className="w-full text-left border-collapse min-w-[1020px]">
+                <table className="w-full text-left border-collapse min-w-[1000px]">
                   <thead>
-                    <tr className="h-9 bg-[#F8F9FF] text-[#555F71] text-[11px] font-bold uppercase tracking-wider rounded-lg">
-                      <th className="pl-3 pr-2 w-10 text-center rounded-l-lg">
+                    <tr className="h-8 bg-[#F8FAFC] text-slate-600 text-[11px] font-semibold uppercase tracking-wider border-b border-[#E5EAF2]">
+                      <th className="pl-3 pr-2 w-9 text-center">
                         <input
                           type="checkbox"
                           checked={selectedIncidentKeys.size > 0 && selectedIncidentKeys.size === filteredOpenIncidents.length}
                           onChange={handleToggleSelectAll}
-                          className="w-4 h-4 rounded text-blue-600 focus:ring-0 accent-blue-600 cursor-pointer"
+                          className="w-3.5 h-3.5 rounded text-blue-600 focus:ring-0 accent-blue-600 cursor-pointer"
                         />
                       </th>
                       <th
                         onClick={() => handleSortOpen('wsid')}
-                        className="px-3 py-2 min-w-[200px] cursor-pointer hover:bg-slate-100/80 transition-colors select-none"
+                        className="px-2.5 py-1.5 min-w-[190px] cursor-pointer hover:bg-slate-100/80 transition-colors select-none"
                       >
-                        <div className="flex items-center gap-1.5">
+                        <div className="flex items-center gap-1">
                           <span>WSID / Lokasi</span>
                           {openSortColumn === 'wsid' ? (
-                            openSortDirection === 'asc' ? <ChevronUp size={12} className="text-blue-600" /> : <ChevronDown size={12} className="text-blue-600" />
+                            openSortDirection === 'asc' ? <ChevronUp size={11} className="text-blue-600" /> : <ChevronDown size={11} className="text-blue-600" />
                           ) : (
-                            <ArrowUpDown size={12} className="text-slate-400" />
+                            <ArrowUpDown size={11} className="text-slate-400" />
                           )}
                         </div>
                       </th>
                       <th
                         onClick={() => handleSortOpen('typeMesin')}
-                        className="px-3 py-2 min-w-[140px] cursor-pointer hover:bg-slate-100/80 transition-colors select-none"
+                        className="px-2.5 py-1.5 min-w-[130px] cursor-pointer hover:bg-slate-100/80 transition-colors select-none"
                       >
-                        <div className="flex items-center gap-1.5">
+                        <div className="flex items-center gap-1">
                           <span>Tipe / Vendor</span>
                           {openSortColumn === 'typeMesin' ? (
-                            openSortDirection === 'asc' ? <ChevronUp size={12} className="text-blue-600" /> : <ChevronDown size={12} className="text-blue-600" />
+                            openSortDirection === 'asc' ? <ChevronUp size={11} className="text-blue-600" /> : <ChevronDown size={11} className="text-blue-600" />
                           ) : (
-                            <ArrowUpDown size={12} className="text-slate-400" />
+                            <ArrowUpDown size={11} className="text-slate-400" />
                           )}
                         </div>
                       </th>
                       <th
                         onClick={() => handleSortOpen('eventCodeDesc')}
-                        className="px-3 py-2 min-w-[190px] cursor-pointer hover:bg-slate-100/80 transition-colors select-none"
+                        className="px-2.5 py-1.5 min-w-[180px] cursor-pointer hover:bg-slate-100/80 transition-colors select-none"
                       >
-                        <div className="flex items-center gap-1.5">
+                        <div className="flex items-center gap-1">
                           <span>Problem</span>
                           {openSortColumn === 'eventCodeDesc' ? (
-                            openSortDirection === 'asc' ? <ChevronUp size={12} className="text-blue-600" /> : <ChevronDown size={12} className="text-blue-600" />
+                            openSortDirection === 'asc' ? <ChevronUp size={11} className="text-blue-600" /> : <ChevronDown size={11} className="text-blue-600" />
                           ) : (
-                            <ArrowUpDown size={12} className="text-slate-400" />
+                            <ArrowUpDown size={11} className="text-slate-400" />
                           )}
                         </div>
                       </th>
                       <th
                         onClick={() => handleSortOpen('startTime')}
-                        className="px-3 py-2 w-32 cursor-pointer hover:bg-slate-100/80 transition-colors select-none"
+                        className="px-2.5 py-1.5 w-28 cursor-pointer hover:bg-slate-100/80 transition-colors select-none"
                       >
-                        <div className="flex items-center gap-1.5">
+                        <div className="flex items-center gap-1">
                           <span>Start</span>
                           {openSortColumn === 'startTime' ? (
-                            openSortDirection === 'asc' ? <ChevronUp size={12} className="text-blue-600" /> : <ChevronDown size={12} className="text-blue-600" />
+                            openSortDirection === 'asc' ? <ChevronUp size={11} className="text-blue-600" /> : <ChevronDown size={11} className="text-blue-600" />
                           ) : (
-                            <ArrowUpDown size={12} className="text-slate-400" />
+                            <ArrowUpDown size={11} className="text-slate-400" />
                           )}
                         </div>
                       </th>
                       <th
                         onClick={() => handleSortOpen('durasiOpr')}
-                        className="px-3 py-2 w-32 cursor-pointer hover:bg-slate-100/80 transition-colors select-none"
+                        className="px-2.5 py-1.5 w-28 cursor-pointer hover:bg-slate-100/80 transition-colors select-none"
                       >
-                        <div className="flex items-center gap-1.5">
+                        <div className="flex items-center gap-1">
                           <span className="flex items-center gap-1">
                             <span>Durasi</span>
-                            <span className="inline-flex items-center px-1 py-0.2 rounded bg-emerald-100 text-emerald-800 text-[8px] font-extrabold tracking-wider">LIVE</span>
+                            <span className="inline-flex items-center px-1 py-0.2 rounded bg-emerald-100 text-emerald-800 text-[8px] font-bold tracking-wider">LIVE</span>
                           </span>
                           {openSortColumn === 'durasiOpr' ? (
-                            openSortDirection === 'asc' ? <ChevronUp size={12} className="text-blue-600" /> : <ChevronDown size={12} className="text-blue-600" />
+                            openSortDirection === 'asc' ? <ChevronUp size={11} className="text-blue-600" /> : <ChevronDown size={11} className="text-blue-600" />
                           ) : (
-                            <ArrowUpDown size={12} className="text-slate-400" />
+                            <ArrowUpDown size={11} className="text-slate-400" />
                           )}
                         </div>
                       </th>
                       <th
                         onClick={() => handleSortOpen('chronic')}
-                        className="px-3 py-2 w-32 cursor-pointer hover:bg-slate-100/80 transition-colors select-none"
+                        className="px-2.5 py-1.5 w-28 cursor-pointer hover:bg-slate-100/80 transition-colors select-none"
                       >
-                        <div className="flex items-center gap-1.5">
+                        <div className="flex items-center gap-1">
                           <span>Chronic Status</span>
                           {openSortColumn === 'chronic' ? (
-                            openSortDirection === 'asc' ? <ChevronUp size={12} className="text-blue-600" /> : <ChevronDown size={12} className="text-blue-600" />
+                            openSortDirection === 'asc' ? <ChevronUp size={11} className="text-blue-600" /> : <ChevronDown size={11} className="text-blue-600" />
                           ) : (
-                            <ArrowUpDown size={12} className="text-slate-400" />
+                            <ArrowUpDown size={11} className="text-slate-400" />
                           )}
                         </div>
                       </th>
                       <th
                         onClick={() => handleSortOpen('actionTerakhir')}
-                        className="px-3 py-2 min-w-[200px] cursor-pointer hover:bg-slate-100/80 transition-colors select-none"
+                        className="px-2.5 py-1.5 min-w-[190px] cursor-pointer hover:bg-slate-100/80 transition-colors select-none"
                       >
-                        <div className="flex items-center gap-1.5">
+                        <div className="flex items-center gap-1">
                           <span>Update Terakhir (Keterangan)</span>
                           {openSortColumn === 'actionTerakhir' ? (
-                            openSortDirection === 'asc' ? <ChevronUp size={12} className="text-blue-600" /> : <ChevronDown size={12} className="text-blue-600" />
+                            openSortDirection === 'asc' ? <ChevronUp size={11} className="text-blue-600" /> : <ChevronDown size={11} className="text-blue-600" />
                           ) : (
-                            <ArrowUpDown size={12} className="text-slate-400" />
+                            <ArrowUpDown size={11} className="text-slate-400" />
                           )}
                         </div>
                       </th>
-                      <th className="pr-3 pl-2 py-2 w-24 text-right rounded-r-lg">Aksi</th>
+                      <th className="pr-3 pl-2 py-1.5 w-20 text-right">Aksi</th>
                     </tr>
                   </thead>
                   <tbody className="text-xs divide-y divide-[#EFF4FF]">
@@ -8457,105 +8457,105 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
             </div>
 
             {/* Dense Incident Table */}
-            <div className="bg-white rounded-2xl shadow-sm border border-[#EFF4FF] overflow-hidden p-4">
+            <div className="bg-white rounded-lg shadow-2xs border border-[#E5EAF2] overflow-hidden p-3">
               <div className="overflow-x-auto w-full">
                 <table className="w-full text-left border-collapse text-xs">
                   <thead>
-                    <tr className="h-9 bg-[#F8F9FF] text-[#555F71] text-[11px] font-bold uppercase tracking-wider rounded-lg">
+                    <tr className="h-8 bg-[#F8FAFC] text-slate-600 text-[11px] font-semibold uppercase tracking-wider border-b border-[#E5EAF2]">
                       <th
                         onClick={() => handleSortHistory('wsid')}
-                        className="px-3 py-2 cursor-pointer hover:bg-slate-100/80 transition-colors select-none"
+                        className="px-2.5 py-1.5 cursor-pointer hover:bg-slate-100/80 transition-colors select-none"
                       >
-                        <div className="flex items-center gap-1.5">
+                        <div className="flex items-center gap-1">
                           <span>WSID / Lokasi</span>
                           {historySortColumn === 'wsid' ? (
-                            historySortDirection === 'asc' ? <ChevronUp size={12} className="text-blue-600" /> : <ChevronDown size={12} className="text-blue-600" />
+                            historySortDirection === 'asc' ? <ChevronUp size={11} className="text-blue-600" /> : <ChevronDown size={11} className="text-blue-600" />
                           ) : (
-                            <ArrowUpDown size={12} className="text-slate-400" />
+                            <ArrowUpDown size={11} className="text-slate-400" />
                           )}
                         </div>
                       </th>
                       <th
                         onClick={() => handleSortHistory('typeMesin')}
-                        className="px-3 py-2 cursor-pointer hover:bg-slate-100/80 transition-colors select-none"
+                        className="px-2.5 py-1.5 cursor-pointer hover:bg-slate-100/80 transition-colors select-none"
                       >
-                        <div className="flex items-center gap-1.5">
+                        <div className="flex items-center gap-1">
                           <span>Tipe / Vendor</span>
                           {historySortColumn === 'typeMesin' ? (
-                            historySortDirection === 'asc' ? <ChevronUp size={12} className="text-blue-600" /> : <ChevronDown size={12} className="text-blue-600" />
+                            historySortDirection === 'asc' ? <ChevronUp size={11} className="text-blue-600" /> : <ChevronDown size={11} className="text-blue-600" />
                           ) : (
-                            <ArrowUpDown size={12} className="text-slate-400" />
+                            <ArrowUpDown size={11} className="text-slate-400" />
                           )}
                         </div>
                       </th>
                       <th
                         onClick={() => handleSortHistory('eventCodeDesc')}
-                        className="px-3 py-2 cursor-pointer hover:bg-slate-100/80 transition-colors select-none"
+                        className="px-2.5 py-1.5 cursor-pointer hover:bg-slate-100/80 transition-colors select-none"
                       >
-                        <div className="flex items-center gap-1.5">
+                        <div className="flex items-center gap-1">
                           <span>Problem</span>
                           {historySortColumn === 'eventCodeDesc' ? (
-                            historySortDirection === 'asc' ? <ChevronUp size={12} className="text-blue-600" /> : <ChevronDown size={12} className="text-blue-600" />
+                            historySortDirection === 'asc' ? <ChevronUp size={11} className="text-blue-600" /> : <ChevronDown size={11} className="text-blue-600" />
                           ) : (
-                            <ArrowUpDown size={12} className="text-slate-400" />
+                            <ArrowUpDown size={11} className="text-slate-400" />
                           )}
                         </div>
                       </th>
                       <th
                         onClick={() => handleSortHistory('startTime')}
-                        className="px-3 py-2 cursor-pointer hover:bg-slate-100/80 transition-colors select-none"
+                        className="px-2.5 py-1.5 cursor-pointer hover:bg-slate-100/80 transition-colors select-none"
                       >
-                        <div className="flex items-center gap-1.5">
+                        <div className="flex items-center gap-1">
                           <span>Start</span>
                           {historySortColumn === 'startTime' ? (
-                            historySortDirection === 'asc' ? <ChevronUp size={12} className="text-blue-600" /> : <ChevronDown size={12} className="text-blue-600" />
+                            historySortDirection === 'asc' ? <ChevronUp size={11} className="text-blue-600" /> : <ChevronDown size={11} className="text-blue-600" />
                           ) : (
-                            <ArrowUpDown size={12} className="text-slate-400" />
+                            <ArrowUpDown size={11} className="text-slate-400" />
                           )}
                         </div>
                       </th>
                       <th
                         onClick={() => handleSortHistory('endTime')}
-                        className="px-3 py-2 cursor-pointer hover:bg-slate-100/80 transition-colors select-none"
+                        className="px-2.5 py-1.5 cursor-pointer hover:bg-slate-100/80 transition-colors select-none"
                       >
-                        <div className="flex items-center gap-1.5">
+                        <div className="flex items-center gap-1">
                           <span>End</span>
                           {historySortColumn === 'endTime' ? (
-                            historySortDirection === 'asc' ? <ChevronUp size={12} className="text-blue-600" /> : <ChevronDown size={12} className="text-blue-600" />
+                            historySortDirection === 'asc' ? <ChevronUp size={11} className="text-blue-600" /> : <ChevronDown size={11} className="text-blue-600" />
                           ) : (
-                            <ArrowUpDown size={12} className="text-slate-400" />
+                            <ArrowUpDown size={11} className="text-slate-400" />
                           )}
                         </div>
                       </th>
                       <th
                         onClick={() => handleSortHistory('durasiOpr')}
-                        className="px-3 py-2 cursor-pointer hover:bg-slate-100/80 transition-colors select-none"
+                        className="px-2.5 py-1.5 cursor-pointer hover:bg-slate-100/80 transition-colors select-none"
                       >
-                        <div className="flex items-center gap-1.5">
+                        <div className="flex items-center gap-1">
                           <span>Durasi</span>
                           {historySortColumn === 'durasiOpr' ? (
-                            historySortDirection === 'asc' ? <ChevronUp size={12} className="text-blue-600" /> : <ChevronDown size={12} className="text-blue-600" />
+                            historySortDirection === 'asc' ? <ChevronUp size={11} className="text-blue-600" /> : <ChevronDown size={11} className="text-blue-600" />
                           ) : (
-                            <ArrowUpDown size={12} className="text-slate-400" />
+                            <ArrowUpDown size={11} className="text-slate-400" />
                           )}
                         </div>
                       </th>
                       <th
                         onClick={() => handleSortHistory('chronic')}
-                        className="px-3 py-2 cursor-pointer hover:bg-slate-100/80 transition-colors select-none"
+                        className="px-2.5 py-1.5 cursor-pointer hover:bg-slate-100/80 transition-colors select-none"
                       >
-                        <div className="flex items-center gap-1.5">
+                        <div className="flex items-center gap-1">
                           <span>Chronic Status</span>
                           {historySortColumn === 'chronic' ? (
-                            historySortDirection === 'asc' ? <ChevronUp size={12} className="text-blue-600" /> : <ChevronDown size={12} className="text-blue-600" />
+                            historySortDirection === 'asc' ? <ChevronUp size={11} className="text-blue-600" /> : <ChevronDown size={11} className="text-blue-600" />
                           ) : (
-                            <ArrowUpDown size={12} className="text-slate-400" />
+                            <ArrowUpDown size={11} className="text-slate-400" />
                           )}
                         </div>
                       </th>
                       <th
                         onClick={() => handleSortHistory('actionTerakhir')}
-                        className="px-3 py-2 cursor-pointer hover:bg-slate-100/80 transition-colors select-none"
+                        className="px-2.5 py-1.5 cursor-pointer hover:bg-slate-100/80 transition-colors select-none"
                       >
                         <div className="flex items-center gap-1.5">
                           <span>Action (Keterangan)</span>
