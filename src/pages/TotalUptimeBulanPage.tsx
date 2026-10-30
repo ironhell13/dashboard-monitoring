@@ -82,8 +82,8 @@ export default function TotalUptimeBulanPage() {
       {/* Header & Export Action */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
         <div>
-          <h1 className="text-lg font-bold text-slate-900 tracking-tight">Total Uptime & Mesin (Abacus Jakarta)</h1>
-          <p className="text-xs text-slate-500 mt-0.5">Perhitungan performa terpisah antara mesin ATM dan CRM dengan grafik tren bulanan</p>
+          <h1 className="text-lg font-bold text-slate-900 tracking-tight">Dashboard Overview &bull; Total Uptime & Performa (Abacus Jakarta)</h1>
+          <p className="text-xs text-slate-500 mt-0.5">Perhitungan performa SLA terpisah antara mesin ATM dan CRM dengan grafik tren bulanan</p>
         </div>
 
         <button

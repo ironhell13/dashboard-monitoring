@@ -59,7 +59,6 @@ export default function Layout({ onLogout, userRole }: LayoutProps) {
       title: 'RINGKASAN & SLA',
       items: [
         { name: 'Dashboard Overview', path: '/dashboard', icon: LayoutDashboard },
-        { name: 'Total Uptime Bulanan', path: '/total-uptime', icon: Activity },
       ]
     },
     {

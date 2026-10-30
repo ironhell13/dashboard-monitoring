@@ -5,7 +5,6 @@ import LandingPage from './components/LandingPage';
 import MonitoringPage from './pages/MonitoringPage';
 import ErrorBoundary from './components/ErrorBoundary';
 import UploadPage from './pages/UploadPage';
-import DashboardPage from './pages/DashboardPage';
 import MesinPerSektorPage from './pages/MesinPerSektorPage';
 import ServicePointPage from './pages/ServicePointPage';
 import TotalUptimeBulanPage from './pages/TotalUptimeBulanPage';
@@ -313,7 +312,7 @@ function App() {
           
           {/* Dashboard Routes wrapped in Layout */}
           <Route element={<Layout onLogout={appMode === 'KAWIL' ? handleLogoutKaWil : handleLogoutKaOps} userRole={currentRole} />}>
-            <Route path="/dashboard" element={<DashboardPage />} />
+            <Route path="/dashboard" element={<TotalUptimeBulanPage />} />
             <Route path="/upload" element={<UploadPage />} />
             <Route path="/cek-daily" element={<CekDailyPage userRole={currentRole} />} />
             <Route path="/follow-up" element={<FollowUpPage userRole={currentRole} />} />
@@ -321,7 +320,7 @@ function App() {
             <Route path="/service-point" element={<ServicePointPage />} />
             <Route path="/all-wsid" element={<AllWsidPage />} />
             <Route path="/wsid/:wsid" element={<WsidDetailPage />} />
-            <Route path="/total-uptime" element={<TotalUptimeBulanPage />} />
+            <Route path="/total-uptime" element={<Navigate to="/dashboard" replace />} />
           </Route>
 
           {/* Fallback route */}
