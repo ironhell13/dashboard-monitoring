@@ -3129,8 +3129,24 @@
                   finalDurasiOpr,
                   'CLOSED'
                 ]]);
+
+                var isAutoCloseByDb = (item.closeSource === 'DASHBOARD') ||
+                                      (item.actionTerakhirOleh === 'Sistem Dashboard') ||
+                                      (String(item.actionTerakhir || '').indexOf('[AUTO-CLOSE]') !== -1);
+                var closeUpdater = isAutoCloseByDb ? 'Sistem Dashboard' : uploaderName;
+
                 // Col 25 & 26: Last_Update_At, Last_Update_By
-                incSheet.getRange(foundRowNum, 25, 1, 2).setValues([[nowWib, uploaderName]]);
+                incSheet.getRange(foundRowNum, 25, 1, 2).setValues([[nowWib, closeUpdater]]);
+
+                // Jika di-auto-close oleh sistem dashboard, set catatan tindakan Col 19-22
+                if (isAutoCloseByDb) {
+                  incSheet.getRange(foundRowNum, 19, 1, 4).setValues([[
+                    item.actionTerakhir || '[AUTO-CLOSE] Problem sudah tidak muncul di report OASE',
+                    'Sistem Dashboard',
+                    nowWib,
+                    1
+                  ]]);
+                }
 
                 // Update juga di DB_ACTIVE_OPEN jika baris ini ada di DB_ACTIVE_OPEN
                 var openRow = openSheetRowMap[incKey] || (incidentNum && openSheetRowMap[incidentNum]);
@@ -3152,8 +3168,10 @@
                   wsid,
                   eventDesc,
                   'UPLOAD_UPDATE',
-                  'Status insiden terupdate menjadi CLOSED via upload CSV (End Time terisi).',
-                  uploaderName,
+                  isAutoCloseByDb
+                    ? 'Status insiden di-auto-close oleh Sistem Dashboard (problem sudah tidak muncul di snapshot OASE).'
+                    : 'Status insiden terupdate menjadi CLOSED via upload CSV (End Time terisi).',
+                  closeUpdater,
                   oldStatus,
                   'CLOSED',
                   'End_Time: (sebelumnya OPEN) -> ' + finalEndTime
@@ -3205,7 +3223,8 @@
               (() => {
                 var realAct = sanitizeCellText(item.actionTerakhir || '-');
                 if (realAct === '-' || isTechnicalMachineLog(realAct)) return '-';
-                return sanitizeCellText(item.actionTerakhirOleh || 'Petugas');
+                var defaultOleh = (item.closeSource === 'DASHBOARD' || item.actionTerakhirOleh === 'Sistem Dashboard') ? 'Sistem Dashboard' : 'Petugas';
+                return sanitizeCellText(item.actionTerakhirOleh || defaultOleh);
               })(),
               (() => {
                 var realAct = sanitizeCellText(item.actionTerakhir || '-');
@@ -3220,7 +3239,7 @@
               nowWib,
               uploaderName,
               nowWib,
-              uploaderName
+              (item.closeSource === 'DASHBOARD' || item.actionTerakhirOleh === 'Sistem Dashboard') ? 'Sistem Dashboard' : uploaderName
             ];
             rowsToAppend.push(newRow);
 
@@ -4765,6 +4784,14 @@
           tgl = startT.split(' ')[0];
         }
         var jam = formatCellTimeOnly(row[14], startT);
+        var closeSrc = '-';
+        if (isEndTimeFilledGS(endT)) {
+          var isByDb = (petugas === 'Sistem Dashboard') ||
+                       (String(row[18] || '').indexOf('[AUTO-CLOSE]') !== -1) ||
+                       (String(row[25] || '').indexOf('Sistem Dashboard') !== -1);
+          closeSrc = isByDb ? 'DASHBOARD' : 'OASE';
+        }
+
         results.push({
           incidentKey: String(row[0] || ''),
           incidentNumber: String(row[1] || '-'),
@@ -4788,7 +4815,8 @@
           actionTerakhirOleh: petugas,
           actionTerakhirWaktu: formatCellDateStr(row[20], targetMonth),
           jumlahAction: Number(row[21]) || 0,
-          monthStr: monthStr
+          monthStr: monthStr,
+          closeSource: closeSrc
         });
 
         if (results.length >= maxLimit) {
@@ -4899,7 +4927,8 @@
         'incidentNumber', 'wsid', 'lokasi', 'servicePointSektor', 'servicePoint', 'sektor',
         'typeMesin', 'vendorMesin', 'startTime', 'endTime', 'dateStr', 'hourStr',
         'hourNumber', 'durasi', 'rawDuration', 'eventCodeDesc', 'eventCode', 'detail',
-        'status', 'actionTerakhir', 'actionTerakhirOleh', 'actionTerakhirWaktu', 'jumlahAction', 'monthStr'
+        'status', 'actionTerakhir', 'actionTerakhirOleh', 'actionTerakhirWaktu', 'jumlahAction', 'monthStr',
+        'closeSource'
       ];
       var compactData = [];
 
@@ -5013,6 +5042,16 @@
               actMap
             );
 
+            var isClosedGS = isEndTimeFilledGS(endTimeStr);
+            var closeSrc = '-';
+            if (isClosedGS) {
+              var isByDb = (resolvedAction.petugas === 'Sistem Dashboard') ||
+                           (resolvedAction.action && resolvedAction.action.indexOf('[AUTO-CLOSE]') !== -1) ||
+                           (String(r[19] || '').indexOf('Sistem Dashboard') !== -1) ||
+                           (String(r[25] || '').indexOf('Sistem Dashboard') !== -1);
+              closeSrc = isByDb ? 'DASHBOARD' : 'OASE';
+            }
+
             var rowArray = [
               String(r[1] || '-'),
               String(r[2] || ''),
@@ -5032,12 +5071,13 @@
               String(r[9] || ''),
               String(r[8] || ''),
               detailStr,
-              isEndTimeFilledGS(endTimeStr) ? 'CLOSED' : 'OPEN',
+              isClosedGS ? 'CLOSED' : 'OPEN',
               resolvedAction.action,
               resolvedAction.petugas,
               resolvedAction.waktu,
               resolvedAction.jumlah,
-              curMonthStr
+              curMonthStr,
+              closeSrc
             ];
             compactData.push(rowArray);
           }

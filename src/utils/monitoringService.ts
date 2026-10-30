@@ -27,6 +27,7 @@ export interface OpenIncidentItem {
   monthStr: string;
   comment?: string;
   keterangan?: string;
+  closeSource?: 'OASE' | 'DASHBOARD' | '-';
 }
 
 export interface IncidentHistoryItem {

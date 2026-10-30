@@ -719,6 +719,68 @@ export function cleanAuthorName(author?: string): string {
     .trim() || author;
 }
 
+/**
+ * Render cell End Time dengan pembeda visual yang jelas antara:
+ * 1. OPEN (badge merah berkedip)
+ * 2. Closed by DASHBOARD (Auto-Close via snapshot rekonsiliasi OASE: teks bronze/amber + badge "Auto-Close DB")
+ * 3. Closed by OASE (Waktu selesai resmi dari file OASE: teks navy/slate + badge "OASE")
+ */
+export function renderIncidentEndTime(row: {
+  endTime?: string | null;
+  status?: string | null;
+  closeSource?: 'OASE' | 'DASHBOARD' | '-' | string;
+  actionTerakhirOleh?: string | null;
+  actionTerakhir?: string | null;
+}) {
+  const isClosed = isEndTimeFilled(row.endTime);
+  if (!isClosed) {
+    return (
+      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-[#FFDAD6] text-[#BA1A1A]">
+        <span className="w-1.5 h-1.5 rounded-full bg-[#BA1A1A] animate-pulse"></span>
+        <span>OPEN</span>
+      </span>
+    );
+  }
+
+  const isByDashboard =
+    row.closeSource === 'DASHBOARD' ||
+    row.actionTerakhirOleh === 'Sistem Dashboard' ||
+    (typeof row.actionTerakhir === 'string' && row.actionTerakhir.includes('[AUTO-CLOSE]'));
+
+  const formattedEnd = formatStartProblemTime(row.endTime);
+
+  if (isByDashboard) {
+    return (
+      <div
+        className="inline-flex flex-col items-start gap-0.5"
+        title="Auto-Close oleh Sistem Dashboard: Problem sudah tidak muncul di snapshot laporan OASE terbaru"
+      >
+        <span className="font-mono text-[11px] font-semibold text-amber-900">
+          {formattedEnd}
+        </span>
+        <span className="inline-flex items-center gap-1 px-1.5 py-0.2 rounded text-[9px] font-bold bg-amber-50 text-amber-800 border border-amber-300">
+          <span className="w-1.5 h-1.5 rounded-full bg-amber-500"></span>
+          <span>Auto-Close DB</span>
+        </span>
+      </div>
+    );
+  }
+
+  return (
+    <div
+      className="inline-flex flex-col items-start gap-0.5"
+      title="Closed via OASE: Waktu selesai tercatat resmi dari sistem OASE"
+    >
+      <span className="font-mono text-[11px] font-medium text-[#0D1C2E]">
+        {formattedEnd}
+      </span>
+      <span className="inline-flex items-center gap-1 px-1.5 py-0.2 rounded text-[9px] font-medium bg-slate-100 text-slate-600 border border-slate-200">
+        <span>OASE</span>
+      </span>
+    </div>
+  );
+}
+
 export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: MonitoringPageProps) {
   const { rawMasterData, modernTickets, setModernTickets, addOrUpdateModernTicket, removeModernTicket } = useDataStore();
 
@@ -1112,6 +1174,11 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
             actionTerakhirWaktu: hasAction ? (r.actionTerakhirWaktu && r.actionTerakhirWaktu !== '-' ? r.actionTerakhirWaktu : sTime) : '-',
             jumlahAction: hasAction ? (r.jumlahAction || 1) : 0,
             monthStr: extractMonthStr(r.dateStr || r.startTime, month),
+            closeSource: (!isEndTimeFilled(r.endTime))
+              ? '-'
+              : (r.closeSource === 'DASHBOARD' || r.actionTerakhirOleh === 'Sistem Dashboard' || (typeof actText === 'string' && actText.includes('[AUTO-CLOSE]'))
+                ? 'DASHBOARD'
+                : 'OASE'),
             comment: r.comment || undefined,
             keterangan: actText !== '-' ? actText : undefined
           };
@@ -3362,6 +3429,11 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
           actionTerakhirWaktu: hasAction ? (r.actionTerakhirWaktu && r.actionTerakhirWaktu !== '-' ? r.actionTerakhirWaktu : sTime) : '-',
           jumlahAction: hasAction ? (r.jumlahAction || 1) : 0,
           monthStr: extractMonthStr(r.dateStr || r.startTime, historyMonth),
+          closeSource: (!isEndTimeFilled(r.endTime))
+            ? '-'
+            : (r.closeSource === 'DASHBOARD' || r.actionTerakhirOleh === 'Sistem Dashboard' || (typeof actionText === 'string' && actionText.includes('[AUTO-CLOSE]'))
+              ? 'DASHBOARD'
+              : 'OASE'),
           comment: r.comment || undefined,
           keterangan: actionText !== '-' ? actionText : undefined
         };
@@ -3383,11 +3455,18 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
         const clean = res.incidents.map((it) => {
           const sTime = formatStartProblemTime(it.startTime) !== '-' ? formatStartProblemTime(it.startTime) : getDisplayStartTime(it);
           const dText = (!it.detail || it.detail === '-' || isDateLikeString(it.detail)) ? '-' : it.detail;
+          const isClosed = isEndTimeFilled(it.endTime);
+          const closeSrc: 'OASE' | 'DASHBOARD' | '-' = !isClosed
+            ? '-'
+            : (it.closeSource === 'DASHBOARD' || it.actionTerakhirOleh === 'Sistem Dashboard' || (typeof it.actionTerakhir === 'string' && it.actionTerakhir.includes('[AUTO-CLOSE]'))
+              ? 'DASHBOARD'
+              : 'OASE');
           return {
             ...it,
             detail: dText,
             startTime: sTime,
-            endTime: formatStartProblemTime(it.endTime)
+            endTime: formatStartProblemTime(it.endTime),
+            closeSource: closeSrc
           };
         });
         historyCacheRef.current[historyMonth] = clean;
@@ -3954,25 +4033,152 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
 
     try {
       const parsed = await parseDailyIncidentCsv(file, { masterData: rawMasterData });
+      const snapshotEndDate = parsed.reportDefaultEndDate || new Date();
+      const snapshotEndStr = parsed.reportEndStr;
 
-      setAllDailyIncidents(parsed.rows);
-      saveActiveIncidentDataset(parsed.rows);
+      // 1. Kumpulkan seluruh identitas insiden pada CSV OASE yang baru diupload
+      const incomingIncNums = new Set<string>();
+      const incomingCompositeKeys = new Set<string>();
+      const incomingWsidEventKeys = new Set<string>();
+
+      parsed.rows.forEach((r) => {
+        if (r.incidentNumber && r.incidentNumber !== '-') {
+          incomingIncNums.add(r.incidentNumber.trim().toUpperCase());
+        }
+        const w = (r.wsid || '').trim().toUpperCase();
+        const ev = (r.eventCodeDesc || '').trim().toUpperCase();
+        const st = (r.startTime || '').trim();
+        if (w && ev) {
+          incomingWsidEventKeys.add(`${w}|${ev}`);
+          if (st) {
+            incomingCompositeKeys.add(`${w}|${ev}|${st}`);
+          }
+        }
+      });
+
+      // 2. Kumpulkan seluruh insiden yang sebelumnya OPEN di dashboard / database
+      const previousOpenList: (OpenIncidentItem | DailyIncidentRow)[] = [];
+      const seenOpenKeys = new Set<string>();
+
+      const registerPreviousOpen = (it: any) => {
+        if (!isEndTimeFilled(it.endTime)) {
+          const k = (it.incidentNumber && it.incidentNumber !== '-')
+            ? it.incidentNumber.trim().toUpperCase()
+            : `${(it.wsid || '').trim().toUpperCase()}|${(it.eventCodeDesc || '').trim().toUpperCase()}|${(it.startTime || '').trim()}`;
+          if (!seenOpenKeys.has(k)) {
+            seenOpenKeys.add(k);
+            previousOpenList.push(it);
+          }
+        }
+      };
+
+      openIncidentsRef.current.forEach(registerPreviousOpen);
+      allDailyIncidentsRef.current.forEach(registerPreviousOpen);
+
+      // 3. REKONSILIASI SNAPSHOT (CARA 1):
+      // Jika file CSV memiliki minimal 10 baris (mencegah file test/parsial menutup problem asli),
+      // maka insiden open sebelumnya yang SUDAH HILANG dari report OASE dinyatakan RESOLVED -> AUTO-CLOSE BY DASHBOARD!
+      const autoClosedRows: DailyIncidentRow[] = [];
+      if (parsed.rows.length >= 10 && previousOpenList.length > 0) {
+        for (const prev of previousOpenList) {
+          const incNum = (prev.incidentNumber && prev.incidentNumber !== '-') ? prev.incidentNumber.trim().toUpperCase() : '';
+          const w = (prev.wsid || '').trim().toUpperCase();
+          const ev = (prev.eventCodeDesc || '').trim().toUpperCase();
+          const st = (prev.startTime || '').trim();
+
+          const isStillInOase = (incNum && incomingIncNums.has(incNum)) ||
+                                incomingCompositeKeys.has(`${w}|${ev}|${st}`) ||
+                                incomingWsidEventKeys.has(`${w}|${ev}`);
+
+          if (!isStillInOase) {
+            const startDate = parseDateTime(prev.startTime);
+            const sched = resolveOperatingSchedule(prev.wsid, undefined, masterSchedMap);
+            const durasiOpr = calculateOperationalDuration(startDate, snapshotEndDate, sched.hari, sched.jam);
+
+            const dStr = (prev as any).dateStr || (prev as any).tanggal || (prev.startTime ? prev.startTime.split(' ')[0] : '-');
+            const hStr = (prev as any).hourStr || (prev as any).jam || '00:00';
+
+            const closedItem: DailyIncidentRow = {
+              incidentNumber: prev.incidentNumber || '-',
+              wsid: prev.wsid,
+              lokasi: prev.lokasi || '-',
+              servicePointSektor: (prev as any).servicePointSektor || `${prev.servicePoint || '-'} - ${prev.sektor || '-'}`,
+              servicePoint: prev.servicePoint || '-',
+              sektor: prev.sektor || '-',
+              typeMesin: prev.typeMesin || '-',
+              vendorMesin: (prev as any).vendorMesin || (prev as any).vendor || '-',
+              startTime: prev.startTime,
+              endTime: snapshotEndStr,
+              dateStr: dStr,
+              hourStr: hStr,
+              hourNumber: (prev as any).hourNumber || 0,
+              durasi: durasiOpr,
+              rawDuration: (prev as any).rawDuration || (prev as any).durationRaw || durasiOpr,
+              eventCodeDesc: prev.eventCodeDesc,
+              eventCode: (prev as any).eventCode || '-',
+              operatingDays: sched.hari,
+              operatingHours: sched.jam,
+              detail: (prev as any).detail || '-',
+              comment: prev.comment || undefined,
+              keterangan: prev.keterangan || undefined,
+              actionTerakhir: '[AUTO-CLOSE] Problem sudah tidak muncul di report OASE',
+              actionTerakhirOleh: 'Sistem Dashboard',
+              actionTerakhirWaktu: snapshotEndStr,
+              jumlahAction: ((prev as any).jumlahAction || 0) + 1,
+              closeSource: 'DASHBOARD'
+            };
+            autoClosedRows.push(closedItem);
+          }
+        }
+      }
+
+      // 4. Bangun dataset gabungan (riwayat lama + autoClosed + data CSV baru)
+      const datasetMap = new Map<string, DailyIncidentRow>();
+
+      allDailyIncidentsRef.current.forEach((r) => {
+        const k = (r.incidentNumber && r.incidentNumber !== '-')
+          ? r.incidentNumber.trim().toUpperCase()
+          : `${(r.wsid || '').trim().toUpperCase()}|${(r.eventCodeDesc || '').trim().toUpperCase()}|${(r.startTime || '').trim()}`;
+        datasetMap.set(k, r);
+      });
+
+      autoClosedRows.forEach((r) => {
+        const k = (r.incidentNumber && r.incidentNumber !== '-')
+          ? r.incidentNumber.trim().toUpperCase()
+          : `${(r.wsid || '').trim().toUpperCase()}|${(r.eventCodeDesc || '').trim().toUpperCase()}|${(r.startTime || '').trim()}`;
+        datasetMap.set(k, r);
+      });
+
+      parsed.rows.forEach((r) => {
+        const k = (r.incidentNumber && r.incidentNumber !== '-')
+          ? r.incidentNumber.trim().toUpperCase()
+          : `${(r.wsid || '').trim().toUpperCase()}|${(r.eventCodeDesc || '').trim().toUpperCase()}|${(r.startTime || '').trim()}`;
+        datasetMap.set(k, r);
+      });
+
+      const mergedAllRows = Array.from(datasetMap.values());
+      setAllDailyIncidents(mergedAllRows);
+      saveActiveIncidentDataset(mergedAllRows);
       try {
-        localStorage.setItem(LOCAL_STORAGE_ACTIVE_DATA, JSON.stringify(parsed.rows.slice(0, 200)));
+        localStorage.setItem(LOCAL_STORAGE_ACTIVE_DATA, JSON.stringify(mergedAllRows.slice(0, 200)));
       } catch (ce) {}
 
-      const extractedOpen = extractOpenFromRows(parsed.rows);
+      const extractedOpen = extractOpenFromRows(mergedAllRows);
       setOpenIncidents(extractedOpen);
 
       saveMonitoringSnapshot({
         openIncidents: extractedOpen,
-        allDailyIncidents: parsed.rows,
+        allDailyIncidents: mergedAllRows,
         historyResults,
         lastSyncTime: Date.now()
       });
 
+      const rowsToUpload = [...parsed.rows, ...autoClosedRows];
       setUploadProgress(40);
-      setUploadMessage(`Dashboard aktif! Menyinkronkan ${parsed.rows.length.toLocaleString()} insiden ke Database Spreadsheet...`);
+      setUploadMessage(
+        `Dashboard aktif (${extractedOpen.length} Open)! Menyinkronkan ${rowsToUpload.length.toLocaleString()} insiden` +
+        (autoClosedRows.length > 0 ? ` (termasuk ${autoClosedRows.length} auto-close)...` : '...')
+      );
 
       setSyncStatusBanner({
         type: 'syncing',
@@ -3983,10 +4189,10 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
       setIsUploadModalOpen(false);
 
       const chunkSize = 2000;
-      const totalChunks = Math.ceil(parsed.rows.length / chunkSize) || 1;
+      const totalChunks = Math.ceil(rowsToUpload.length / chunkSize) || 1;
       let aggStats = {
-        totalLines: parsed.totalRawLines,
-        matched: parsed.rows.length,
+        totalLines: parsed.totalRawLines + autoClosedRows.length,
+        matched: rowsToUpload.length,
         newCount: 0,
         updatedCount: 0,
         unchangedCount: 0,
@@ -3994,7 +4200,7 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
       };
 
       for (let i = 0; i < totalChunks; i++) {
-        const chunk = parsed.rows.slice(i * chunkSize, (i + 1) * chunkSize);
+        const chunk = rowsToUpload.slice(i * chunkSize, (i + 1) * chunkSize);
         const progressPct = 40 + Math.round(((i + 1) / totalChunks) * 55);
         setUploadProgress(progressPct);
         setUploadMessage(`Sinkronisasi batch ${i + 1} dari ${totalChunks}...`);
@@ -4003,7 +4209,7 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
           uploaderName: formatPetugasSignature(petugasName),
           sumber: 'Monitoring',
           fileName: file.name,
-          totalCsvLines: parsed.totalRawLines,
+          totalCsvLines: parsed.totalRawLines + autoClosedRows.length,
           chunkIndex: i,
           totalChunks: totalChunks,
           rows: chunk
@@ -4028,9 +4234,12 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
       setUploadStats(aggStats);
       setUploadMessage('Sinkronisasi selesai! Database berhasil diperbarui.');
 
+      const autoCloseReport = autoClosedRows.length > 0
+        ? ` (${autoClosedRows.length} problem hilang dari OASE otomatis di-auto-close oleh dashboard).`
+        : '.';
       setSyncStatusBanner({
         type: 'success',
-        text: `Sukses sinkronisasi ${parsed.rows.length.toLocaleString()} insiden ke database Google Spreadsheet.`
+        text: `Sukses sinkronisasi ${parsed.rows.length.toLocaleString()} insiden ke database Google Spreadsheet${autoCloseReport}`
       });
 
       fetchUploadLogs();
@@ -8351,15 +8560,8 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
                             </td>
 
                             {/* End */}
-                            <td className="py-3 px-3 whitespace-nowrap font-mono text-xs">
-                              {r.endTime && r.endTime !== '-' ? (
-                                <span className="text-[#0D1C2E]">{formatStartProblemTime(r.endTime)}</span>
-                              ) : (
-                                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-[#FFDAD6] text-[#BA1A1A]">
-                                  <span className="w-1.5 h-1.5 rounded-full bg-[#BA1A1A] animate-pulse"></span>
-                                  <span>OPEN</span>
-                                </span>
-                              )}
+                            <td className="py-2.5 px-3 whitespace-nowrap">
+                              {renderIncidentEndTime(r)}
                             </td>
 
                             {/* Durasi */}
@@ -8890,15 +9092,8 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
                             </td>
 
                             {/* 5. End */}
-                            <td className="px-3 py-1.5 font-mono text-[11px] whitespace-nowrap">
-                              {r.endTime && r.endTime !== '-' ? (
-                                <span className="text-[#555F71]">{formatStartProblemTime(r.endTime)}</span>
-                              ) : (
-                                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-[#FFDAD6] text-[#BA1A1A]">
-                                  <span className="w-1.5 h-1.5 rounded-full bg-[#BA1A1A] animate-pulse"></span>
-                                  <span>OPEN</span>
-                                </span>
-                              )}
+                            <td className="px-3 py-1.5 whitespace-nowrap">
+                              {renderIncidentEndTime(r)}
                             </td>
 
                             {/* 6. Durasi */}
@@ -9308,6 +9503,21 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
 
             {/* Drawer Body */}
             <div className="flex-1 overflow-y-auto p-5 flex flex-col gap-5">
+              {/* Timing Info Card */}
+              <div className="grid grid-cols-2 gap-3 p-3.5 rounded-xl bg-white border border-[#E5EAF2] text-xs shadow-xs">
+                <div>
+                  <span className="text-[10px] text-[#555F71] block font-semibold uppercase tracking-wider mb-0.5">Waktu Mulai (Start)</span>
+                  <span className="font-mono text-[11px] font-semibold text-[#0D1C2E]">
+                    {getDisplayStartTime(activeIncidentDetail)}
+                  </span>
+                </div>
+                <div>
+                  <span className="text-[10px] text-[#555F71] block font-semibold uppercase tracking-wider mb-0.5">Waktu Selesai (End)</span>
+                  <div className="mt-0.5">
+                    {renderIncidentEndTime(activeIncidentDetail)}
+                  </div>
+                </div>
+              </div>
               {/* Chronic Alert Banner if detected */}
               {(() => {
                 const c = chronicInfoMap.get(activeIncidentDetail.incidentKey);

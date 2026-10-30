@@ -29,6 +29,8 @@ export interface DailyIncidentRow {
   actionTerakhirOleh?: string;
   actionTerakhirWaktu?: string;
   jumlahAction?: number;
+  closeSource?: 'OASE' | 'DASHBOARD' | '-';
+  monthStr?: string;
 }
 
 export const TARGET_EVENT_CODES: string[] = [
@@ -514,6 +516,15 @@ export function splitCsvLine(line: string): string[] {
   return result;
 }
 
+export interface ParseDailyIncidentResult {
+  rows: DailyIncidentRow[];
+  totalRawLines: number;
+  matchedCount: number;
+  reportDateStr?: string;
+  reportDefaultEndDate: Date;
+  reportEndStr: string;
+}
+
 /**
  * Parsing file Incident Report CSV
  */
@@ -523,12 +534,7 @@ export async function parseDailyIncidentCsv(
     masterData?: MasterRow[];
     customJamMap?: Map<string, { hari: string; jam: string }>;
   }
-): Promise<{
-  rows: DailyIncidentRow[];
-  totalRawLines: number;
-  matchedCount: number;
-  reportDateStr?: string;
-}> {
+): Promise<ParseDailyIncidentResult> {
   let content = '';
   let filename = '';
 
@@ -540,11 +546,45 @@ export async function parseDailyIncidentCsv(
   }
 
   let reportDefaultEndDate: Date | null = null;
+  let reportDateStr: string | undefined = undefined;
   let targetMonthHint = 10;
-  const matchFn = filename.match(/(\d{2})(\d{2})(\d{4})_(\d{2})-(\d{2})-(\d{2})/);
-  if (matchFn) {
-    const [, d, m, y, hr, min, sec] = matchFn;
+
+  // Coba ekstrak timestamp snapshot dari pola nama file OASE yang umum
+  // 1. DDMMYYYY_HH-mm-ss / DDMMYYYY_HHmmss (contoh: 13102026_14-00-00.csv)
+  const matchFn1 = filename.match(/(\d{2})(\d{2})(\d{4})_(\d{2})[-_:]?(\d{2})[-_:]?(\d{2})/);
+  // 2. YYYY-MM-DD_HH-mm-ss / YYYYMMDD_HHmmss (contoh: 2026-10-13_14-00-00.csv)
+  const matchFn2 = filename.match(/(\d{4})[-_]?(\d{2})[-_]?(\d{2})[-_T](\d{2})[-_:]?(\d{2})[-_:]?(\d{2})/);
+  // 3. DD-MM-YYYY_HH-mm-ss (contoh: 13-10-2026_14-00-00.csv)
+  const matchFn3 = filename.match(/(\d{2})[-_](\d{2})[-_](\d{4})[-_](\d{2})[-_:]?(\d{2})[-_:]?(\d{2})/);
+
+  if (matchFn1) {
+    const [, d, m, y, hr, min, sec] = matchFn1;
     targetMonthHint = parseInt(m, 10) || 10;
+    reportDateStr = `${d}/${m}/${y}`;
+    reportDefaultEndDate = new Date(
+      parseInt(y, 10),
+      parseInt(m, 10) - 1,
+      parseInt(d, 10),
+      parseInt(hr, 10),
+      parseInt(min, 10),
+      parseInt(sec, 10)
+    );
+  } else if (matchFn2) {
+    const [, y, m, d, hr, min, sec] = matchFn2;
+    targetMonthHint = parseInt(m, 10) || 10;
+    reportDateStr = `${d}/${m}/${y}`;
+    reportDefaultEndDate = new Date(
+      parseInt(y, 10),
+      parseInt(m, 10) - 1,
+      parseInt(d, 10),
+      parseInt(hr, 10),
+      parseInt(min, 10),
+      parseInt(sec, 10)
+    );
+  } else if (matchFn3) {
+    const [, d, m, y, hr, min, sec] = matchFn3;
+    targetMonthHint = parseInt(m, 10) || 10;
+    reportDateStr = `${d}/${m}/${y}`;
     reportDefaultEndDate = new Date(
       parseInt(y, 10),
       parseInt(m, 10) - 1,
@@ -554,6 +594,15 @@ export async function parseDailyIncidentCsv(
       parseInt(sec, 10)
     );
   }
+
+  const finalEndDate = reportDefaultEndDate || new Date();
+  const dStr = String(finalEndDate.getDate()).padStart(2, '0');
+  const mStr = String(finalEndDate.getMonth() + 1).padStart(2, '0');
+  const yStr = finalEndDate.getFullYear();
+  const hrStr = String(finalEndDate.getHours()).padStart(2, '0');
+  const mnStr = String(finalEndDate.getMinutes()).padStart(2, '0');
+  const scStr = String(finalEndDate.getSeconds()).padStart(2, '0');
+  const reportEndStr = `${dStr}/${mStr}/${yStr} ${hrStr}:${mnStr}:${scStr}`;
 
   // Buat lookup Master Data Mesin jika ada
   const masterMap = new Map<string, MasterRow>();
@@ -662,6 +711,8 @@ export async function parseDailyIncidentCsv(
       }
     }
 
+    const isClosed = isEndTimeFilled(endTimeStr);
+
     rows.push({
       incidentNumber: getCol(parts, 'Incident Number', 'incident number'),
       wsid,
@@ -694,7 +745,9 @@ export async function parseDailyIncidentCsv(
       actionTerakhir: undefined,
       actionTerakhirOleh: undefined,
       actionTerakhirWaktu: undefined,
-      jumlahAction: 0
+      jumlahAction: 0,
+      closeSource: isClosed ? 'OASE' : '-',
+      monthStr: normalizeMonthStr(startTimeStr) || '2026-10'
     });
   }
 
@@ -702,7 +755,9 @@ export async function parseDailyIncidentCsv(
     rows,
     totalRawLines: totalLines - 1,
     matchedCount: rows.length,
-    reportDateStr: matchFn ? `${matchFn[1]}/${matchFn[2]}/${matchFn[3]}` : undefined
+    reportDateStr: reportDateStr || `${dStr}/${mStr}/${yStr}`,
+    reportDefaultEndDate: finalEndDate,
+    reportEndStr
   };
 }
 
