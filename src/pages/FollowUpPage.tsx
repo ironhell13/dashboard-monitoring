@@ -43,6 +43,7 @@ import {
 } from '../utils/spreadsheetService';
 import { formatBulanTahun, getServicePointName } from '../utils/comprehensiveExporter';
 import { evaluateMachineHealth } from '../utils/slaHelper';
+import StickyTableWrapper from '../components/StickyTableWrapper';
 
 const ROOT_CAUSE_PRESETS = [
   'Frekuensi Pengisian',
@@ -1073,7 +1074,7 @@ export default function FollowUpPage() {
 
           {/* Table */}
           <div className="bg-white border border-[#E5EAF2] rounded-lg shadow-2xs overflow-hidden">
-            <div className="overflow-x-auto">
+            <StickyTableWrapper>
               <table className="w-full text-left text-xs border-collapse">
                 <thead>
                   <tr className="bg-[#F8FAFC] text-slate-600 font-semibold uppercase text-[11px] tracking-wider border-b border-[#E5EAF2]">
@@ -1184,7 +1185,7 @@ export default function FollowUpPage() {
                   )}
                 </tbody>
               </table>
-            </div>
+            </StickyTableWrapper>
           </div>
         </div>
       )}
@@ -1241,7 +1242,7 @@ export default function FollowUpPage() {
 
           {/* Table */}
           <div className="bg-white border border-[#E5EAF2] rounded-lg shadow-2xs overflow-hidden">
-            <div className="overflow-x-auto">
+            <StickyTableWrapper>
               <table className="w-full text-left text-xs border-collapse">
                 <thead>
                   <tr className="bg-[#F8FAFC] text-slate-600 font-semibold uppercase text-[11px] tracking-wider border-b border-[#E5EAF2]">
@@ -1354,7 +1355,7 @@ export default function FollowUpPage() {
                   )}
                 </tbody>
               </table>
-            </div>
+            </StickyTableWrapper>
           </div>
         </div>
       )}
@@ -1373,7 +1374,7 @@ export default function FollowUpPage() {
           </div>
 
           <div className="bg-white border border-[#E5EAF2] rounded-lg shadow-2xs overflow-hidden">
-            <div className="overflow-x-auto">
+            <StickyTableWrapper>
               <table className="w-full text-left text-xs border-collapse">
                 <thead>
                   <tr className="bg-[#F8FAFC] text-slate-600 font-semibold uppercase text-[11px] tracking-wider border-b border-[#E5EAF2]">
@@ -1469,7 +1470,7 @@ export default function FollowUpPage() {
                   )}
                 </tbody>
               </table>
-            </div>
+            </StickyTableWrapper>
           </div>
         </div>
       )}

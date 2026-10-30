@@ -1,6 +1,7 @@
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useFilteredData } from '../hooks/useFilteredData';
+import StickyTableWrapper from '../components/StickyTableWrapper';
 import { getFrxDurForCategory } from '../utils/problemCalculator';
 import {
   Search,
@@ -660,7 +661,7 @@ export default function AllWsidPage() {
             </div>
           </div>
 
-          <div className="overflow-x-auto">
+          <StickyTableWrapper>
             <table className="w-full text-left text-xs border-collapse">
               <thead>
                 <tr className="h-8 bg-[#F8FAFC] text-slate-600 font-semibold uppercase tracking-wider text-[11px] select-none border-b border-[#E5EAF2]">
@@ -887,7 +888,7 @@ export default function AllWsidPage() {
                 )}
               </tbody>
             </table>
-          </div>
+          </StickyTableWrapper>
 
           {/* Pagination Controls */}
           {pageSize > 0 && totalPages > 1 && (

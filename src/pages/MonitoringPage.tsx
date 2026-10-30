@@ -93,6 +93,7 @@ import {
   type UploadLogItem
 } from '../utils/monitoringService';
 import { BackendConfigModal } from '../components/BackendConfigModal';
+import StickyTableWrapper from '../components/StickyTableWrapper';
 import { isBackendConfigured } from '../utils/apiClient';
 import {
   parseDailyIncidentCsv,
@@ -4434,12 +4435,6 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
 
           {/* Right Utility Bar */}
           <div className="flex items-center gap-2 sm:gap-2.5">
-            {/* Live Sync Pill */}
-            <div className="hidden lg:flex items-center gap-1.5 px-2 py-0.5 rounded-md bg-[#EFF4FF] text-[#555F71] text-[10px] font-medium border border-[#E5EAF2]">
-              <span className="w-1.5 h-1.5 rounded-full bg-blue-600 animate-pulse"></span>
-              <span>Tersinkronisasi &bull; {new Date().toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })} WIB</span>
-            </div>
-
             {/* Petugas Capsule */}
             <button
               onClick={openDutyModal}
@@ -4481,20 +4476,6 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
                   {reOpenTicketsCount > 0 ? `! ${reOpenTicketsCount}` : activeTickets.length}
                 </span>
               )}
-            </button>
-
-            {/* Tombol Status Koneksi Backend Google Apps Script */}
-            <button
-              onClick={() => setIsConfigModalOpen(true)}
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold border transition-all cursor-pointer shadow-xs ${
-                backendActive
-                  ? 'bg-emerald-50 hover:bg-emerald-100/80 border-emerald-300/80 text-emerald-800'
-                  : 'bg-amber-50 hover:bg-amber-100/80 border-amber-300/80 text-amber-800'
-              }`}
-              title="Pengaturan Koneksi Google Apps Script Backend"
-            >
-              <span className={`w-2 h-2 rounded-full ${backendActive ? 'bg-emerald-500 animate-pulse' : 'bg-amber-500'}`} />
-              <span className="hidden sm:inline">{backendActive ? 'GAS Connected' : 'Setup API'}</span>
             </button>
 
             {/* Hidden Input for Instant CSV */}
@@ -4648,13 +4629,9 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
                 <h1 className="font-bold text-lg sm:text-xl text-[#0D1C2E] tracking-tight">
                   Monitoring Problem Open
                 </h1>
-                <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-[#FFDAD6] text-[#BA1A1A] text-[10px] font-bold uppercase tracking-wider">
-                  <span className="w-1.5 h-1.5 rounded-full bg-[#BA1A1A] animate-ping"></span>
-                  {countOpenTotal} Aktif
-                </span>
-                <div className="flex items-center gap-1.5 text-[#555F71] text-[11px] bg-white border border-[#EFF4FF] px-2.5 py-1 rounded-full shadow-2xs">
-                  <Clock size={12} className="text-blue-600" />
-                  <span>Waktu Monitoring: <strong className="text-[#0D1C2E] font-semibold">{currentLiveTime.toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit', second: '2-digit' })} WIB</strong></span>
+                <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-white text-[#555F71] text-[11px] font-medium border border-[#E5EAF2] shadow-2xs">
+                  <span className="w-1.5 h-1.5 rounded-full bg-blue-600 animate-pulse"></span>
+                  <span>Tersinkronisasi &bull; {currentLiveTime.toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })} WIB</span>
                 </div>
                 <button
                   type="button"
@@ -4889,11 +4866,6 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
                 </div>
 
                 <div className="flex items-center gap-2 shrink-0 self-end md:self-auto flex-wrap">
-                  {/* Result Count Indicator */}
-                  <span className="text-[11px] font-medium text-slate-600 bg-slate-50 px-2 h-8 inline-flex items-center rounded-md border border-[#E5EAF2]">
-                    <strong className="text-slate-900 mr-1">{filteredOpenIncidents.length}</strong> dari {countOpenTotal} open
-                  </span>
-
                   {/* Sort Dropdown */}
                   <div className="relative">
                     <select
@@ -5669,7 +5641,7 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
 
             {/* Main Incident Table Container (Enterprise Compact Table) */}
             <div className="bg-white rounded-lg p-3 shadow-2xs border border-[#E5EAF2] flex flex-col">
-              <div className="overflow-x-auto w-full">
+              <StickyTableWrapper tableWrapperClassName="w-full">
                 <table className="w-full text-left border-collapse min-w-[1000px]">
                   <thead>
                     <tr className="h-8 bg-[#F8FAFC] text-slate-600 text-[11px] font-semibold uppercase tracking-wider border-b border-[#E5EAF2]">
@@ -6011,7 +5983,7 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
                     )}
                   </tbody>
                 </table>
-              </div>
+              </StickyTableWrapper>
 
               {/* Pagination Footer */}
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-3 mt-2 border-t border-[#EFF4FF] text-xs text-[#555F71]">
@@ -7307,7 +7279,7 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
               </div>
 
               {/* Table Body */}
-              <div className="overflow-x-auto">
+              <StickyTableWrapper>
                 <table className="w-full text-left text-xs border-collapse">
                   <thead>
                     <tr className="bg-[#F8F9FF] text-[#555F71] border-b border-slate-100 text-[11px] font-bold uppercase tracking-wider">
@@ -7387,7 +7359,7 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
                     )}
                   </tbody>
                 </table>
-              </div>
+              </StickyTableWrapper>
 
               {/* Table Footer & Pagination */}
               <div className="p-3.5 border-t border-slate-100 flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-white text-xs text-slate-500">
@@ -11167,15 +11139,8 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
       {/* 8. FOOTER                                            */}
       {/* ==================================================== */}
       {!isSupervisorRole && (
-        <footer className="w-full bg-white border-t border-[#EFF4FF] shadow-[0_-1px_8px_rgba(0,0,0,0.02)] mt-auto">
-          <div className="max-w-[1440px] mx-auto px-4 sm:px-8 py-3.5 flex flex-col sm:flex-row items-center justify-between gap-2 text-[11px] text-[#555F71]">
-            <div>&copy; 2026 PT Bank Central Asia Tbk &bull; Operational Terminal Management System</div>
-            <div className="flex items-center gap-4">
-              <span>Versi v2.4.0-prod</span>
-              <span>&bull;</span>
-              <span>SLA Operasional: 99.98%</span>
-            </div>
-          </div>
+        <footer className="w-full bg-white border-t border-[#E5EAF2] py-3 text-center text-xs text-slate-400 mt-auto">
+          ©️ 2026 Mons Digital Studio • eMons ATM CRM
         </footer>
       )}
     </div>

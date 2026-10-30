@@ -7,6 +7,7 @@ import { Download, Layers, MapPin, FileSpreadsheet, ChevronDown, ChevronUp, Arro
 import { exportMesinPerSektorExcel, SERVICE_POINT_MAP, getServicePointName } from '../utils/comprehensiveExporter';
 import { aggregateMachinesData, getHighestProblemCategory, getValueForCategory, getFrxDurForCategory, type HighestProblemResult } from '../utils/problemCalculator';
 import { cleanSektorName } from '../utils/dailyIncidentParser';
+import StickyTableWrapper from '../components/StickyTableWrapper';
 
 interface SektorRow {
   sektor: string;
@@ -193,7 +194,7 @@ export default function MesinPerSektorPage() {
       </div>
 
       <div className="bg-white rounded-lg overflow-hidden shadow-2xs border border-[#E5EAF2]">
-        <div className="overflow-x-auto">
+        <StickyTableWrapper>
           <table className="w-full text-xs text-left">
             <thead className="bg-[#F8FAFC] text-slate-600 font-semibold border-b border-[#E5EAF2] select-none text-[11px]">
               <tr>
@@ -365,7 +366,7 @@ export default function MesinPerSektorPage() {
               )}
             </tbody>
           </table>
-        </div>
+        </StickyTableWrapper>
       </div>
     </div>
   );

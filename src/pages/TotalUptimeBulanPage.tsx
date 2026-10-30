@@ -1,5 +1,6 @@
-import React, { useMemo } from 'react';
+import React, { useMemo, useState } from 'react';
 import { useDataStore } from '../store/useDataStore';
+import StickyTableWrapper from '../components/StickyTableWrapper';
 import { 
   Activity, 
   TrendingUp, 
@@ -29,6 +30,7 @@ const SLA_ATM = 99.00;
 const SLA_CRM = 98.50;
 
 export default function TotalUptimeBulanPage() {
+  const [tableViewMode, setTableViewMode] = useState<'COMBINED' | 'SPLIT' | 'ATM' | 'CRM'>('COMBINED');
   const { 
     globalTrendData, 
     rawMasterData, 
@@ -362,48 +364,288 @@ export default function TotalUptimeBulanPage() {
 
       {/* Detailed Monthly Performance Table */}
       <div className="bg-white rounded-lg overflow-hidden shadow-2xs border border-[#E5EAF2]">
-        <div className="px-4 py-3 border-b border-[#E5EAF2] flex items-center justify-between">
+        <div className="px-4 py-3 border-b border-[#E5EAF2] flex flex-col sm:flex-row sm:items-center justify-between gap-3">
           <div>
-            <h3 className="font-semibold text-slate-900 text-xs">Tabel Rekapitulasi Performa Bulanan</h3>
-            <p className="text-[11px] text-slate-500 mt-0.5">Perbandingan detail performa Uptime dan kepatuhan SLA BCA per bulan</p>
+            <div className="flex items-center gap-2">
+              <h3 className="font-semibold text-slate-900 text-xs">Tabel Rekapitulasi Performa Bulanan</h3>
+              <span className="text-[10px] bg-slate-100 text-slate-600 px-2 py-0.5 rounded font-medium border border-slate-200">
+                {chartData.length} Bulan
+              </span>
+            </div>
+            <p className="text-[11px] text-slate-500 mt-0.5">
+              Perbandingan terpisah performa Uptime dan kepatuhan SLA antara Mesin ATM vs Mesin CRM
+            </p>
           </div>
-          <span className="text-[11px] text-slate-400 font-medium">Total: {chartData.length} Bulan</span>
+
+          {/* View Mode Toggle: Gabungan dengan Pembatas / Pisah 2 Tabel / ATM Saja / CRM Saja */}
+          <div className="flex items-center bg-slate-100 p-0.5 rounded-md border border-slate-200 text-[11px] font-medium">
+            <button
+              type="button"
+              onClick={() => setTableViewMode('COMBINED')}
+              className={`px-2.5 py-1 rounded transition-colors cursor-pointer ${
+                tableViewMode === 'COMBINED'
+                  ? 'bg-white text-blue-600 font-semibold shadow-2xs'
+                  : 'text-slate-600 hover:text-slate-900'
+              }`}
+            >
+              Gabungan (Ada Pembatas)
+            </button>
+            <button
+              type="button"
+              onClick={() => setTableViewMode('SPLIT')}
+              className={`px-2.5 py-1 rounded transition-colors cursor-pointer ${
+                tableViewMode === 'SPLIT'
+                  ? 'bg-white text-blue-600 font-semibold shadow-2xs'
+                  : 'text-slate-600 hover:text-slate-900'
+              }`}
+            >
+              Pisah 2 Tabel
+            </button>
+            <button
+              type="button"
+              onClick={() => setTableViewMode('ATM')}
+              className={`px-2.5 py-1 rounded transition-colors cursor-pointer ${
+                tableViewMode === 'ATM'
+                  ? 'bg-white text-blue-600 font-semibold shadow-2xs'
+                  : 'text-slate-600 hover:text-slate-900'
+              }`}
+            >
+              Hanya ATM
+            </button>
+            <button
+              type="button"
+              onClick={() => setTableViewMode('CRM')}
+              className={`px-2.5 py-1 rounded transition-colors cursor-pointer ${
+                tableViewMode === 'CRM'
+                  ? 'bg-white text-blue-600 font-semibold shadow-2xs'
+                  : 'text-slate-600 hover:text-slate-900'
+              }`}
+            >
+              Hanya CRM
+            </button>
+          </div>
         </div>
 
-        <div className="overflow-x-auto">
-          <table className="w-full text-xs text-left">
-            <thead className="bg-[#F8FAFC] text-slate-600 font-semibold border-b border-[#E5EAF2] text-[11px]">
-              <tr>
-                <th className="px-3 py-1.5">Periode Bulan</th>
-                <th className="px-3 py-1.5 text-center">Populasi ATM</th>
-                <th className="px-3 py-1.5 text-center">Uptime ATM (%)</th>
-                <th className="px-3 py-1.5 text-center">Status SLA ATM</th>
-                <th className="px-3 py-1.5 text-center">Populasi CRM</th>
-                <th className="px-3 py-1.5 text-center">Uptime CRM (%)</th>
-                <th className="px-3 py-1.5 text-center">Status SLA CRM</th>
-                <th className="px-3 py-1.5 text-center font-bold text-slate-800">Total Mesin</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-[#E5EAF2]">
-              {chartData.length === 0 ? (
-                <tr>
-                  <td colSpan={8} className="px-3 py-8 text-center text-slate-400">
-                    Tidak ada data bulanan yang tersedia.
-                  </td>
+        {/* 1. TAMPILAN GABUNGAN DENGAN PEMBATAS TEGAS */}
+        {tableViewMode === 'COMBINED' && (
+          <StickyTableWrapper>
+            <table className="w-full text-xs text-left border-collapse">
+              <thead>
+                {/* Baris 1 Group Header: ATM vs CRM Pembatas Jelas */}
+                <tr className="border-b border-[#E5EAF2] text-[11px]">
+                  <th rowSpan={2} className="px-3 py-2 font-semibold text-slate-700 bg-slate-50 border-r-2 border-slate-300">
+                    Periode Bulan
+                  </th>
+                  <th colSpan={3} className="px-3 py-1.5 text-center font-bold text-blue-700 bg-blue-50/70 border-r-2 border-slate-300">
+                    <div className="flex items-center justify-center gap-1.5">
+                      <span className="w-2 h-2 rounded-full bg-blue-600"></span>
+                      <span>DATA MESIN ATM BCA (SLA &ge; 99.00%)</span>
+                    </div>
+                  </th>
+                  <th colSpan={3} className="px-3 py-1.5 text-center font-bold text-indigo-700 bg-indigo-50/70 border-r-2 border-slate-300">
+                    <div className="flex items-center justify-center gap-1.5">
+                      <span className="w-2 h-2 rounded-full bg-indigo-600"></span>
+                      <span>DATA MESIN CRM / ATS BCA (SLA &ge; 98.50%)</span>
+                    </div>
+                  </th>
+                  <th rowSpan={2} className="px-3 py-2 text-center font-bold text-slate-800 bg-slate-50">
+                    Total Mesin
+                  </th>
                 </tr>
-              ) : (
-                chartData.map((data) => {
-                  const atmAchieved = data.uptimeATM !== null && data.uptimeATM >= SLA_ATM;
-                  const crmAchieved = data.uptimeCRM !== null && data.uptimeCRM >= SLA_CRM;
+                {/* Baris 2 Sub Header */}
+                <tr className="bg-[#F8FAFC] text-slate-600 font-semibold border-b border-[#E5EAF2] text-[10px]">
+                  <th className="px-3 py-1 text-center bg-blue-50/30 text-blue-900 font-medium">Populasi</th>
+                  <th className="px-3 py-1 text-center bg-blue-50/30 text-blue-900 font-medium">Uptime (%)</th>
+                  <th className="px-3 py-1 text-center bg-blue-50/30 text-blue-900 font-medium border-r-2 border-slate-300">Status SLA</th>
+                  
+                  <th className="px-3 py-1 text-center bg-indigo-50/30 text-indigo-900 font-medium">Populasi</th>
+                  <th className="px-3 py-1 text-center bg-indigo-50/30 text-indigo-900 font-medium">Uptime (%)</th>
+                  <th className="px-3 py-1 text-center bg-indigo-50/30 text-indigo-900 font-medium border-r-2 border-slate-300">Status SLA</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-[#E5EAF2]">
+                {chartData.length === 0 ? (
+                  <tr>
+                    <td colSpan={8} className="px-3 py-8 text-center text-slate-400">
+                      Tidak ada data bulanan yang tersedia.
+                    </td>
+                  </tr>
+                ) : (
+                  chartData.map((data) => {
+                    const atmAchieved = data.uptimeATM !== null && data.uptimeATM >= SLA_ATM;
+                    const crmAchieved = data.uptimeCRM !== null && data.uptimeCRM >= SLA_CRM;
 
+                    return (
+                      <tr key={data.periodeRaw} className="hover:bg-slate-50/70 transition-colors">
+                        <td className="px-3 py-1.5 font-semibold text-slate-900 border-r-2 border-slate-300 bg-slate-50/30">{data.periodeLabel}</td>
+                        
+                        {/* ATM Info */}
+                        <td className="px-3 py-1.5 text-center text-slate-700 bg-blue-50/10">
+                          {data.mesinATM.toLocaleString()}
+                        </td>
+                        <td className="px-3 py-1.5 text-center font-bold text-blue-600 bg-blue-50/10">
+                          {data.uptimeATM !== null ? `${data.uptimeATM.toFixed(2)}%` : '-'}
+                        </td>
+                        <td className="px-3 py-1.5 text-center border-r-2 border-slate-300 bg-blue-50/10">
+                          {data.uptimeATM !== null ? (
+                            <span className={`inline-flex items-center gap-1 text-[10px] font-semibold px-1.5 py-0.2 rounded ${
+                              atmAchieved ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' : 'bg-rose-50 text-rose-700 border border-rose-200'
+                            }`}>
+                              {atmAchieved ? <CheckCircle2 size={10} /> : <AlertTriangle size={10} />}
+                              {atmAchieved ? 'ACHIEVED' : 'NOT ACHIEVED'}
+                            </span>
+                          ) : '-'}
+                        </td>
+
+                        {/* CRM Info */}
+                        <td className="px-3 py-1.5 text-center text-slate-700 bg-indigo-50/10">
+                          {data.mesinCRM.toLocaleString()}
+                        </td>
+                        <td className="px-3 py-1.5 text-center font-bold text-indigo-600 bg-indigo-50/10">
+                          {data.uptimeCRM !== null ? `${data.uptimeCRM.toFixed(2)}%` : '-'}
+                        </td>
+                        <td className="px-3 py-1.5 text-center border-r-2 border-slate-300 bg-indigo-50/10">
+                          {data.uptimeCRM !== null ? (
+                            <span className={`inline-flex items-center gap-1 text-[10px] font-semibold px-1.5 py-0.2 rounded ${
+                              crmAchieved ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' : 'bg-rose-50 text-rose-700 border border-rose-200'
+                            }`}>
+                              {crmAchieved ? <CheckCircle2 size={10} /> : <AlertTriangle size={10} />}
+                              {crmAchieved ? 'ACHIEVED' : 'NOT ACHIEVED'}
+                            </span>
+                          ) : '-'}
+                        </td>
+
+                        {/* Total */}
+                        <td className="px-3 py-1.5 text-center font-bold text-slate-900 bg-slate-50/30">
+                          {data.totalMesin.toLocaleString()}
+                        </td>
+                      </tr>
+                    );
+                  })
+                )}
+              </tbody>
+            </table>
+          </StickyTableWrapper>
+        )}
+
+        {/* 2. TAMPILAN PISAH 2 TABEL (BERDAMPINGAN / DEDIKASI MASING-MASING) */}
+        {tableViewMode === 'SPLIT' && (
+          <div className="p-3 grid grid-cols-1 lg:grid-cols-2 gap-4">
+            {/* Tabel 1: ATM */}
+            <div className="border border-blue-200 rounded-lg overflow-hidden">
+              <div className="bg-blue-50/80 px-3 py-2 border-b border-blue-200 flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <span className="w-2.5 h-2.5 rounded-full bg-blue-600"></span>
+                  <span className="text-xs font-bold text-blue-900">Tabel Performa Mesin ATM (BCA)</span>
+                </div>
+                <span className="text-[10px] text-blue-700 font-medium">Target SLA: 99.00%</span>
+              </div>
+              <StickyTableWrapper>
+                <table className="w-full text-xs text-left">
+                  <thead className="bg-slate-50 text-slate-600 font-semibold border-b border-[#E5EAF2] text-[11px]">
+                    <tr>
+                      <th className="px-3 py-1.5">Periode</th>
+                      <th className="px-3 py-1.5 text-center">Populasi ATM</th>
+                      <th className="px-3 py-1.5 text-center">Uptime ATM (%)</th>
+                      <th className="px-3 py-1.5 text-center">Status SLA</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-[#E5EAF2]">
+                    {chartData.map((data) => {
+                      const atmAchieved = data.uptimeATM !== null && data.uptimeATM >= SLA_ATM;
+                      return (
+                        <tr key={data.periodeRaw} className="hover:bg-blue-50/30 transition-colors">
+                          <td className="px-3 py-1.5 font-semibold text-slate-900">{data.periodeLabel}</td>
+                          <td className="px-3 py-1.5 text-center text-slate-600">{data.mesinATM.toLocaleString()}</td>
+                          <td className="px-3 py-1.5 text-center font-bold text-blue-600">
+                            {data.uptimeATM !== null ? `${data.uptimeATM.toFixed(2)}%` : '-'}
+                          </td>
+                          <td className="px-3 py-1.5 text-center">
+                            {data.uptimeATM !== null ? (
+                              <span className={`inline-flex items-center gap-1 text-[10px] font-semibold px-1.5 py-0.2 rounded ${
+                                atmAchieved ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' : 'bg-rose-50 text-rose-700 border border-rose-200'
+                              }`}>
+                                {atmAchieved ? <CheckCircle2 size={10} /> : <AlertTriangle size={10} />}
+                                {atmAchieved ? 'ACHIEVED' : 'NOT ACHIEVED'}
+                              </span>
+                            ) : '-'}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </StickyTableWrapper>
+            </div>
+
+            {/* Tabel 2: CRM */}
+            <div className="border border-indigo-200 rounded-lg overflow-hidden">
+              <div className="bg-indigo-50/80 px-3 py-2 border-b border-indigo-200 flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <span className="w-2.5 h-2.5 rounded-full bg-indigo-600"></span>
+                  <span className="text-xs font-bold text-indigo-900">Tabel Performa Mesin CRM / ATS (BCA)</span>
+                </div>
+                <span className="text-[10px] text-indigo-700 font-medium">Target SLA: 98.50%</span>
+              </div>
+              <StickyTableWrapper>
+                <table className="w-full text-xs text-left">
+                  <thead className="bg-slate-50 text-slate-600 font-semibold border-b border-[#E5EAF2] text-[11px]">
+                    <tr>
+                      <th className="px-3 py-1.5">Periode</th>
+                      <th className="px-3 py-1.5 text-center">Populasi CRM</th>
+                      <th className="px-3 py-1.5 text-center">Uptime CRM (%)</th>
+                      <th className="px-3 py-1.5 text-center">Status SLA</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-[#E5EAF2]">
+                    {chartData.map((data) => {
+                      const crmAchieved = data.uptimeCRM !== null && data.uptimeCRM >= SLA_CRM;
+                      return (
+                        <tr key={data.periodeRaw} className="hover:bg-indigo-50/30 transition-colors">
+                          <td className="px-3 py-1.5 font-semibold text-slate-900">{data.periodeLabel}</td>
+                          <td className="px-3 py-1.5 text-center text-slate-600">{data.mesinCRM.toLocaleString()}</td>
+                          <td className="px-3 py-1.5 text-center font-bold text-indigo-600">
+                            {data.uptimeCRM !== null ? `${data.uptimeCRM.toFixed(2)}%` : '-'}
+                          </td>
+                          <td className="px-3 py-1.5 text-center">
+                            {data.uptimeCRM !== null ? (
+                              <span className={`inline-flex items-center gap-1 text-[10px] font-semibold px-1.5 py-0.2 rounded ${
+                                crmAchieved ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' : 'bg-rose-50 text-rose-700 border border-rose-200'
+                              }`}>
+                                {crmAchieved ? <CheckCircle2 size={10} /> : <AlertTriangle size={10} />}
+                                {crmAchieved ? 'ACHIEVED' : 'NOT ACHIEVED'}
+                              </span>
+                            ) : '-'}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </StickyTableWrapper>
+            </div>
+          </div>
+        )}
+
+        {/* 3. TAMPILAN HANYA ATM */}
+        {tableViewMode === 'ATM' && (
+          <StickyTableWrapper>
+            <table className="w-full text-xs text-left">
+              <thead className="bg-blue-50/60 text-blue-900 font-semibold border-b border-blue-200 text-[11px]">
+                <tr>
+                  <th className="px-3 py-1.5">Periode Bulan</th>
+                  <th className="px-3 py-1.5 text-center">Populasi ATM</th>
+                  <th className="px-3 py-1.5 text-center">Uptime ATM (%)</th>
+                  <th className="px-3 py-1.5 text-center">Status SLA ATM (Target &ge; 99.00%)</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-[#E5EAF2]">
+                {chartData.map((data) => {
+                  const atmAchieved = data.uptimeATM !== null && data.uptimeATM >= SLA_ATM;
                   return (
-                    <tr key={data.periodeRaw} className="hover:bg-slate-50/70 transition-colors">
+                    <tr key={data.periodeRaw} className="hover:bg-blue-50/20 transition-colors">
                       <td className="px-3 py-1.5 font-semibold text-slate-900">{data.periodeLabel}</td>
-                      
-                      {/* ATM Info */}
-                      <td className="px-3 py-1.5 text-center text-slate-600">
-                        {data.mesinATM.toLocaleString()}
-                      </td>
+                      <td className="px-3 py-1.5 text-center text-slate-600">{data.mesinATM.toLocaleString()}</td>
                       <td className="px-3 py-1.5 text-center font-bold text-blue-600">
                         {data.uptimeATM !== null ? `${data.uptimeATM.toFixed(2)}%` : '-'}
                       </td>
@@ -417,12 +659,34 @@ export default function TotalUptimeBulanPage() {
                           </span>
                         ) : '-'}
                       </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </StickyTableWrapper>
+        )}
 
-                      {/* CRM Info */}
-                      <td className="px-3 py-1.5 text-center text-slate-600">
-                        {data.mesinCRM.toLocaleString()}
-                      </td>
-                      <td className="px-3 py-1.5 text-center font-bold text-blue-600">
+        {/* 4. TAMPILAN HANYA CRM */}
+        {tableViewMode === 'CRM' && (
+          <StickyTableWrapper>
+            <table className="w-full text-xs text-left">
+              <thead className="bg-indigo-50/60 text-indigo-900 font-semibold border-b border-indigo-200 text-[11px]">
+                <tr>
+                  <th className="px-3 py-1.5">Periode Bulan</th>
+                  <th className="px-3 py-1.5 text-center">Populasi CRM</th>
+                  <th className="px-3 py-1.5 text-center">Uptime CRM (%)</th>
+                  <th className="px-3 py-1.5 text-center">Status SLA CRM (Target &ge; 98.50%)</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-[#E5EAF2]">
+                {chartData.map((data) => {
+                  const crmAchieved = data.uptimeCRM !== null && data.uptimeCRM >= SLA_CRM;
+                  return (
+                    <tr key={data.periodeRaw} className="hover:bg-indigo-50/20 transition-colors">
+                      <td className="px-3 py-1.5 font-semibold text-slate-900">{data.periodeLabel}</td>
+                      <td className="px-3 py-1.5 text-center text-slate-600">{data.mesinCRM.toLocaleString()}</td>
+                      <td className="px-3 py-1.5 text-center font-bold text-indigo-600">
                         {data.uptimeCRM !== null ? `${data.uptimeCRM.toFixed(2)}%` : '-'}
                       </td>
                       <td className="px-3 py-1.5 text-center">
@@ -435,18 +699,13 @@ export default function TotalUptimeBulanPage() {
                           </span>
                         ) : '-'}
                       </td>
-
-                      {/* Total */}
-                      <td className="px-3 py-1.5 text-center font-bold text-slate-900">
-                        {data.totalMesin.toLocaleString()}
-                      </td>
                     </tr>
                   );
-                })
-              )}
-            </tbody>
-          </table>
-        </div>
+                })}
+              </tbody>
+            </table>
+          </StickyTableWrapper>
+        )}
       </div>
     </div>
   );

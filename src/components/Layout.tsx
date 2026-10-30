@@ -103,9 +103,6 @@ export default function Layout({ onLogout, userRole }: LayoutProps) {
                     <span className="text-slate-900 font-bold text-xs tracking-tight truncate">
                       eMons ATM CRM
                     </span>
-                    <span className="text-[8px] bg-blue-50 text-blue-700 font-semibold px-1 py-0.2 rounded border border-blue-200/60 shrink-0">
-                      PROD
-                    </span>
                   </div>
                   <p className="text-slate-400 text-[9px] leading-tight truncate">
                     Efficient Monitoring System
@@ -318,7 +315,7 @@ export default function Layout({ onLogout, userRole }: LayoutProps) {
 
           {/* Footer */}
           <footer className="py-2.5 text-center text-[10px] text-slate-400 border-t border-[#E5EAF2] mt-4">
-            &copy; {new Date().getFullYear()} Mons Digital Studio &bull; eMons ATM CRM
+            ©️ 2026 Mons Digital Studio • eMons ATM CRM
           </footer>
         </div>
       </main>

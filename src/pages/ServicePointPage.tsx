@@ -7,6 +7,7 @@ import { Download, MapPin, ChevronDown, ChevronUp, ArrowUpDown, ArrowUp, ArrowDo
 import { exportServicePointExcel, SERVICE_POINT_MAP, getServicePointName } from '../utils/comprehensiveExporter';
 import { cleanSektorName } from '../utils/dailyIncidentParser';
 import { aggregateMachinesData, getFrxDurForCategory } from '../utils/problemCalculator';
+import StickyTableWrapper from '../components/StickyTableWrapper';
 
 interface SektorStats {
   namaSektor: string;
@@ -203,7 +204,7 @@ export default function ServicePointPage() {
 
       <div className={`grid grid-cols-1 ${selectedMachine ? 'xl:grid-cols-3' : ''} gap-4 transition-all duration-200`}>
         <div className={`bg-white rounded-lg border border-[#E5EAF2] shadow-2xs overflow-hidden ${selectedMachine ? 'xl:col-span-2' : ''}`}>
-          <div className="overflow-x-auto">
+          <StickyTableWrapper>
             <table className="w-full text-xs text-left">
               <thead className="bg-[#F8FAFC] text-slate-600 font-semibold border-b border-[#E5EAF2] select-none text-[11px]">
                 <tr>
@@ -357,7 +358,7 @@ export default function ServicePointPage() {
                 )}
               </tbody>
             </table>
-          </div>
+          </StickyTableWrapper>
         </div>
 
         {/* Side Panel Inspector */}

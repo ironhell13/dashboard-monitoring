@@ -12,6 +12,7 @@ import {
 } from 'lucide-react';
 import { exportDashboardExcel, SERVICE_POINT_MAP, getServicePointName, formatBulanTahun } from '../utils/comprehensiveExporter';
 import { cleanSektorName } from '../utils/dailyIncidentParser';
+import StickyTableWrapper from '../components/StickyTableWrapper';
 import { 
   evaluateMachineHealth, 
   SPIKE_THRESHOLDS 
@@ -1066,7 +1067,7 @@ export default function DashboardPage() {
           </h3>
           <span className="text-[11px] text-slate-400 font-normal">Terurut berdasarkan nilai metrik terpilih</span>
         </div>
-        <div className="overflow-x-auto">
+        <StickyTableWrapper>
           <table className="w-full text-xs text-left">
             <thead className="bg-[#F8FAFC] text-slate-600 font-semibold border-b border-[#E5EAF2] select-none text-[11px]">
               <tr>
@@ -1111,7 +1112,7 @@ export default function DashboardPage() {
               ))}
             </tbody>
           </table>
-        </div>
+        </StickyTableWrapper>
       </div>
     </div>
   );

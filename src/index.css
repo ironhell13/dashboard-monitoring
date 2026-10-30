@@ -95,16 +95,16 @@
 
 /* Custom Horizontal Scrollbar for Table */
 .floating-scrollbar::-webkit-scrollbar {
-  height: 6px;
+  height: 8px;
 }
 .floating-scrollbar::-webkit-scrollbar-track {
-  background: #f1f5f9;
-  border-radius: 3px;
+  background: #e2e8f0;
+  border-radius: 4px;
 }
 .floating-scrollbar::-webkit-scrollbar-thumb {
-  background: #94a3b8;
-  border-radius: 3px;
+  background: #64748b;
+  border-radius: 4px;
 }
 .floating-scrollbar::-webkit-scrollbar-thumb:hover {
-  background: #64748b;
+  background: #334155;
 }

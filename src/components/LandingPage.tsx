@@ -116,11 +116,11 @@ export default function LandingPage({ onSelectMode }: LandingPageProps) {
 
   return (
     <div className="min-h-screen bg-[#F5F7FB] text-slate-800 flex flex-col justify-between selection:bg-blue-100 selection:text-blue-900 font-sans antialiased">
-      {/* Top Professional Corporate Banner */}
-      <div className="bg-[#0F172A] border-b border-slate-800 text-white">
+      {/* Top Professional Corporate Banner - Semi-transparent */}
+      <div className="bg-[#0F172A]/75 backdrop-blur-md border-b border-slate-700/50 text-white">
         <div className="max-w-[1240px] mx-auto px-6 sm:px-10 py-6">
           {/* Top Header Bar */}
-          <header className="flex items-center justify-between pb-6 border-b border-slate-800/80">
+          <header className="flex items-center justify-between pb-6 border-b border-slate-700/40">
             {/* Logo & Branding */}
             <div className="flex items-center gap-3">
               <div className="w-9 h-9 rounded-lg bg-blue-600 flex items-center justify-center text-white shadow-xs">
@@ -428,7 +428,7 @@ export default function LandingPage({ onSelectMode }: LandingPageProps) {
 
       {/* Footer */}
       <footer className="py-4 text-center text-xs text-slate-400 border-t border-[#E5EAF2]">
-        &copy; {new Date().getFullYear()} Mons Digital Studio &bull; eMons ATM CRM
+        ©️ 2026 Mons Digital Studio • eMons ATM CRM
       </footer>
 
       {/* Modal Lupa Password */}
