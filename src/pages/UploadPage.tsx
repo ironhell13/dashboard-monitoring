@@ -257,55 +257,51 @@ export default function UploadPage() {
   };
 
   return (
-    <div className="min-h-screen bg-slate-50 flex items-center justify-center p-6">
-      <div className="glass-card max-w-4xl w-full p-8 relative overflow-hidden">
-        {/* Background blobs */}
-        <div className="absolute -top-32 -left-32 w-64 h-64 bg-blue-400 rounded-full mix-blend-multiply filter blur-3xl opacity-20"></div>
-        <div className="absolute -bottom-32 -right-32 w-64 h-64 bg-indigo-500 rounded-full mix-blend-multiply filter blur-3xl opacity-20"></div>
-        
+    <div className="min-h-screen bg-[#F5F7FB] flex items-center justify-center p-6 animate-fade-in">
+      <div className="bg-white rounded-lg max-w-4xl w-full p-6 sm:p-8 border border-[#E5EAF2] shadow-2xs">
         {/* Header with back button */}
-        <div className="relative z-10 flex items-center justify-between mb-6">
+        <div className="flex items-center justify-between mb-6">
           {hasExistingData ? (
             <button
               onClick={() => navigate('/dashboard')}
-              className="inline-flex items-center gap-2 px-3 py-1.5 text-xs font-semibold text-slate-600 bg-white border border-slate-200 rounded-lg hover:bg-slate-100 hover:text-slate-900 transition-all shadow-sm cursor-pointer"
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-slate-700 bg-white border border-[#E5EAF2] rounded-lg hover:bg-slate-50 transition-colors shadow-2xs cursor-pointer"
             >
-              <ArrowLeft size={16} />
+              <ArrowLeft size={14} />
               <span>Kembali ke Dashboard</span>
             </button>
           ) : (
             <div></div>
           )}
 
-          <div className="inline-flex items-center gap-2 px-3 py-1 bg-slate-100/80 border border-slate-200 rounded-full text-xs text-slate-600 font-medium">
-            <Database size={14} className={(isGasEnvironment() || isBackendConfigured()) ? "text-emerald-500" : "text-amber-500"} />
+          <div className="inline-flex items-center gap-2 px-2.5 py-1 bg-slate-50 border border-[#E5EAF2] rounded-md text-xs text-slate-600 font-medium">
+            <Database size={13} className={(isGasEnvironment() || isBackendConfigured()) ? "text-emerald-600" : "text-amber-600"} />
             <span>{(isGasEnvironment() || isBackendConfigured()) ? "Tersambung ke Google Spreadsheet Backend" : "Database Mode Lokal (Tersimpan)"}</span>
           </div>
         </div>
 
-        <div className="relative z-10 text-center mb-8">
-          <h1 className="text-3xl font-extrabold text-slate-800 tracking-tight">Database & Upload Data</h1>
-          <p className="text-slate-500 mt-2">
+        <div className="text-center mb-6">
+          <h1 className="text-2xl font-bold text-slate-900 tracking-tight">Database & Upload Data</h1>
+          <p className="text-xs text-slate-500 mt-1 max-w-xl mx-auto">
             Data tersimpan permanen di Google Spreadsheet. Master Data dapat diupdate kapan saja, dan data uptime bulanan yang sudah masuk otomatis dikunci agar tidak tertimpa.
           </p>
         </div>
 
         {/* Sync Cache to Backend Banner */}
         {hasExistingData && (isGasEnvironment() || isBackendConfigured()) && (
-          <div className="mb-6 p-4 bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-200 rounded-2xl flex flex-col md:flex-row items-start md:items-center justify-between gap-4 shadow-xs">
+          <div className="mb-5 p-4 bg-blue-50/70 border border-blue-200 rounded-lg flex flex-col md:flex-row items-start md:items-center justify-between gap-4 shadow-2xs">
             <div className="flex items-start gap-3">
-              <div className="p-2.5 bg-blue-600 rounded-xl text-white mt-0.5 shadow-sm">
-                <UploadCloud size={20} />
+              <div className="p-2 bg-blue-600 rounded-lg text-white mt-0.5">
+                <UploadCloud size={18} />
               </div>
               <div>
-                <h4 className="text-sm font-bold text-slate-800 flex items-center gap-2">
+                <h4 className="text-xs font-semibold text-slate-900 flex items-center gap-2">
                   <span>Data Aktif di Browser:</span>
-                  <span className="text-xs font-semibold text-blue-700 bg-blue-100 px-2 py-0.5 rounded-full">
+                  <span className="text-[11px] font-medium text-blue-700 bg-blue-100 px-2 py-0.5 rounded">
                     {rawMasterData?.length || 0} Mesin &bull; {rawUptimeFiles?.length || 0} Bulan Uptime
                   </span>
                 </h4>
-                <p className="text-xs text-slate-600 mt-1 max-w-xl">
-                  Data yang Anda upload sebelumnya saat ini berada di memori browser. Klik tombol di samping untuk langsung <strong>menyimpan data ini ke Spreadsheet Backend</strong> ("Backend API Monitoring BCA") tanpa perlu upload ulang file!
+                <p className="text-xs text-slate-600 mt-0.5 max-w-xl">
+                  Data yang Anda upload sebelumnya saat ini berada di memori browser. Klik tombol di samping untuk langsung menyimpan data ini ke Spreadsheet Backend tanpa perlu upload ulang file.
                 </p>
               </div>
             </div>
@@ -313,17 +309,17 @@ export default function UploadPage() {
               type="button"
               onClick={handleSyncCachedToBackend}
               disabled={isProcessing}
-              className="px-4 py-2.5 bg-blue-600 hover:bg-blue-700 active:scale-95 text-white text-xs font-bold rounded-xl shadow-md hover:shadow-lg transition-all flex items-center gap-2 whitespace-nowrap cursor-pointer disabled:opacity-50 flex-shrink-0"
+              className="px-3.5 py-1.5 bg-blue-600 hover:bg-blue-700 text-white text-xs font-medium rounded-lg shadow-2xs transition-colors flex items-center gap-2 whitespace-nowrap cursor-pointer disabled:opacity-50 shrink-0"
             >
               {isProcessing ? (
                 <>
-                  <Loader2 size={16} className="animate-spin" />
+                  <Loader2 size={14} className="animate-spin" />
                   <span>Menyimpan ke Spreadsheet...</span>
                 </>
               ) : (
                 <>
-                  <UploadCloud size={16} />
-                  <span>⚡ Kirim ke Spreadsheet Sekarang</span>
+                  <UploadCloud size={14} />
+                  <span>Kirim ke Spreadsheet Sekarang</span>
                 </>
               )}
             </button>
@@ -332,35 +328,35 @@ export default function UploadPage() {
 
         {/* Locked Periods Status Banner */}
         {lockedPeriodes && lockedPeriodes.length > 0 && (
-          <div className="mb-6 p-4 bg-amber-50/80 border border-amber-200/80 rounded-2xl relative overflow-hidden">
+          <div className="mb-5 p-4 bg-amber-50/60 border border-amber-200 rounded-lg">
             <div className="flex items-start gap-3">
-              <div className="p-2 bg-amber-100 rounded-xl text-amber-700 mt-0.5">
-                <Lock size={18} />
+              <div className="p-2 bg-amber-100 rounded-lg text-amber-700 mt-0.5">
+                <Lock size={16} />
               </div>
               <div className="flex-1">
                 <div className="flex items-center justify-between">
-                  <h4 className="text-sm font-bold text-amber-900 flex items-center gap-2">
+                  <h4 className="text-xs font-semibold text-amber-900 flex items-center gap-2">
                     <span>Periode Terkunci di Database (Anti-Overwrite)</span>
-                    <span className="text-xs font-normal text-amber-700 bg-amber-200/60 px-2 py-0.5 rounded-full">
+                    <span className="text-[11px] font-medium text-amber-700 bg-amber-100 px-2 py-0.5 rounded">
                       {lockedPeriodes.length} Bulan
                     </span>
                   </h4>
                   {lastDbSync && (
-                    <span className="text-[11px] text-amber-700/80">
+                    <span className="text-[10px] text-amber-700/80">
                       Sync: {new Date(lastDbSync).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' })}
                     </span>
                   )}
                 </div>
-                <p className="text-xs text-amber-700 mt-1">
+                <p className="text-xs text-amber-700 mt-0.5">
                   Periode berikut sudah tersimpan di database dan dilindungi. Upload file baru tidak akan menimpa data pada bulan-bulan ini.
                 </p>
-                <div className="flex flex-wrap gap-2 mt-3">
+                <div className="flex flex-wrap gap-2 mt-2.5">
                   {lockedPeriodes.map((p) => (
                     <span 
                       key={p} 
-                      className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-white border border-amber-300 rounded-lg text-xs font-semibold text-amber-800 shadow-xs"
+                      className="inline-flex items-center gap-1.5 px-2 py-0.5 bg-white border border-amber-300 rounded text-xs font-medium text-amber-800 shadow-2xs"
                     >
-                      <ShieldCheck size={14} className="text-amber-600" />
+                      <ShieldCheck size={13} className="text-amber-600" />
                       <span>{formatMonthPeriode(p)}</span>
                       <button
                         type="button"
@@ -369,7 +365,7 @@ export default function UploadPage() {
                         title={`Buka kunci periode ${formatMonthPeriode(p)} untuk upload ulang`}
                         className="ml-1 text-slate-400 hover:text-rose-600 transition-colors p-0.5 rounded cursor-pointer disabled:opacity-50 flex items-center"
                       >
-                        {unlockingPeriode === p ? <Loader2 size={12} className="animate-spin text-amber-600" /> : <Unlock size={12} />}
+                        {unlockingPeriode === p ? <Loader2 size={11} className="animate-spin text-amber-600" /> : <Unlock size={11} />}
                       </button>
                     </span>
                   ))}
@@ -381,8 +377,8 @@ export default function UploadPage() {
 
         {/* Info when existing master data is already loaded */}
         {hasExistingMaster && (
-          <div className="mb-6 p-3.5 bg-blue-50/70 border border-blue-200/70 rounded-xl text-xs text-blue-700 flex items-center gap-2.5">
-            <Info size={16} className="text-blue-600 flex-shrink-0" />
+          <div className="mb-5 p-3 bg-blue-50/70 border border-blue-200 rounded-lg text-xs text-blue-700 flex items-center gap-2">
+            <Info size={15} className="text-blue-600 shrink-0" />
             <span>
               <strong>Master Data Aktif:</strong> {rawMasterData.length} baris mesin tersimpan di database. Anda dapat mengupload file Master baru jika ada pembaruan mesin, atau cukup upload file Uptime bulan baru.
             </span>
@@ -390,20 +386,20 @@ export default function UploadPage() {
         )}
 
         {error && (
-          <div className="mb-6 p-4 bg-red-50/80 border border-red-200 rounded-xl text-red-600 flex items-center gap-3">
-            <AlertCircle size={20} className="flex-shrink-0" />
-            <span className="text-sm font-medium">{error}</span>
+          <div className="mb-5 p-3.5 bg-rose-50 border border-rose-200 rounded-lg text-rose-700 flex items-center gap-2.5">
+            <AlertCircle size={18} className="shrink-0" />
+            <span className="text-xs font-medium">{error}</span>
           </div>
         )}
 
-        <div className="grid md:grid-cols-2 gap-8 mb-8">
+        <div className="grid md:grid-cols-2 gap-5 mb-6">
           {/* Master File Upload */}
-          <div className={`border-2 border-dashed rounded-2xl p-6 text-center transition-all ${masterFile ? 'border-blue-400 bg-blue-50/30' : 'border-slate-300 hover:border-blue-400 hover:bg-slate-50/50'}`}>
-            <div className="mx-auto w-12 h-12 bg-white rounded-full shadow-sm flex items-center justify-center mb-4 text-blue-500">
-              <FileSpreadsheet size={24} />
+          <div className={`border-2 border-dashed rounded-lg p-5 text-center transition-colors ${masterFile ? 'border-blue-400 bg-blue-50/30' : 'border-[#E5EAF2] hover:border-blue-300 hover:bg-slate-50/50'}`}>
+            <div className="mx-auto w-10 h-10 bg-slate-50 rounded-lg border border-[#E5EAF2] flex items-center justify-center mb-3 text-blue-600">
+              <FileSpreadsheet size={20} />
             </div>
-            <h3 className="font-semibold text-slate-800 mb-1">Master Data Mesin</h3>
-            <p className="text-xs text-slate-500 mb-4">
+            <h3 className="font-semibold text-slate-900 text-sm mb-0.5">Master Data Mesin</h3>
+            <p className="text-xs text-slate-500 mb-3">
               {hasExistingMaster ? 'Upload file baru jika ada update Master Data' : 'Upload 1 file Excel Master Data BCA'}
             </p>
             
@@ -414,29 +410,29 @@ export default function UploadPage() {
               className="hidden" 
               onChange={(e) => setMasterFile(e.target.files?.[0] || null)}
             />
-            <label htmlFor="master-upload" className="cursor-pointer inline-flex items-center px-4 py-2 bg-white border border-slate-200 rounded-lg text-sm font-medium text-slate-700 hover:bg-slate-50 shadow-sm transition-all">
+            <label htmlFor="master-upload" className="cursor-pointer inline-flex items-center px-3.5 py-1.5 bg-white border border-[#E5EAF2] rounded-lg text-xs font-medium text-slate-700 hover:bg-slate-50 shadow-2xs transition-colors">
               {masterFile ? 'Ganti File' : (hasExistingMaster ? 'Update File Master' : 'Pilih File')}
             </label>
             {masterFile && (
-              <div className="mt-4 flex items-center justify-center gap-2 text-sm text-green-600 font-medium">
-                <CheckCircle2 size={16} />
+              <div className="mt-3 flex items-center justify-center gap-1.5 text-xs text-emerald-700 font-medium">
+                <CheckCircle2 size={14} />
                 <span className="truncate max-w-[200px]">{masterFile.name}</span>
               </div>
             )}
             {!masterFile && hasExistingMaster && (
-              <div className="mt-3 text-xs text-slate-400 font-medium">
+              <div className="mt-2.5 text-[11px] text-slate-400 font-normal">
                 Menggunakan Master Data yang sudah ada di database
               </div>
             )}
           </div>
 
           {/* Uptime Files Upload */}
-          <div className={`border-2 border-dashed rounded-2xl p-6 text-center transition-all ${uptimeFiles.length > 0 ? 'border-indigo-400 bg-indigo-50/30' : 'border-slate-300 hover:border-indigo-400 hover:bg-slate-50/50'}`}>
-            <div className="mx-auto w-12 h-12 bg-white rounded-full shadow-sm flex items-center justify-center mb-4 text-indigo-500">
-              <UploadCloud size={24} />
+          <div className={`border-2 border-dashed rounded-lg p-5 text-center transition-colors ${uptimeFiles.length > 0 ? 'border-blue-400 bg-blue-50/30' : 'border-[#E5EAF2] hover:border-blue-300 hover:bg-slate-50/50'}`}>
+            <div className="mx-auto w-10 h-10 bg-slate-50 rounded-lg border border-[#E5EAF2] flex items-center justify-center mb-3 text-blue-600">
+              <UploadCloud size={20} />
             </div>
-            <h3 className="font-semibold text-slate-800 mb-1">Data Uptime Bulanan</h3>
-            <p className="text-xs text-slate-500 mb-4">Upload file Excel bulan baru (maks 12 bulan)</p>
+            <h3 className="font-semibold text-slate-900 text-sm mb-0.5">Data Uptime Bulanan</h3>
+            <p className="text-xs text-slate-500 mb-3">Upload file Excel bulan baru (maks 12 bulan)</p>
             
             <input 
               type="file" 
@@ -456,17 +452,17 @@ export default function UploadPage() {
                 }
               }}
             />
-            <label htmlFor="uptime-upload" className="cursor-pointer inline-flex items-center px-4 py-2 bg-white border border-slate-200 rounded-lg text-sm font-medium text-slate-700 hover:bg-slate-50 shadow-sm transition-all">
+            <label htmlFor="uptime-upload" className="cursor-pointer inline-flex items-center px-3.5 py-1.5 bg-white border border-[#E5EAF2] rounded-lg text-xs font-medium text-slate-700 hover:bg-slate-50 shadow-2xs transition-colors">
               {uptimeFiles.length > 0 ? 'Ganti File' : 'Pilih File Uptime'}
             </label>
             {uptimeFiles.length > 0 && (
-              <div className="mt-4 flex flex-col items-center justify-center text-sm text-indigo-600 font-medium max-h-24 overflow-y-auto">
-                <div className="flex items-center gap-2 mb-1">
-                  <CheckCircle2 size={16} />
+              <div className="mt-3 flex flex-col items-center justify-center text-xs text-blue-700 font-medium max-h-24 overflow-y-auto">
+                <div className="flex items-center gap-1.5 mb-1 font-semibold">
+                  <CheckCircle2 size={14} className="text-emerald-600" />
                   <span>{uptimeFiles.length} file dipilih</span>
                 </div>
                 {uptimeFiles.map((f, i) => (
-                  <span key={i} className="text-xs text-slate-500 truncate max-w-[200px]">{f.name}</span>
+                  <span key={i} className="text-[11px] text-slate-500 truncate max-w-[200px]">{f.name}</span>
                 ))}
               </div>
             )}
@@ -474,7 +470,7 @@ export default function UploadPage() {
         </div>
 
         {/* Process Button & Progress */}
-        <div className="flex flex-col items-center justify-center gap-3 text-center">
+        <div className="flex flex-col items-center justify-center gap-2.5 text-center">
           <button
             onClick={handleProcess}
             disabled={
@@ -482,11 +478,11 @@ export default function UploadPage() {
               (uptimeFiles.length === 0 && !hasExistingUptime && !masterFile) || 
               isProcessing
             }
-            className="inline-flex items-center justify-center gap-2 px-8 py-3 bg-slate-900 text-white rounded-xl font-medium hover:bg-slate-800 disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-lg shadow-slate-900/20 cursor-pointer"
+            className="inline-flex items-center justify-center gap-2 px-6 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-xs font-medium disabled:opacity-50 disabled:cursor-not-allowed transition-colors shadow-2xs cursor-pointer"
           >
             {isProcessing ? (
               <>
-                <Loader2 size={20} className="animate-spin" />
+                <Loader2 size={16} className="animate-spin" />
                 <span>Menyimpan ke Database ({progress}%)</span>
               </>
             ) : (
@@ -495,7 +491,7 @@ export default function UploadPage() {
           </button>
 
           {statusMessage && (
-            <p className="text-xs text-indigo-600 font-medium animate-pulse">
+            <p className="text-xs text-blue-600 font-medium animate-pulse">
               {statusMessage}
             </p>
           )}

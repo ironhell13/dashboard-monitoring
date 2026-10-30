@@ -554,126 +554,122 @@ export default function DashboardPage() {
   const LINE_COLORS = ['#3b82f6', '#10b981', '#f59e0b', '#ec4899', '#8b5cf6', '#06b6d4'];
 
   return (
-    <div className="space-y-6 animate-fade-in pb-12">
+    <div className="space-y-5 animate-fade-in pb-12">
       {/* Top Header & Export */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div>
-          <h2 className="text-xl font-bold text-[#2D3748] flex items-center gap-2.5">
-            <div className="w-8 h-8 rounded-xl bg-teal-50 text-[#319795] flex items-center justify-center shrink-0">
-              <BarChart3 size={18} />
+          <h2 className="text-xl font-bold text-slate-900 flex items-center gap-2.5">
+            <div className="w-8 h-8 rounded-lg bg-blue-50 text-blue-600 flex items-center justify-center shrink-0 border border-blue-100">
+              <BarChart3 size={17} />
             </div>
             Dashboard Overview
           </h2>
-          <p className="text-slate-400 text-xs mt-0.5">
+          <p className="text-slate-500 text-xs mt-0.5">
             Ringkasan KPI performa uptime &amp; evaluasi insiden mesin ATM &amp; CRM.
           </p>
         </div>
         <button
           onClick={handleExportExcel}
           disabled={aggregatedData.length === 0}
-          className="inline-flex items-center gap-2 px-3.5 py-1.5 bg-white hover:bg-slate-50 text-[#2D3748] font-semibold rounded-xl border border-slate-200 shadow-xs transition-all hover:shadow text-xs disabled:opacity-50 cursor-pointer self-start sm:self-auto"
+          className="inline-flex items-center gap-2 px-3 py-1.5 bg-white hover:bg-slate-50 text-slate-700 font-medium rounded-lg border border-[#E5EAF2] shadow-2xs transition-colors text-xs disabled:opacity-50 cursor-pointer self-start sm:self-auto"
         >
-          <Download size={14} className="text-[#319795]" />
+          <Download size={13} className="text-blue-600" />
           <span>Export Data Grafik</span>
         </button>
       </div>
 
-      {/* 4 KPI Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+      {/* 4 Clean Enterprise KPI Cards */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3.5">
         {/* KPI 1: Uptime */}
-        <div className="glass-card p-5 flex items-center justify-between">
-          <div>
-            <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Rata-rata Uptime</p>
-            <p className="text-2xl font-black text-[#319795] mt-1">{kpis.avgUptime}%</p>
-            <p className="text-[11px] text-slate-400 mt-0.5">SLA: ATM 99.00% • CRM 98.50%</p>
+        <div className="bg-white rounded-lg border border-[#E5EAF2] p-4 shadow-2xs">
+          <div className="flex items-center justify-between text-slate-500 mb-1">
+            <span className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider">Rata-rata Uptime</span>
+            <CheckCircle2 size={16} className="text-emerald-600" />
           </div>
-          <div className="w-12 h-12 rounded-2xl bg-teal-50 text-[#319795] flex items-center justify-center border border-teal-100">
-            <CheckCircle2 size={24} />
+          <div className="text-2xl font-bold text-slate-900 tracking-tight">
+            {kpis.avgUptime}%
           </div>
+          <p className="text-[11px] text-slate-500 mt-1">SLA: ATM 99.00% &bull; CRM 98.50%</p>
         </div>
 
         {/* KPI 2: Downtime */}
-        <div className="glass-card p-5 flex items-center justify-between">
-          <div>
-            <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Rata-rata Downtime</p>
-            <p className="text-2xl font-black text-rose-500 mt-1">{kpis.avgDowntime}%</p>
-            <p className="text-[11px] text-slate-400 mt-0.5">Akumulasi seluruh problem</p>
+        <div className="bg-white rounded-lg border border-[#E5EAF2] p-4 shadow-2xs">
+          <div className="flex items-center justify-between text-slate-500 mb-1">
+            <span className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider">Rata-rata Downtime</span>
+            <AlertTriangle size={16} className="text-rose-500" />
           </div>
-          <div className="w-12 h-12 rounded-2xl bg-rose-50 text-rose-500 flex items-center justify-center border border-rose-100">
-            <AlertTriangle size={24} />
+          <div className="text-2xl font-bold text-slate-900 tracking-tight">
+            {kpis.avgDowntime}%
           </div>
+          <p className="text-[11px] text-slate-500 mt-1">Akumulasi seluruh problem</p>
         </div>
 
         {/* KPI 3: Best Unit */}
-        <div className="glass-card p-5 flex items-center justify-between">
-          <div>
-            <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Uptime Terbaik</p>
-            <p className="text-sm font-bold text-[#2D3748] mt-1 truncate max-w-[180px]" title={kpis.bestUnit}>
-              {kpis.bestUnit}
-            </p>
-            <p className="text-[11px] text-[#319795] font-semibold mt-0.5">Performa Tertinggi</p>
+        <div className="bg-white rounded-lg border border-[#E5EAF2] p-4 shadow-2xs">
+          <div className="flex items-center justify-between text-slate-500 mb-1">
+            <span className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider">Uptime Terbaik</span>
+            <TrendingUp size={16} className="text-blue-600" />
           </div>
-          <div className="w-12 h-12 rounded-2xl bg-teal-50 text-[#319795] flex items-center justify-center border border-teal-100">
-            <TrendingUp size={24} />
+          <div className="text-lg font-bold text-slate-900 tracking-tight truncate" title={kpis.bestUnit}>
+            {kpis.bestUnit}
           </div>
+          <p className="text-[11px] text-emerald-600 font-medium mt-1">Performa Tertinggi</p>
         </div>
 
         {/* KPI 4: Needs Attention */}
-        <div className="glass-card p-5 flex items-center justify-between">
-          <div>
-            <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Perlu Perhatian</p>
-            <p className="text-sm font-bold text-rose-600 mt-1 truncate max-w-[180px]" title={kpis.worstUnit}>
-              {kpis.worstUnit}
-            </p>
-            <p className="text-[11px] text-slate-400 mt-0.5 truncate max-w-[180px]" title={`Penyebab: ${kpis.worstProblem}`}>
-              Dominan: {kpis.worstProblem}
-            </p>
+        <div className="bg-white rounded-lg border border-[#E5EAF2] p-4 shadow-2xs">
+          <div className="flex items-center justify-between text-slate-500 mb-1">
+            <span className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider">Perlu Perhatian</span>
+            <Cpu size={16} className="text-amber-500" />
           </div>
-          <div className="w-12 h-12 rounded-2xl bg-amber-50 text-amber-600 flex items-center justify-center border border-amber-100">
-            <Cpu size={24} />
+          <div className="text-lg font-bold text-slate-900 tracking-tight truncate" title={kpis.worstUnit}>
+            {kpis.worstUnit}
           </div>
+          <p className="text-[11px] text-slate-500 mt-1 truncate" title={`Penyebab: ${kpis.worstProblem}`}>
+            Dominan: <strong className="text-rose-600 font-medium">{kpis.worstProblem}</strong>
+          </p>
         </div>
       </div>
 
-      {/* Compact & Expandable Health SLA Telemetry Strip */}
-      <div className="glass-card p-4 transition-all">
+      {/* Health SLA Telemetry Strip */}
+      <div className="bg-white rounded-lg border border-[#E5EAF2] p-3.5 shadow-2xs transition-all">
         <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3">
           {/* Left: Title & Subtitle */}
-          <div className="flex items-center gap-3">
-            <div className="w-9 h-9 rounded-xl bg-teal-50 text-[#319795] flex items-center justify-center shrink-0">
-              <ShieldAlert size={18} />
+          <div className="flex items-center gap-2.5">
+            <div className="w-8 h-8 rounded-lg bg-blue-50 text-blue-600 flex items-center justify-center shrink-0 border border-blue-100">
+              <ShieldAlert size={16} />
             </div>
             <div>
               <div className="flex items-center gap-2 flex-wrap">
-                <h4 className="font-bold text-[#2D3748] text-sm">
+                <h4 className="font-bold text-slate-900 text-xs sm:text-sm">
                   Status Kesehatan Mesin (BCA Aktif)
                 </h4>
-                <span className="text-[10px] px-2 py-0.5 rounded-full bg-slate-100 text-slate-500 font-semibold">
-                  {healthAnalysis.total} Unit · {formatPeriodLabel(activeHealthPeriod)}
+                <span className="text-[10px] px-2 py-0.2 rounded bg-slate-100 text-slate-600 font-medium border border-slate-200">
+                  {healthAnalysis.total} Unit &bull; {formatPeriodLabel(activeHealthPeriod)}
                 </span>
               </div>
-              <p className="text-[11px] text-slate-400">
-                Target SLA: ATM 99.00% · CRM 98.50% | Zona Waspada 2 Bln | Kritis &gt; 2 Bln
+              <p className="text-[11px] text-slate-500">
+                Target SLA: ATM 99.00% &bull; CRM 98.50% | Zona Waspada 2 Bln | Kritis &gt; 2 Bln
               </p>
             </div>
           </div>
 
-          {/* Middle: 3 Compact Status Pills */}
+          {/* Middle: 3 Compact Status Badges */}
           <div className="flex flex-wrap items-center gap-2">
-            <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs font-bold">
+            <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs font-semibold">
               <CheckCircle2 size={13} className="text-emerald-600" />
               <span>{healthAnalysis.safeCount} Aman</span>
-              <span className="text-[11px] font-normal text-emerald-600">({healthAnalysis.safePct}%)</span>
+              <span className="text-[10px] font-normal text-emerald-700">({healthAnalysis.safePct}%)</span>
             </div>
-            <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-xl bg-amber-50 border border-amber-200 text-amber-800 text-xs font-bold">
+            <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-amber-50 border border-amber-200 text-amber-800 text-xs font-semibold">
               <AlertTriangle size={13} className="text-amber-600" />
               <span>{healthAnalysis.warningCount} Waspada</span>
-              <span className="text-[11px] font-normal text-amber-600">({healthAnalysis.warningPct}%)</span>
+              <span className="text-[10px] font-normal text-amber-700">({healthAnalysis.warningPct}%)</span>
             </div>
-            <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-xl bg-rose-50 border border-rose-200 text-rose-800 text-xs font-bold">
+            <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-rose-50 border border-rose-200 text-rose-800 text-xs font-semibold">
               <ShieldAlert size={13} className="text-rose-600" />
               <span>{healthAnalysis.criticalCount} Kritis</span>
-              <span className="text-[11px] font-normal text-rose-600">({healthAnalysis.criticalPct}%)</span>
+              <span className="text-[10px] font-normal text-rose-700">({healthAnalysis.criticalPct}%)</span>
             </div>
           </div>
 
@@ -681,17 +677,17 @@ export default function DashboardPage() {
           <div className="flex items-center gap-2 self-end lg:self-auto">
             <button
               onClick={() => setIsHealthDetailOpen(!isHealthDetailOpen)}
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-semibold transition-all cursor-pointer"
+              className="inline-flex items-center gap-1.5 px-2.5 py-1.5 bg-slate-50 hover:bg-slate-100 border border-[#E5EAF2] text-slate-700 rounded-md text-xs font-medium transition-colors cursor-pointer"
             >
               <span>{isHealthDetailOpen ? 'Tutup Rincian' : 'Rincian Masalah'}</span>
-              {isHealthDetailOpen ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+              {isHealthDetailOpen ? <ChevronUp size={13} /> : <ChevronDown size={13} />}
             </button>
             <button
               onClick={() => {
                 setSelectedPeriode(activeHealthPeriod);
                 navigate('/follow-up');
               }}
-              className="inline-flex items-center gap-1 px-3 py-1.5 bg-[#4FD1C5] hover:bg-[#319795] text-white rounded-xl text-xs font-semibold shadow-xs transition-all cursor-pointer"
+              className="inline-flex items-center gap-1 px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-md text-xs font-medium transition-colors cursor-pointer shadow-2xs"
             >
               <span>Follow-Up</span>
               <ArrowRight size={13} />
@@ -701,51 +697,51 @@ export default function DashboardPage() {
 
         {/* Expandable Breakdown Drawer */}
         {isHealthDetailOpen && (
-          <div className="mt-4 pt-4 border-t border-slate-100 space-y-3 animate-fade-in">
+          <div className="mt-3 pt-3 border-t border-[#E5EAF2] space-y-2.5 animate-fade-in">
             <div className="flex items-center justify-between text-xs text-slate-500">
               <span className="font-semibold text-slate-700">
                 Rincian Kategori Masalah ({healthAnalysis.reasons.length} terdeteksi):
               </span>
-              <span>Klik kartu untuk filter WSID di Need to Follow Up</span>
+              <span className="text-[11px]">Klik kartu untuk filter WSID di Need to Follow Up</span>
             </div>
 
             {healthAnalysis.reasons.length === 0 ? (
-              <div className="p-3 bg-emerald-50 rounded-xl text-center text-xs font-medium text-emerald-700">
+              <div className="p-3 bg-emerald-50 border border-emerald-200 rounded-lg text-center text-xs font-medium text-emerald-800">
                 Semua mesin berada dalam status aman dan memenuhi target SLA.
               </div>
             ) : (
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3">
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-2.5">
                 {healthAnalysis.reasons.map((item) => {
                   const isCrit = item.status === 'CRITICAL' || item.key === 'CHRONIC_CRITICAL';
                   return (
                     <div
                       key={item.key}
                       onClick={() => handleReasonCardClick(item)}
-                      className="p-3 bg-slate-50/70 hover:bg-white border border-slate-200/80 hover:border-[#4FD1C5] hover:shadow-md rounded-xl transition-all cursor-pointer group flex flex-col justify-between"
+                      className="p-3 bg-slate-50 hover:bg-white border border-[#E5EAF2] hover:border-blue-400 hover:shadow-2xs rounded-lg transition-all cursor-pointer group flex flex-col justify-between"
                       title={item.description}
                     >
                       <div>
                         <div className="flex items-center justify-between gap-1 mb-1">
-                          <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded uppercase tracking-wider ${
+                          <span className={`text-[9px] font-semibold px-1.5 py-0.2 rounded uppercase tracking-wider ${
                             isCrit
-                              ? 'bg-rose-100 text-rose-700'
-                              : 'bg-amber-100 text-amber-700'
+                              ? 'bg-rose-50 text-rose-700 border border-rose-200'
+                              : 'bg-amber-50 text-amber-700 border border-amber-200'
                           }`}>
                             {isCrit ? 'Kritis' : 'Warning'}
                           </span>
-                          <span className="text-xs font-bold text-[#2D3748]">
+                          <span className="text-xs font-bold text-slate-800">
                             {item.count} <span className="text-[10px] text-slate-400 font-normal">unit</span>
                           </span>
                         </div>
-                        <h5 className="text-xs font-bold text-slate-700 group-hover:text-[#319795] transition-colors line-clamp-1">
+                        <h5 className="text-xs font-semibold text-slate-800 group-hover:text-blue-600 transition-colors line-clamp-1">
                           {item.label}
                         </h5>
-                        <p className="text-[10px] text-slate-400 mt-0.5 line-clamp-2">
+                        <p className="text-[10px] text-slate-500 mt-0.5 line-clamp-2">
                           {item.description}
                         </p>
                       </div>
 
-                      <div className="mt-2 pt-2 border-t border-slate-200/60 flex items-center justify-between text-[10px] text-[#319795] font-semibold">
+                      <div className="mt-2 pt-1.5 border-t border-slate-200/70 flex items-center justify-between text-[10px] text-blue-600 font-medium">
                         <span>Lihat WSID</span>
                         <ArrowRight size={11} className="group-hover:translate-x-0.5 transition-transform" />
                       </div>
@@ -759,15 +755,15 @@ export default function DashboardPage() {
       </div>
 
       {/* Main Interactive Chart Section */}
-      <div className="glass-card p-6 space-y-4">
+      <div className="bg-white rounded-lg border border-[#E5EAF2] p-5 shadow-2xs space-y-4">
         {/* Header with Title + Integrated Toolbar */}
-        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 pb-4 border-b border-slate-100">
+        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3 pb-3 border-b border-[#E5EAF2]">
           <div>
             <div className="flex items-center gap-2">
-              <h3 className="font-bold text-[#2D3748] text-base">
+              <h3 className="font-bold text-slate-900 text-sm sm:text-base">
                 {getMetricLabel()}
               </h3>
-              <span className="text-[11px] px-2.5 py-0.5 rounded-full bg-teal-50 text-[#319795] font-semibold border border-teal-200/60">
+              <span className="text-[11px] px-2 py-0.2 rounded bg-blue-50 text-blue-700 font-semibold border border-blue-200/60">
                 {groupBy === 'SERVICE_POINT' ? 'Per Service Point' : 'Per Sektor'}
               </span>
             </div>
@@ -780,32 +776,32 @@ export default function DashboardPage() {
           </div>
 
           {/* Integrated Toolbar */}
-          <div className="flex flex-wrap items-center gap-2.5">
+          <div className="flex flex-wrap items-center gap-2">
             {/* Dimension Toggle: SP vs Sektor */}
-            <div className="inline-flex bg-slate-100/80 p-1 rounded-xl">
+            <div className="inline-flex bg-slate-100 p-0.5 rounded-md border border-[#E5EAF2]">
               <button
                 onClick={() => {
                   setGroupBy('SERVICE_POINT');
                   setFilterServicePoint('ALL');
                 }}
-                className={`flex items-center gap-1.5 py-1 px-3 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
+                className={`flex items-center gap-1.5 py-1 px-2.5 rounded text-xs transition-colors cursor-pointer ${
                   groupBy === 'SERVICE_POINT'
-                    ? 'bg-[#4FD1C5] text-white shadow-xs'
-                    : 'text-slate-600 hover:text-[#2D3748]'
+                    ? 'bg-blue-600 text-white font-medium shadow-2xs'
+                    : 'text-slate-600 hover:text-slate-900 font-medium'
                 }`}
               >
-                <MapPin size={12} />
+                <MapPin size={11} />
                 Service Point
               </button>
               <button
                 onClick={() => setGroupBy('SEKTOR')}
-                className={`flex items-center gap-1.5 py-1 px-3 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
+                className={`flex items-center gap-1.5 py-1 px-2.5 rounded text-xs transition-colors cursor-pointer ${
                   groupBy === 'SEKTOR'
-                    ? 'bg-[#4FD1C5] text-white shadow-xs'
-                    : 'text-slate-600 hover:text-[#2D3748]'
+                    ? 'bg-blue-600 text-white font-medium shadow-2xs'
+                    : 'text-slate-600 hover:text-slate-900 font-medium'
                 }`}
               >
-                <Server size={12} />
+                <Server size={11} />
                 Sektor
               </button>
             </div>
@@ -815,7 +811,7 @@ export default function DashboardPage() {
               <select
                 value={filterServicePoint}
                 onChange={(e) => setFilterServicePoint(e.target.value)}
-                className="bg-slate-50 border border-slate-200 rounded-xl px-2.5 py-1 text-xs text-slate-700 font-medium focus:border-[#4FD1C5] focus:outline-none cursor-pointer shadow-xs"
+                className="bg-white border border-[#E5EAF2] rounded-md px-2.5 py-1 text-xs text-slate-700 font-medium focus:border-blue-500 focus:outline-none cursor-pointer"
               >
                 <option value="ALL">Semua SP</option>
                 {servicePointOptions.map(sp => (
@@ -828,55 +824,55 @@ export default function DashboardPage() {
             <select
               value={metric}
               onChange={(e) => setMetric(e.target.value as MetricType)}
-              className="bg-slate-50 border border-slate-200 rounded-xl px-2.5 py-1 text-xs text-slate-700 font-semibold focus:border-[#4FD1C5] focus:outline-none cursor-pointer shadow-xs"
+              className="bg-white border border-[#E5EAF2] rounded-md px-2.5 py-1 text-xs text-slate-700 font-medium focus:border-blue-500 focus:outline-none cursor-pointer"
             >
-              <option value="uptime">🟢 Uptime (%)</option>
-              <option value="total_downtime">🔴 Total Downtime (%)</option>
-              <option value="all_problems">📊 Semua Problem (Stacked)</option>
-              <option value="hw">🔧 Hardware / HW (%)</option>
-              <option value="uh">💵 Uang Habis / UH (%)</option>
-              <option value="kom">📡 Komunikasi / KOM (%)</option>
-              <option value="up">📥 Uang Penuh / UP (%)</option>
-              <option value="ll">📝 Lain-lain / LL (%)</option>
+              <option value="uptime">Uptime (%)</option>
+              <option value="total_downtime">Total Downtime (%)</option>
+              <option value="all_problems">Semua Problem (Stacked)</option>
+              <option value="hw">Hardware / HW (%)</option>
+              <option value="uh">Uang Habis / UH (%)</option>
+              <option value="kom">Komunikasi / KOM (%)</option>
+              <option value="up">Uang Penuh / UP (%)</option>
+              <option value="ll">Lain-lain / LL (%)</option>
             </select>
 
             {/* Chart Type: Bar / Trend / Donut */}
-            <div className="inline-flex bg-slate-100/80 p-1 rounded-xl">
+            <div className="inline-flex bg-slate-100 p-0.5 rounded-md border border-[#E5EAF2]">
               <button
                 onClick={() => setChartType('bar')}
-                className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
+                className={`inline-flex items-center gap-1 px-2.5 py-1 rounded text-xs transition-colors cursor-pointer ${
                   chartType === 'bar'
-                    ? 'bg-[#4FD1C5] text-white shadow-xs'
-                    : 'text-slate-600 hover:text-[#2D3748]'
+                    ? 'bg-blue-600 text-white font-medium shadow-2xs'
+                    : 'text-slate-600 hover:text-slate-900 font-medium'
                 }`}
                 title="Peringkat Bar"
               >
-                <BarChart3 size={13} />
+                <BarChart3 size={12} />
                 Bar
               </button>
               <button
                 onClick={() => setChartType('trend')}
                 disabled={activePeriods.length < 2}
                 title={activePeriods.length < 2 ? 'Minimal 2 bulan data' : 'Tren Waktu'}
-                className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
+                className={`inline-flex items-center gap-1 px-2.5 py-1 rounded text-xs transition-colors cursor-pointer ${
                   chartType === 'trend'
-                    ? 'bg-[#4FD1C5] text-white shadow-xs'
-                    : 'text-slate-600 hover:text-[#2D3748] disabled:opacity-40'
+                    ? 'bg-blue-600 text-white font-medium shadow-2xs'
+                    : 'text-slate-600 hover:text-slate-900 font-medium disabled:opacity-40'
                 }`}
               >
-                <TrendingUp size={13} />
+                <TrendingUp size={12} />
                 Tren
               </button>
               <button
                 onClick={() => setChartType('donut')}
-                className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
+                className={`inline-flex items-center gap-1 px-2.5 py-1 rounded text-xs transition-colors cursor-pointer ${
                   chartType === 'donut'
-                    ? 'bg-[#4FD1C5] text-white shadow-xs'
-                    : 'text-slate-600 hover:text-[#2D3748]'
+                    ? 'bg-blue-600 text-white font-medium shadow-2xs'
+                    : 'text-slate-600 hover:text-slate-900 font-medium'
                 }`}
                 title="Distribusi Problem"
               >
-                <PieIcon size={13} />
+                <PieIcon size={12} />
                 Donut
               </button>
             </div>
@@ -1063,50 +1059,54 @@ export default function DashboardPage() {
       </div>
 
       {/* Summary Table below chart */}
-      <div className="glass-card overflow-hidden">
-        <div className="px-6 py-4 bg-white border-b border-slate-100 flex justify-between items-center">
-          <h3 className="font-bold text-[#2D3748] text-sm">
+      <div className="bg-white rounded-lg border border-[#E5EAF2] shadow-2xs overflow-hidden">
+        <div className="px-5 py-3.5 bg-white border-b border-[#E5EAF2] flex justify-between items-center">
+          <h3 className="font-bold text-slate-900 text-xs sm:text-sm">
             Tabel Peringkat Lengkap ({groupBy === 'SERVICE_POINT' ? 'Service Point' : 'Sektor'})
           </h3>
-          <span className="text-xs text-slate-400 font-medium">Terurut berdasarkan nilai metrik terpilih</span>
+          <span className="text-xs text-slate-400 font-normal">Terurut berdasarkan nilai metrik terpilih</span>
         </div>
         <div className="overflow-x-auto">
           <table className="w-full text-xs text-left">
-            <thead className="bg-slate-50 text-slate-600 font-semibold border-b border-slate-200 select-none">
+            <thead className="bg-[#F8FAFC] text-slate-600 font-semibold border-b border-[#E5EAF2] select-none">
               <tr>
-                <th className="px-5 py-3.5 text-center">Peringkat</th>
-                <th className="px-5 py-3.5">{groupBy === 'SERVICE_POINT' ? 'Service Point' : 'Sektor'}</th>
-                {groupBy === 'SEKTOR' && <th className="px-5 py-3.5">Service Point Induk</th>}
-                <th className="px-5 py-3.5 text-center">Mesin Aktif</th>
-                <th className="px-5 py-3.5 text-center">Uptime (%)</th>
-                <th className="px-5 py-3.5 text-center">Downtime Total (%)</th>
-                <th className="px-5 py-3.5 text-center">UH (%)</th>
-                <th className="px-5 py-3.5 text-center">KOM (%)</th>
-                <th className="px-5 py-3.5 text-center">UP (%)</th>
-                <th className="px-5 py-3.5 text-center">H/W (%)</th>
-                <th className="px-5 py-3.5 text-center">LL (%)</th>
-                <th className="px-5 py-3.5">Problem Dominan</th>
+                <th className="px-4 py-2.5 text-center">Peringkat</th>
+                <th className="px-4 py-2.5">{groupBy === 'SERVICE_POINT' ? 'Service Point' : 'Sektor'}</th>
+                {groupBy === 'SEKTOR' && <th className="px-4 py-2.5">Service Point Induk</th>}
+                <th className="px-4 py-2.5 text-center">Mesin Aktif</th>
+                <th className="px-4 py-2.5 text-center">Uptime (%)</th>
+                <th className="px-4 py-2.5 text-center">Downtime Total (%)</th>
+                <th className="px-4 py-2.5 text-center">UH (%)</th>
+                <th className="px-4 py-2.5 text-center">KOM (%)</th>
+                <th className="px-4 py-2.5 text-center">UP (%)</th>
+                <th className="px-4 py-2.5 text-center">H/W (%)</th>
+                <th className="px-4 py-2.5 text-center">LL (%)</th>
+                <th className="px-4 py-2.5">Problem Dominan</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-slate-100">
+            <tbody className="divide-y divide-[#E5EAF2]">
               {aggregatedData.map((d, idx) => (
-                <tr key={d.id} className="hover:bg-slate-50/70 transition-colors">
-                  <td className="px-5 py-3 text-center font-bold text-slate-400">{idx + 1}</td>
-                  <td className="px-5 py-3 font-semibold text-slate-800">{d.name}</td>
-                  {groupBy === 'SEKTOR' && <td className="px-5 py-3 text-slate-500">{d.servicePoint}</td>}
-                  <td className="px-5 py-3 text-center font-medium text-slate-600">{d.machineCount}</td>
-                  <td className="px-5 py-3 text-center font-bold text-emerald-600">
-                    <span className="inline-block bg-emerald-50 px-2 py-0.5 rounded-full">{d.uptime}%</span>
+                <tr key={d.id} className="hover:bg-slate-50/80 transition-colors">
+                  <td className="px-4 py-2.5 text-center font-medium text-slate-400">{idx + 1}</td>
+                  <td className="px-4 py-2.5 font-semibold text-slate-800">{d.name}</td>
+                  {groupBy === 'SEKTOR' && <td className="px-4 py-2.5 text-slate-500">{d.servicePoint}</td>}
+                  <td className="px-4 py-2.5 text-center font-medium text-slate-600">{d.machineCount}</td>
+                  <td className="px-4 py-2.5 text-center">
+                    <span className="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200/70">
+                      {d.uptime}%
+                    </span>
                   </td>
-                  <td className="px-5 py-3 text-center font-bold text-rose-500">
-                    <span className="inline-block bg-rose-50 px-2 py-0.5 rounded-full">{d.downtimeTotal}%</span>
+                  <td className="px-4 py-2.5 text-center">
+                    <span className="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-semibold bg-rose-50 text-rose-700 border border-rose-200/70">
+                      {d.downtimeTotal}%
+                    </span>
                   </td>
-                  <td className="px-5 py-3 text-center text-amber-600 font-medium">{d.uh}%</td>
-                  <td className="px-5 py-3 text-center text-blue-600 font-medium">{d.kom}%</td>
-                  <td className="px-5 py-3 text-center text-pink-600 font-medium">{d.up}%</td>
-                  <td className="px-5 py-3 text-center text-rose-600 font-medium">{d.hw}%</td>
-                  <td className="px-5 py-3 text-center text-purple-600 font-medium">{d.ll}%</td>
-                  <td className="px-5 py-3 text-slate-600 font-medium">{d.dominantProblem}</td>
+                  <td className="px-4 py-2.5 text-center text-amber-600 font-medium">{d.uh}%</td>
+                  <td className="px-4 py-2.5 text-center text-blue-600 font-medium">{d.kom}%</td>
+                  <td className="px-4 py-2.5 text-center text-pink-600 font-medium">{d.up}%</td>
+                  <td className="px-4 py-2.5 text-center text-rose-600 font-medium">{d.hw}%</td>
+                  <td className="px-4 py-2.5 text-center text-purple-600 font-medium">{d.ll}%</td>
+                  <td className="px-4 py-2.5 text-slate-600 font-medium">{d.dominantProblem}</td>
                 </tr>
               ))}
             </tbody>

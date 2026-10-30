@@ -14,7 +14,7 @@ export default function FilterBar() {
     availablePeriodes, setAvailablePeriodes,
     setGlobalTrendData,
     lockedPeriodes, setLockedPeriodes,
-    selectedPeriode, setSelectedPeriode,
+    selectedPeriode,
     selectedPeriodeStart, setSelectedPeriodeStart,
     selectedPeriodeEnd, setSelectedPeriodeEnd,
     selectedJenisMesin, setSelectedJenisMesin,
@@ -112,31 +112,29 @@ export default function FilterBar() {
   };
 
   const getMonthText = (periode: string) => {
-    if (periode === 'ALL') return 'Semua Bulan (Agregat)';
+    if (periode === 'ALL') return 'Semua Periode';
     return formatBulanTahun(periode);
   };
 
   const activeSync = isSyncing || isRefreshing;
 
   return (
-    <div className="bg-white rounded-2xl px-5 py-3.5 border border-slate-100 shadow-[0px_3.5px_5.5px_rgba(0,0,0,0.02)] flex flex-wrap items-center justify-between gap-4">
-      {/* Filters */}
-      <div className="flex flex-wrap items-center gap-4 sm:gap-6">
-        <div className="flex items-center gap-2 mr-1">
-          <div className="w-7 h-7 rounded-lg bg-teal-50 text-[#319795] flex items-center justify-center">
-            <Filter size={15} />
-          </div>
-          <span className="text-xs font-bold text-[#2D3748]">Filter Global</span>
+    <div className="bg-white rounded-lg px-3.5 py-2 border border-[#E5EAF2] flex flex-wrap items-center justify-between gap-3">
+      {/* Filters Area */}
+      <div className="flex flex-wrap items-center gap-2 sm:gap-3">
+        <div className="flex items-center gap-1.5 text-slate-700 mr-1">
+          <Filter size={14} className="text-slate-400" />
+          <span className="text-xs font-semibold text-slate-800">Filter Global</span>
         </div>
 
         {/* Periode Filter: Range Dari & Sampai */}
-        <div className="flex items-center gap-2 bg-slate-50 border border-slate-200/80 rounded-xl px-3 py-1.5 shadow-xs">
-          <Calendar size={15} className="text-[#319795]" />
-          <span className="text-[11px] font-semibold text-slate-500 uppercase">Dari:</span>
+        <div className="flex items-center gap-1.5 bg-slate-50 border border-[#E5EAF2] rounded-md px-2.5 py-1 text-xs">
+          <Calendar size={13} className="text-slate-400" />
+          <span className="text-[11px] font-medium text-slate-500">Dari:</span>
           <select
             value={selectedPeriodeStart}
             onChange={(e) => setSelectedPeriodeStart(e.target.value)}
-            className="bg-transparent focus:outline-none text-xs font-medium text-slate-700 cursor-pointer pr-1"
+            className="bg-transparent focus:outline-none text-xs font-medium text-slate-800 cursor-pointer pr-1"
           >
             <option value="ALL">Semua Periode</option>
             {availablePeriodes.map((p) => (
@@ -144,11 +142,11 @@ export default function FilterBar() {
             ))}
           </select>
           <span className="text-slate-300">|</span>
-          <span className="text-[11px] font-semibold text-slate-500 uppercase">Sampai:</span>
+          <span className="text-[11px] font-medium text-slate-500">Sampai:</span>
           <select
             value={selectedPeriodeEnd}
             onChange={(e) => setSelectedPeriodeEnd(e.target.value)}
-            className="bg-transparent focus:outline-none text-xs font-medium text-slate-700 cursor-pointer pr-1"
+            className="bg-transparent focus:outline-none text-xs font-medium text-slate-800 cursor-pointer pr-1"
           >
             <option value="ALL">Semua Periode</option>
             {availablePeriodes.map((p) => (
@@ -158,12 +156,12 @@ export default function FilterBar() {
         </div>
 
         {/* Jenis Mesin Filter */}
-        <div className="flex items-center gap-2 bg-slate-50 border border-slate-200/80 rounded-xl px-3 py-1.5 shadow-xs">
-          <MonitorSmartphone size={15} className="text-[#319795]" />
+        <div className="flex items-center gap-1.5 bg-slate-50 border border-[#E5EAF2] rounded-md px-2.5 py-1 text-xs">
+          <MonitorSmartphone size={13} className="text-slate-400" />
           <select
             value={selectedJenisMesin}
             onChange={(e) => setSelectedJenisMesin(e.target.value as any)}
-            className="bg-transparent focus:outline-none text-xs font-medium text-slate-700 cursor-pointer pr-1"
+            className="bg-transparent focus:outline-none text-xs font-medium text-slate-800 cursor-pointer pr-1"
           >
             <option value="ALL">Semua Mesin</option>
             <option value="ATM">ATM</option>
@@ -172,9 +170,9 @@ export default function FilterBar() {
         </div>
       </div>
 
-      {/* Actions */}
-      <div className="flex items-center gap-3">
-        {/* Dynamic Sync Status Badge & Instant Manual Refresh */}
+      {/* Action Buttons */}
+      <div className="flex items-center gap-2">
+        {/* Sync Status Badge & Instant Manual Refresh */}
         <button
           onClick={handleManualRefresh}
           disabled={activeSync}
@@ -185,40 +183,40 @@ export default function FilterBar() {
               ? `Terjadi kendala koneksi: ${syncError}. Klik untuk coba lagi.`
               : `Data tersinkronisasi. Terakhir: ${lastDbSync ? new Date(lastDbSync).toLocaleTimeString('id-ID') : 'Terkini'}. Klik untuk sinkron ulang.`
           }
-          className={`flex items-center gap-2 px-3 py-1.5 rounded-xl text-xs font-medium border transition-all cursor-pointer shadow-xs ${
+          className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-xs font-medium border transition-colors cursor-pointer ${
             activeSync
-              ? 'bg-teal-50 text-[#319795] border-teal-200'
+              ? 'bg-blue-50 text-blue-700 border-blue-200'
               : syncError
               ? 'bg-amber-50 text-amber-700 border-amber-200 hover:bg-amber-100'
-              : 'bg-slate-50 text-slate-600 border-slate-200 hover:bg-slate-100'
+              : 'bg-white text-slate-600 border-[#E5EAF2] hover:bg-slate-50'
           }`}
         >
           {activeSync ? (
             <>
-              <RefreshCw size={13} className="animate-spin text-[#319795]" />
+              <RefreshCw size={12} className="animate-spin text-blue-600" />
               <span>Sinkronisasi...</span>
             </>
           ) : syncError ? (
             <>
-              <AlertCircle size={13} className="text-amber-500" />
+              <AlertCircle size={12} className="text-amber-500" />
               <span>Cache Lokal (Coba Lagi)</span>
             </>
           ) : (
             <>
-              <CheckCircle2 size={13} className="text-emerald-500" />
+              <CheckCircle2 size={12} className="text-emerald-500" />
               <span>Tersinkronisasi</span>
               <RefreshCw size={11} className="text-slate-400 ml-0.5 hover:text-slate-600" />
             </>
           )}
         </button>
 
-        {/* 1-Click Comprehensive Multi-Sheet Excel Export */}
+        {/* 1-Click Comprehensive Multi-Sheet Excel Export - Solid Blue Enterprise Button */}
         <button
           onClick={handleExportAll}
           title="Download laporan lengkap mencakup Ringkasan Sektor, Data WSID per Sektor (BCA & Non BCA), Tren Bulanan Abacus Jakarta, dan Top Problem"
-          className="flex items-center gap-2 px-3.5 py-1.5 bg-[#4FD1C5] hover:bg-[#319795] text-white font-semibold rounded-xl text-xs shadow-[0px_4px_12px_rgba(79,209,197,0.35)] transition-all active:scale-95 cursor-pointer"
+          className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-600 hover:bg-blue-700 active:bg-blue-800 text-white font-medium rounded-md text-xs transition-colors cursor-pointer shadow-xs"
         >
-          <FileSpreadsheet size={15} />
+          <FileSpreadsheet size={14} />
           <span>Export Laporan Lengkap</span>
         </button>
       </div>

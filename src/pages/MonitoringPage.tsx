@@ -676,7 +676,7 @@ export function renderAuthorBadge(author?: string) {
   }
   if (isOps) {
     return (
-      <span className="px-1.5 py-0.2 rounded text-[9px] font-bold bg-teal-50 text-[#006A63] border border-teal-200/80 uppercase tracking-wide shrink-0">
+      <span className="px-1.5 py-0.2 rounded text-[9px] font-bold bg-teal-50 text-blue-600 border border-teal-200/80 uppercase tracking-wide shrink-0">
         Ka Ops
       </span>
     );
@@ -4222,8 +4222,8 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
   // RENDER JSX (CLEAN, SIMPLE, PURITY OPERATIONAL SLATE AESTHETICS)
   // =========================================================================
   return (
-    <div className={`w-full text-[#0D1C2E] flex flex-col font-sans antialiased selection:bg-[#4FD1C5]/30 ${
-      isSupervisorRole ? 'bg-transparent min-h-0' : 'min-h-screen bg-[#F8F9FF]'
+    <div className={`w-full text-[#0D1C2E] flex flex-col font-sans antialiased selection:bg-blue-100 ${
+      isSupervisorRole ? 'bg-transparent min-h-0' : 'min-h-screen bg-[#F5F7FB]'
     }`}>
       {/* ==================================================== */}
       {/* 1. TOP HEADER (56px HEIGHT, CLEAN PURITY SLATE)     */}
@@ -4231,7 +4231,7 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
       <header className={`w-full bg-white/95 backdrop-blur-md transition-all ${
         isSupervisorRole
           ? 'rounded-2xl border border-slate-100 shadow-[0px_3.5px_5.5px_rgba(0,0,0,0.02)] mb-4 sticky top-0 z-20'
-          : 'sticky top-0 z-40 h-14 shadow-[0_1px_8px_rgba(0,0,0,0.04)] border-b border-[#EFF4FF]'
+          : 'sticky top-0 z-40 h-14 shadow-[0_1px_8px_rgba(0,0,0,0.04)] border-b border-[#E5EAF2]'
       }`}>
         <div className={`w-full h-full flex items-center justify-between gap-4 ${
           isSupervisorRole ? 'px-4 sm:px-6' : 'max-w-[1440px] mx-auto px-4 sm:px-8'
@@ -4242,8 +4242,8 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
               effectiveRole === 'KAWIL'
                 ? 'bg-indigo-100 text-indigo-700'
                 : effectiveRole === 'KAOPS'
-                ? 'bg-teal-100 text-[#006A63]'
-                : 'bg-[#4FD1C5]/20 text-[#006A63]'
+                ? 'bg-teal-100 text-blue-600'
+                : 'bg-blue-50 text-blue-600'
             }`}>
               <Server size={18} />
             </div>
@@ -4269,7 +4269,7 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
               onClick={() => setActiveTab('OPEN')}
               className={`inline-flex items-center gap-1.5 h-14 border-b-2 transition-all text-xs font-semibold cursor-pointer ${
                 activeTab === 'OPEN'
-                  ? 'border-[#4FD1C5] text-[#006A63]'
+                  ? 'border-blue-600 text-blue-600'
                   : 'border-transparent text-[#555F71] hover:text-[#0D1C2E]'
               }`}
             >
@@ -4286,18 +4286,18 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
                 onClick={() => setIsFrekuensiMenuOpen((prev) => !prev)}
                 className={`inline-flex items-center gap-1.5 h-14 border-b-2 transition-all text-xs font-semibold cursor-pointer ${
                   activeTab === 'FREKUENSI' || activeTab === 'GRAFIK_FREKUENSI' || activeTab === 'GRAFIK_24JAM'
-                    ? 'border-[#4FD1C5] text-[#006A63]'
+                    ? 'border-blue-600 text-blue-600'
                     : 'border-transparent text-[#555F71] hover:text-[#0D1C2E]'
                 }`}
               >
                 {activeTab === 'GRAFIK_FREKUENSI' ? (
                   <>
-                    <TrendingUp size={15} className="text-[#006A63]" />
+                    <TrendingUp size={15} className="text-blue-600" />
                     <span>Grafik Frekuensi</span>
                   </>
                 ) : activeTab === 'GRAFIK_24JAM' ? (
                   <>
-                    <BarChart3 size={15} className="text-[#006A63]" />
+                    <BarChart3 size={15} className="text-blue-600" />
                     <span>Grafik 24 Jam</span>
                   </>
                 ) : (
@@ -4311,7 +4311,7 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
                 <ChevronDown
                   size={13}
                   className={`transition-transform duration-200 ${
-                    isFrekuensiMenuOpen ? 'rotate-180 text-[#006A63]' : 'text-slate-400'
+                    isFrekuensiMenuOpen ? 'rotate-180 text-blue-600' : 'text-slate-400'
                   }`}
                 />
               </button>
@@ -4331,7 +4331,7 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
                     }}
                     className={`w-full px-3.5 py-2.5 text-left flex items-start gap-3 transition-colors cursor-pointer ${
                       activeTab === 'FREKUENSI'
-                        ? 'bg-[#4FD1C5]/10 text-[#006A63]'
+                        ? 'bg-blue-50/50 text-blue-600'
                         : 'hover:bg-slate-50 text-slate-700'
                     }`}
                   >
@@ -4341,7 +4341,7 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
                     <div className="flex-1 min-w-0">
                       <div className="text-xs font-bold flex items-center justify-between">
                         <span>Frekuensi</span>
-                        <span className="px-1.5 py-0.2 text-[10px] font-bold rounded-full bg-[#EFF4FF] text-[#006A63]">
+                        <span className="px-1.5 py-0.2 text-[10px] font-bold rounded-full bg-[#EFF4FF] text-blue-600">
                           {aggFreqItems.length}
                         </span>
                       </div>
@@ -4359,11 +4359,11 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
                     }}
                     className={`w-full px-3.5 py-2.5 text-left flex items-start gap-3 transition-colors cursor-pointer ${
                       activeTab === 'GRAFIK_FREKUENSI'
-                        ? 'bg-[#4FD1C5]/10 text-[#006A63]'
+                        ? 'bg-blue-50/50 text-blue-600'
                         : 'hover:bg-slate-50 text-slate-700'
                     }`}
                   >
-                    <div className="p-2 rounded-xl bg-[#4FD1C5]/20 text-[#006A63] mt-0.5">
+                    <div className="p-2 rounded-xl bg-blue-50 text-blue-600 mt-0.5">
                       <TrendingUp size={16} />
                     </div>
                     <div className="flex-1 min-w-0">
@@ -4389,7 +4389,7 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
                     }}
                     className={`w-full px-3.5 py-2 text-left flex items-start gap-3 transition-colors cursor-pointer ${
                       activeTab === 'GRAFIK_24JAM'
-                        ? 'bg-[#4FD1C5]/10 text-[#006A63]'
+                        ? 'bg-blue-50/50 text-blue-600'
                         : 'hover:bg-slate-50 text-slate-700'
                     }`}
                   >
@@ -4413,7 +4413,7 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
               onClick={() => setActiveTab('HISTORY')}
               className={`inline-flex items-center gap-1.5 h-14 border-b-2 transition-all text-xs font-semibold cursor-pointer ${
                 activeTab === 'HISTORY'
-                  ? 'border-[#4FD1C5] text-[#006A63]'
+                  ? 'border-blue-600 text-blue-600'
                   : 'border-transparent text-[#555F71] hover:text-[#0D1C2E]'
               }`}
             >
@@ -4424,7 +4424,7 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
               onClick={() => setActiveTab('UPLOAD')}
               className={`inline-flex items-center gap-1.5 h-14 border-b-2 transition-all text-xs font-semibold cursor-pointer ${
                 activeTab === 'UPLOAD'
-                  ? 'border-[#4FD1C5] text-[#006A63]'
+                  ? 'border-blue-600 text-blue-600'
                   : 'border-transparent text-[#555F71] hover:text-[#0D1C2E]'
               }`}
             >
@@ -4436,7 +4436,7 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
           <div className="flex items-center gap-2.5 sm:gap-3">
             {/* Live Sync Pill */}
             <div className="hidden lg:flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-[#EFF4FF] text-[#555F71] text-[11px] font-medium">
-              <span className="w-1.5 h-1.5 rounded-full bg-[#006A63] animate-pulse"></span>
+              <span className="w-1.5 h-1.5 rounded-full bg-blue-600 animate-pulse"></span>
               <span>Tersinkronisasi &bull; {new Date().toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })} WIB</span>
             </div>
 
@@ -4450,7 +4450,7 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
               }`}
               title="Klik untuk mengubah petugas jaga"
             >
-              <User size={13} className={!petugasName.trim() ? 'text-rose-600' : 'text-[#006A63]'} />
+              <User size={13} className={!petugasName.trim() ? 'text-rose-600' : 'text-blue-600'} />
               <span>Petugas: <strong>{petugasName.trim() || 'Wajib Diisi'}</strong></span>
               <ChevronDown size={13} className="text-[#555F71]" />
             </button>
@@ -4653,7 +4653,7 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
                   {countOpenTotal} Aktif
                 </span>
                 <div className="flex items-center gap-1.5 text-[#555F71] text-[11px] bg-white border border-[#EFF4FF] px-2.5 py-1 rounded-full shadow-2xs">
-                  <Clock size={12} className="text-[#006A63]" />
+                  <Clock size={12} className="text-blue-600" />
                   <span>Waktu Monitoring: <strong className="text-[#0D1C2E] font-semibold">{currentLiveTime.toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit', second: '2-digit' })} WIB</strong></span>
                 </div>
                 <button
@@ -4667,8 +4667,8 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
                   className="flex items-center gap-1.5 text-[#555F71] hover:text-[#0D1C2E] text-[11px] bg-[#EFF4FF] hover:bg-[#dbe6ff] px-2.5 py-1 rounded-full cursor-pointer transition-all border border-transparent hover:border-[#BFD3FF]"
                   title="Klik untuk menyinkronkan data Problem Open & Database terbaru sekarang"
                 >
-                  <RefreshCw size={12} className={isLoadingOpen || isLoadingDailyFromDb ? 'animate-spin text-[#006A63]' : 'text-[#006A63]'} />
-                  <span>{isLoadingOpen || isLoadingDailyFromDb ? 'Menyinkronkan...' : <span>Update otomatis (<strong className="text-[#0D1C2E] font-semibold">{countdownSeconds}s</strong>) • <strong className="text-[#006A63] underline">Refresh</strong></span>}</span>
+                  <RefreshCw size={12} className={isLoadingOpen || isLoadingDailyFromDb ? 'animate-spin text-blue-600' : 'text-blue-600'} />
+                  <span>{isLoadingOpen || isLoadingDailyFromDb ? 'Menyinkronkan...' : <span>Update otomatis (<strong className="text-[#0D1C2E] font-semibold">{countdownSeconds}s</strong>) • <strong className="text-blue-600 underline">Refresh</strong></span>}</span>
                 </button>
               </div>
 
@@ -4679,7 +4679,7 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
                   onClick={openDutyModal}
                   className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white shadow-2xs hover:bg-[#EFF4FF] text-[#555F71] hover:text-[#0D1C2E] transition-all text-xs font-medium border border-[#EFF4FF] cursor-pointer"
                 >
-                  <ShieldCheck size={14} className="text-[#006A63]" />
+                  <ShieldCheck size={14} className="text-blue-600" />
                   <span>Ganti Petugas</span>
                 </button>
 
@@ -4706,24 +4706,24 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
                 onClick={() => handleCardFilterClick('ALL')}
                 className={`cursor-pointer bg-white p-3.5 rounded-2xl shadow-sm flex items-center justify-between transition-all select-none border ${
                   openCardFilter === 'ALL'
-                    ? 'border-[#4FD1C5] bg-[#E6FFFA]/30 ring-2 ring-[#4FD1C5]/50 shadow-md'
+                    ? 'border-blue-600 bg-blue-50/30 ring-2 ring-blue-400/50 shadow-md'
                     : 'border-[#EFF4FF] hover:border-slate-300 hover:shadow-md'
                 }`}
               >
                 <div className="flex flex-col min-w-0">
-                  <span className="text-[11px] font-bold text-[#006A63] uppercase tracking-wider truncate">
+                  <span className="text-[11px] font-bold text-blue-600 uppercase tracking-wider truncate">
                     Total Open
                   </span>
                   <span className="text-2xl sm:text-3xl font-extrabold text-[#0D1C2E] leading-tight mt-0.5">
                     {countOpenTotal}
                   </span>
                   <div className="flex items-center gap-1 mt-1">
-                    <span className="inline-flex items-center px-1.5 py-0.2 rounded-full bg-[#4FD1C5]/20 text-[#006A63] text-[9px] font-bold">
+                    <span className="inline-flex items-center px-1.5 py-0.2 rounded-full bg-blue-50 text-blue-600 text-[9px] font-bold">
                       {openCardFilter === 'ALL' ? 'Aktif Dipilih' : 'Semua Problem'}
                     </span>
                   </div>
                 </div>
-                <div className="w-11 h-11 rounded-xl bg-[#4FD1C5] text-[#005750] flex items-center justify-center shrink-0">
+                <div className="w-11 h-11 rounded-xl bg-blue-600 text-blue-700 flex items-center justify-center shrink-0">
                   <Server size={22} />
                 </div>
               </div>
@@ -4826,7 +4826,7 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
                     {countNoAction}
                   </span>
                   <div className="flex items-center gap-1 mt-1">
-                    <span className="inline-flex items-center px-1.5 py-0.2 rounded-full bg-[#E5EEFF] text-[#006A63] text-[9px] font-bold">
+                    <span className="inline-flex items-center px-1.5 py-0.2 rounded-full bg-[#E5EEFF] text-blue-600 text-[9px] font-bold">
                       Perlu Tindakan
                     </span>
                   </div>
@@ -4840,7 +4840,7 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
             {/* Empty State Simulation Card (when 0 or simulated) */}
             {(countOpenTotal === 0 || isSimulasiAman) && (
               <div className="bg-white p-8 rounded-2xl shadow-sm text-center border border-[#EFF4FF]">
-                <div className="w-14 h-14 rounded-full bg-[#4FD1C5]/20 text-[#006A63] mx-auto flex items-center justify-center mb-3">
+                <div className="w-14 h-14 rounded-full bg-blue-50 text-blue-600 mx-auto flex items-center justify-center mb-3">
                   <CheckCircle2 size={32} />
                 </div>
                 <h3 className="font-bold text-base text-[#0D1C2E]">
@@ -4875,7 +4875,7 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
                       setCurrentPageOpen(1);
                     }}
                     placeholder="Cari WSID, lokasi, atau ATM/CRM..."
-                    className="w-full h-9 pl-9 pr-8 rounded-xl bg-[#F8F9FF] text-xs text-[#0D1C2E] placeholder:text-[#555F71]/70 border border-[#EFF4FF] focus:outline-none focus:ring-1 focus:ring-[#4FD1C5] focus:bg-white transition-all"
+                    className="w-full h-9 pl-9 pr-8 rounded-xl bg-[#F8F9FF] text-xs text-[#0D1C2E] placeholder:text-[#555F71]/70 border border-[#EFF4FF] focus:outline-none focus:ring-1 focus:ring-blue-500 focus:bg-white transition-all"
                   />
                   {openSearch && (
                     <button
@@ -4933,11 +4933,11 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
                     onClick={() => setIsEventCodeDropdownOpenOpen((prev) => !prev)}
                     className={`inline-flex items-center gap-1.5 h-9 px-3 rounded-xl text-xs font-medium transition-colors shrink-0 border cursor-pointer ${
                       selectedEventCodesOpen.length > 0
-                        ? 'bg-[#E6FFFA] text-[#006A63] border-[#4FD1C5] font-semibold'
+                        ? 'bg-blue-50 text-blue-600 border-blue-600 font-semibold'
                         : 'bg-[#F8F9FF] hover:bg-[#EFF4FF] text-[#0D1C2E] border-[#EFF4FF]'
                     }`}
                   >
-                    <SlidersHorizontal size={13} className={selectedEventCodesOpen.length > 0 ? 'text-[#006A63]' : 'text-[#555F71]'} />
+                    <SlidersHorizontal size={13} className={selectedEventCodesOpen.length > 0 ? 'text-blue-600' : 'text-[#555F71]'} />
                     <span className="text-[#555F71]">Event:</span>
                     <span className="font-semibold truncate max-w-[130px]">
                       {selectedEventCodesOpen.length === 0
@@ -4962,7 +4962,7 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
                           <button
                             type="button"
                             onClick={selectAllEventCodesOpen}
-                            className="text-[11px] text-[#006A63] hover:underline font-semibold px-2 py-0.5 rounded cursor-pointer"
+                            className="text-[11px] text-blue-600 hover:underline font-semibold px-2 py-0.5 rounded cursor-pointer"
                           >
                             Pilih Semua
                           </button>
@@ -4984,7 +4984,7 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
                           placeholder="Cari deskripsi problem..."
                           value={eventCodeSearchOpen}
                           onChange={(e) => setEventCodeSearchOpen(e.target.value)}
-                          className="w-full pl-8 pr-7 py-1.5 text-xs bg-slate-50 border border-slate-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-[#4FD1C5]"
+                          className="w-full pl-8 pr-7 py-1.5 text-xs bg-slate-50 border border-slate-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-blue-500"
                         />
                         {eventCodeSearchOpen && (
                           <button
@@ -5007,7 +5007,7 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
                               <label
                                 key={code}
                                 className={`flex items-start justify-between gap-2 px-2 py-1.5 rounded-lg cursor-pointer text-xs transition-colors ${
-                                  isChecked ? 'bg-[#E6FFFA] text-[#006A63] font-semibold' : 'hover:bg-slate-50 text-slate-700'
+                                  isChecked ? 'bg-blue-50 text-blue-600 font-semibold' : 'hover:bg-slate-50 text-slate-700'
                                 }`}
                               >
                                 <div className="flex items-start gap-2">
@@ -5015,7 +5015,7 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
                                     type="checkbox"
                                     checked={isChecked}
                                     onChange={() => toggleEventCodeOpen(code)}
-                                    className="mt-0.5 h-3.5 w-3.5 rounded border-slate-300 text-[#006A63] focus:ring-[#4FD1C5] cursor-pointer"
+                                    className="mt-0.5 h-3.5 w-3.5 rounded border-slate-300 text-blue-600 focus:ring-blue-500 cursor-pointer"
                                   />
                                   <span className="leading-snug break-words">{code}</span>
                                 </div>
@@ -5047,11 +5047,11 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
                     }}
                     className={`inline-flex items-center gap-1.5 h-9 px-3 rounded-xl text-xs font-medium transition-colors shrink-0 border cursor-pointer ${
                       selectedOpenSPs.length > 0
-                        ? 'bg-[#E6FFFA] text-[#006A63] border-[#4FD1C5] font-semibold'
+                        ? 'bg-blue-50 text-blue-600 border-blue-600 font-semibold'
                         : 'bg-[#F8F9FF] hover:bg-[#EFF4FF] text-[#0D1C2E] border-[#EFF4FF]'
                     }`}
                   >
-                    <MapPin size={13} className={selectedOpenSPs.length > 0 ? 'text-[#006A63]' : 'text-[#555F71]'} />
+                    <MapPin size={13} className={selectedOpenSPs.length > 0 ? 'text-blue-600' : 'text-[#555F71]'} />
                     <span className="text-[#555F71]">SP:</span>
                     <span className="font-semibold truncate max-w-[120px]">
                       {selectedOpenSPs.length === 0
@@ -5076,7 +5076,7 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
                           <button
                             type="button"
                             onClick={selectAllOpenSPs}
-                            className="text-[11px] text-[#006A63] hover:underline font-semibold px-2 py-0.5 rounded cursor-pointer"
+                            className="text-[11px] text-blue-600 hover:underline font-semibold px-2 py-0.5 rounded cursor-pointer"
                           >
                             Pilih Semua
                           </button>
@@ -5098,7 +5098,7 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
                           placeholder="Cari Service Point..."
                           value={spSearchOpen}
                           onChange={(e) => setSpSearchOpen(e.target.value)}
-                          className="w-full pl-8 pr-7 py-1.5 text-xs bg-slate-50 border border-slate-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-[#4FD1C5]"
+                          className="w-full pl-8 pr-7 py-1.5 text-xs bg-slate-50 border border-slate-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-blue-500"
                         />
                         {spSearchOpen && (
                           <button
@@ -5123,7 +5123,7 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
                               <label
                                 key={sp}
                                 className={`flex items-start justify-between gap-2 px-2 py-1.5 rounded-lg cursor-pointer text-xs transition-colors ${
-                                  isChecked ? 'bg-[#E6FFFA] text-[#006A63] font-semibold' : 'hover:bg-slate-50 text-slate-700'
+                                  isChecked ? 'bg-blue-50 text-blue-600 font-semibold' : 'hover:bg-slate-50 text-slate-700'
                                 }`}
                               >
                                 <div className="flex items-start gap-2">
@@ -5131,7 +5131,7 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
                                     type="checkbox"
                                     checked={isChecked}
                                     onChange={() => toggleOpenSP(sp)}
-                                    className="mt-0.5 h-3.5 w-3.5 rounded border-slate-300 text-[#006A63] focus:ring-[#4FD1C5] cursor-pointer"
+                                    className="mt-0.5 h-3.5 w-3.5 rounded border-slate-300 text-blue-600 focus:ring-blue-500 cursor-pointer"
                                   />
                                   <span className="leading-snug break-words">{sp}</span>
                                 </div>
@@ -5163,11 +5163,11 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
                     }}
                     className={`inline-flex items-center gap-1.5 h-9 px-3 rounded-xl text-xs font-medium transition-colors shrink-0 border cursor-pointer ${
                       selectedOpenSektors.length > 0
-                        ? 'bg-[#E6FFFA] text-[#006A63] border-[#4FD1C5] font-semibold'
+                        ? 'bg-blue-50 text-blue-600 border-blue-600 font-semibold'
                         : 'bg-[#F8F9FF] hover:bg-[#EFF4FF] text-[#0D1C2E] border-[#EFF4FF]'
                     }`}
                   >
-                    <Layers size={13} className={selectedOpenSektors.length > 0 ? 'text-[#006A63]' : 'text-[#555F71]'} />
+                    <Layers size={13} className={selectedOpenSektors.length > 0 ? 'text-blue-600' : 'text-[#555F71]'} />
                     <span className="text-[#555F71]">Sektor:</span>
                     <span className="font-semibold truncate max-w-[120px]">
                       {selectedOpenSektors.length === 0
@@ -5192,7 +5192,7 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
                           <button
                             type="button"
                             onClick={selectAllOpenSektors}
-                            className="text-[11px] text-[#006A63] hover:underline font-semibold px-2 py-0.5 rounded cursor-pointer"
+                            className="text-[11px] text-blue-600 hover:underline font-semibold px-2 py-0.5 rounded cursor-pointer"
                           >
                             Pilih Semua
                           </button>
@@ -5214,7 +5214,7 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
                           placeholder="Cari Sektor..."
                           value={sektorSearchOpen}
                           onChange={(e) => setSektorSearchOpen(e.target.value)}
-                          className="w-full pl-8 pr-7 py-1.5 text-xs bg-slate-50 border border-slate-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-[#4FD1C5]"
+                          className="w-full pl-8 pr-7 py-1.5 text-xs bg-slate-50 border border-slate-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-blue-500"
                         />
                         {sektorSearchOpen && (
                           <button
@@ -5237,7 +5237,7 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
                               <label
                                 key={sk}
                                 className={`flex items-start justify-between gap-2 px-2 py-1.5 rounded-lg cursor-pointer text-xs transition-colors ${
-                                  isChecked ? 'bg-[#E6FFFA] text-[#006A63] font-semibold' : 'hover:bg-slate-50 text-slate-700'
+                                  isChecked ? 'bg-blue-50 text-blue-600 font-semibold' : 'hover:bg-slate-50 text-slate-700'
                                 }`}
                               >
                                 <div className="flex items-start gap-2">
@@ -5245,7 +5245,7 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
                                     type="checkbox"
                                     checked={isChecked}
                                     onChange={() => toggleOpenSektor(sk)}
-                                    className="mt-0.5 h-3.5 w-3.5 rounded border-slate-300 text-[#006A63] focus:ring-[#4FD1C5] cursor-pointer"
+                                    className="mt-0.5 h-3.5 w-3.5 rounded border-slate-300 text-blue-600 focus:ring-blue-500 cursor-pointer"
                                   />
                                   <span className="leading-snug break-words">{sk}</span>
                                 </div>
@@ -5277,11 +5277,11 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
                     }}
                     className={`inline-flex items-center gap-1.5 h-9 px-3 rounded-xl text-xs font-medium transition-colors shrink-0 border cursor-pointer ${
                       selectedOpenVendors.length > 0
-                        ? 'bg-[#E6FFFA] text-[#006A63] border-[#4FD1C5] font-semibold'
+                        ? 'bg-blue-50 text-blue-600 border-blue-600 font-semibold'
                         : 'bg-[#F8F9FF] hover:bg-[#EFF4FF] text-[#0D1C2E] border-[#EFF4FF]'
                     }`}
                   >
-                    <Wrench size={13} className={selectedOpenVendors.length > 0 ? 'text-[#006A63]' : 'text-[#555F71]'} />
+                    <Wrench size={13} className={selectedOpenVendors.length > 0 ? 'text-blue-600' : 'text-[#555F71]'} />
                     <span className="text-[#555F71]">Vendor:</span>
                     <span className="font-semibold truncate max-w-[120px]">
                       {selectedOpenVendors.length === 0
@@ -5306,7 +5306,7 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
                           <button
                             type="button"
                             onClick={selectAllOpenVendors}
-                            className="text-[11px] text-[#006A63] hover:underline font-semibold px-2 py-0.5 rounded cursor-pointer"
+                            className="text-[11px] text-blue-600 hover:underline font-semibold px-2 py-0.5 rounded cursor-pointer"
                           >
                             Pilih Semua
                           </button>
@@ -5328,7 +5328,7 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
                           placeholder="Cari Vendor..."
                           value={vendorSearchOpen}
                           onChange={(e) => setVendorSearchOpen(e.target.value)}
-                          className="w-full pl-8 pr-7 py-1.5 text-xs bg-slate-50 border border-slate-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-[#4FD1C5]"
+                          className="w-full pl-8 pr-7 py-1.5 text-xs bg-slate-50 border border-slate-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-blue-500"
                         />
                         {vendorSearchOpen && (
                           <button
@@ -5351,7 +5351,7 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
                               <label
                                 key={vd}
                                 className={`flex items-start justify-between gap-2 px-2 py-1.5 rounded-lg cursor-pointer text-xs transition-colors ${
-                                  isChecked ? 'bg-[#E6FFFA] text-[#006A63] font-semibold' : 'hover:bg-slate-50 text-slate-700'
+                                  isChecked ? 'bg-blue-50 text-blue-600 font-semibold' : 'hover:bg-slate-50 text-slate-700'
                                 }`}
                               >
                                 <div className="flex items-start gap-2">
@@ -5359,7 +5359,7 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
                                     type="checkbox"
                                     checked={isChecked}
                                     onChange={() => toggleOpenVendor(vd)}
-                                    className="mt-0.5 h-3.5 w-3.5 rounded border-slate-300 text-[#006A63] focus:ring-[#4FD1C5] cursor-pointer"
+                                    className="mt-0.5 h-3.5 w-3.5 rounded border-slate-300 text-blue-600 focus:ring-blue-500 cursor-pointer"
                                   />
                                   <span className="leading-snug break-words">{vd}</span>
                                 </div>
@@ -5391,11 +5391,11 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
                     }}
                     className={`inline-flex items-center gap-1.5 h-9 px-3 rounded-xl text-xs font-medium transition-colors shrink-0 border cursor-pointer ${
                       selectedOpenTipes.length > 0
-                        ? 'bg-[#E6FFFA] text-[#006A63] border-[#4FD1C5] font-semibold'
+                        ? 'bg-blue-50 text-blue-600 border-blue-600 font-semibold'
                         : 'bg-[#F8F9FF] hover:bg-[#EFF4FF] text-[#0D1C2E] border-[#EFF4FF]'
                     }`}
                   >
-                    <Cpu size={13} className={selectedOpenTipes.length > 0 ? 'text-[#006A63]' : 'text-[#555F71]'} />
+                    <Cpu size={13} className={selectedOpenTipes.length > 0 ? 'text-blue-600' : 'text-[#555F71]'} />
                     <span className="text-[#555F71]">Tipe:</span>
                     <span className="font-semibold truncate max-w-[120px]">
                       {selectedOpenTipes.length === 0
@@ -5415,7 +5415,7 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
                           <button
                             type="button"
                             onClick={selectAllOpenTipes}
-                            className="text-[11px] text-[#006A63] hover:underline font-semibold px-2 py-0.5 rounded cursor-pointer"
+                            className="text-[11px] text-blue-600 hover:underline font-semibold px-2 py-0.5 rounded cursor-pointer"
                           >
                             Pilih Semua
                           </button>
@@ -5443,7 +5443,7 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
                             <label
                               key={tipe}
                               className={`flex items-center justify-between gap-2 px-2 py-2 rounded-lg cursor-pointer text-xs transition-colors ${
-                                isChecked ? 'bg-[#E6FFFA] text-[#006A63] font-semibold' : 'hover:bg-slate-50 text-slate-700'
+                                isChecked ? 'bg-blue-50 text-blue-600 font-semibold' : 'hover:bg-slate-50 text-slate-700'
                               }`}
                             >
                               <div className="flex items-center gap-2">
@@ -5451,7 +5451,7 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
                                   type="checkbox"
                                   checked={isChecked}
                                   onChange={() => toggleOpenTipe(tipe)}
-                                  className="h-3.5 w-3.5 rounded border-slate-300 text-[#006A63] focus:ring-[#4FD1C5] cursor-pointer"
+                                  className="h-3.5 w-3.5 rounded border-slate-300 text-blue-600 focus:ring-blue-500 cursor-pointer"
                                 />
                                 <span>{tipe === 'ATM' ? 'ATM (Tarik Tunai)' : 'CRM / ATS (Setor Tarik)'}</span>
                               </div>
@@ -5502,7 +5502,7 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
                     }}
                     className={`h-9 px-3 pr-7 rounded-xl text-xs font-medium border outline-none cursor-pointer appearance-none ${
                       openActionFilter !== 'ALL'
-                        ? 'bg-[#E6FFFA] text-[#006A63] border-[#4FD1C5] font-semibold'
+                        ? 'bg-blue-50 text-blue-600 border-blue-600 font-semibold'
                         : 'bg-[#F8F9FF] hover:bg-[#EFF4FF] text-[#0D1C2E] border-[#EFF4FF]'
                     }`}
                   >
@@ -5514,7 +5514,7 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
                 </div>
 
                 {/* 8. Filter Periode Tanggal (Dari & Sampai) */}
-                <div className="flex items-center gap-1.5 bg-[#F8F9FF] border border-[#EFF4FF] rounded-xl px-2.5 h-9 shrink-0">
+                <div className="flex items-center gap-1.5 bg-white border border-[#E5EAF2] rounded-xl px-2.5 h-9 shrink-0">
                   <Calendar size={13} className="text-[#555F71]" />
                   <span className="text-[10px] font-bold text-slate-400 uppercase">Dari:</span>
                   <input
@@ -5560,7 +5560,7 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
                   <span className="text-[#555F71] font-medium mr-1">Filter Aktif:</span>
 
                   {(openStartDate !== 'ALL' || openEndDate !== 'ALL') && (
-                    <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-[#E6FFFA] text-[#006A63] font-medium">
+                    <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-blue-50 text-blue-600 font-medium">
                       <Calendar size={12} />
                       <span>Periode: <strong>{openStartDate !== 'ALL' ? openStartDate : 'Awal'} s/d {openEndDate !== 'ALL' ? openEndDate : 'Akhir'}</strong></span>
                       <button
@@ -5594,7 +5594,7 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
                   )}
 
                   {selectedEventCodesOpen.map((evt) => (
-                    <span key={evt} className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-[#E6FFFA] text-[#006A63] font-medium">
+                    <span key={evt} className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-blue-50 text-blue-600 font-medium">
                       <span>Event: <strong>{evt}</strong></span>
                       <button onClick={() => toggleEventCodeOpen(evt)} className="hover:text-rose-600 cursor-pointer">
                         <X size={12} />
@@ -5659,7 +5659,7 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
                   <button
                     type="button"
                     onClick={handleResetOpenFilters}
-                    className="text-[#006A63] hover:underline font-semibold ml-2 cursor-pointer text-xs"
+                    className="text-blue-600 hover:underline font-semibold ml-2 cursor-pointer text-xs"
                   >
                     Hapus Semua
                   </button>
@@ -5678,7 +5678,7 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
                           type="checkbox"
                           checked={selectedIncidentKeys.size > 0 && selectedIncidentKeys.size === filteredOpenIncidents.length}
                           onChange={handleToggleSelectAll}
-                          className="w-4 h-4 rounded text-[#006A63] focus:ring-0 accent-[#006A63] cursor-pointer"
+                          className="w-4 h-4 rounded text-blue-600 focus:ring-0 accent-blue-600 cursor-pointer"
                         />
                       </th>
                       <th
@@ -5688,7 +5688,7 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
                         <div className="flex items-center gap-1.5">
                           <span>WSID / Lokasi</span>
                           {openSortColumn === 'wsid' ? (
-                            openSortDirection === 'asc' ? <ChevronUp size={12} className="text-[#006A63]" /> : <ChevronDown size={12} className="text-[#006A63]" />
+                            openSortDirection === 'asc' ? <ChevronUp size={12} className="text-blue-600" /> : <ChevronDown size={12} className="text-blue-600" />
                           ) : (
                             <ArrowUpDown size={12} className="text-slate-400" />
                           )}
@@ -5701,7 +5701,7 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
                         <div className="flex items-center gap-1.5">
                           <span>Tipe / Vendor</span>
                           {openSortColumn === 'typeMesin' ? (
-                            openSortDirection === 'asc' ? <ChevronUp size={12} className="text-[#006A63]" /> : <ChevronDown size={12} className="text-[#006A63]" />
+                            openSortDirection === 'asc' ? <ChevronUp size={12} className="text-blue-600" /> : <ChevronDown size={12} className="text-blue-600" />
                           ) : (
                             <ArrowUpDown size={12} className="text-slate-400" />
                           )}
@@ -5714,7 +5714,7 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
                         <div className="flex items-center gap-1.5">
                           <span>Problem</span>
                           {openSortColumn === 'eventCodeDesc' ? (
-                            openSortDirection === 'asc' ? <ChevronUp size={12} className="text-[#006A63]" /> : <ChevronDown size={12} className="text-[#006A63]" />
+                            openSortDirection === 'asc' ? <ChevronUp size={12} className="text-blue-600" /> : <ChevronDown size={12} className="text-blue-600" />
                           ) : (
                             <ArrowUpDown size={12} className="text-slate-400" />
                           )}
@@ -5727,7 +5727,7 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
                         <div className="flex items-center gap-1.5">
                           <span>Start</span>
                           {openSortColumn === 'startTime' ? (
-                            openSortDirection === 'asc' ? <ChevronUp size={12} className="text-[#006A63]" /> : <ChevronDown size={12} className="text-[#006A63]" />
+                            openSortDirection === 'asc' ? <ChevronUp size={12} className="text-blue-600" /> : <ChevronDown size={12} className="text-blue-600" />
                           ) : (
                             <ArrowUpDown size={12} className="text-slate-400" />
                           )}
@@ -5743,7 +5743,7 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
                             <span className="inline-flex items-center px-1 py-0.2 rounded bg-emerald-100 text-emerald-800 text-[8px] font-extrabold tracking-wider">LIVE</span>
                           </span>
                           {openSortColumn === 'durasiOpr' ? (
-                            openSortDirection === 'asc' ? <ChevronUp size={12} className="text-[#006A63]" /> : <ChevronDown size={12} className="text-[#006A63]" />
+                            openSortDirection === 'asc' ? <ChevronUp size={12} className="text-blue-600" /> : <ChevronDown size={12} className="text-blue-600" />
                           ) : (
                             <ArrowUpDown size={12} className="text-slate-400" />
                           )}
@@ -5756,7 +5756,7 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
                         <div className="flex items-center gap-1.5">
                           <span>Chronic Status</span>
                           {openSortColumn === 'chronic' ? (
-                            openSortDirection === 'asc' ? <ChevronUp size={12} className="text-[#006A63]" /> : <ChevronDown size={12} className="text-[#006A63]" />
+                            openSortDirection === 'asc' ? <ChevronUp size={12} className="text-blue-600" /> : <ChevronDown size={12} className="text-blue-600" />
                           ) : (
                             <ArrowUpDown size={12} className="text-slate-400" />
                           )}
@@ -5769,7 +5769,7 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
                         <div className="flex items-center gap-1.5">
                           <span>Update Terakhir (Keterangan)</span>
                           {openSortColumn === 'actionTerakhir' ? (
-                            openSortDirection === 'asc' ? <ChevronUp size={12} className="text-[#006A63]" /> : <ChevronDown size={12} className="text-[#006A63]" />
+                            openSortDirection === 'asc' ? <ChevronUp size={12} className="text-blue-600" /> : <ChevronDown size={12} className="text-blue-600" />
                           ) : (
                             <ArrowUpDown size={12} className="text-slate-400" />
                           )}
@@ -5783,7 +5783,7 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
                       <tr>
                         <td colSpan={9} className="py-12 text-center text-slate-400">
                           {isLoadingOpen && allDailyIncidents.length === 0 ? (
-                            <div className="flex items-center justify-center gap-2 text-[#006A63] font-medium">
+                            <div className="flex items-center justify-center gap-2 text-blue-600 font-medium">
                               <Clock size={16} className="animate-spin" />
                               <span>Memuat insiden dari server...</span>
                             </div>
@@ -5798,7 +5798,7 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
                               {hasActiveOpenFilters && (
                                 <button
                                   onClick={handleResetOpenFilters}
-                                  className="mt-2 px-3.5 py-1.5 rounded-xl bg-[#EFF4FF] text-[#006A63] font-semibold text-xs cursor-pointer hover:bg-[#E5EEFF]"
+                                  className="mt-2 px-3.5 py-1.5 rounded-xl bg-[#EFF4FF] text-blue-600 font-semibold text-xs cursor-pointer hover:bg-[#E5EEFF]"
                                 >
                                   Reset Filter
                                 </button>
@@ -5818,7 +5818,7 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
                             key={r.incidentKey}
                             className={`h-10 hover:bg-[#F8F9FF] transition-colors ${
                               isDrawerActive
-                                ? 'bg-[#E6FFFA]/50 ring-1 ring-[#4FD1C5]/40'
+                                ? 'bg-blue-50/50 ring-1 ring-blue-400/40'
                                 : isSelected
                                 ? 'bg-[#EFF4FF]/70'
                                 : ''
@@ -5829,7 +5829,7 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
                                 type="checkbox"
                                 checked={isSelected}
                                 onChange={() => handleToggleSelectKey(r.incidentKey)}
-                                className="w-4 h-4 rounded text-[#006A63] focus:ring-0 accent-[#006A63] cursor-pointer"
+                                className="w-4 h-4 rounded text-blue-600 focus:ring-0 accent-blue-600 cursor-pointer"
                               />
                             </td>
 
@@ -5887,7 +5887,7 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
                                       ? 'bg-[#BA1A1A]'
                                       : r.durasiOpr >= 60
                                       ? 'bg-amber-500'
-                                      : 'bg-[#4FD1C5]'
+                                      : 'bg-blue-600'
                                   }`}
                                 />
                                 <span className="text-[#0D1C2E] font-medium truncate max-w-[200px]" title={r.eventCodeDesc}>
@@ -5930,9 +5930,9 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
                               ) : chronic?.is3x5Hari ? (
                                 <span
                                   title={`Problem yang sama terjadi ${chronic.fiveDayCount}x dlm 5 hari`}
-                                  className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-[#EFF4FF] text-[#006A63] text-[10px] font-bold"
+                                  className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-[#EFF4FF] text-blue-600 text-[10px] font-bold"
                                 >
-                                  <Repeat size={11} className="text-[#006A63]" />
+                                  <Repeat size={11} className="text-blue-600" />
                                   <span>3x/5 hari</span>
                                 </span>
                               ) : (
@@ -5951,7 +5951,7 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
                                     {r.actionTerakhir}
                                   </span>
                                   <span className="text-[10px] text-[#555F71] flex items-center gap-1.5 truncate">
-                                    <CheckCircle2 size={11} className="text-[#006A63] shrink-0" />
+                                    <CheckCircle2 size={11} className="text-blue-600 shrink-0" />
                                     {renderAuthorBadge(r.actionTerakhirOleh)}
                                     <span className="truncate">{cleanAuthorName(r.actionTerakhirOleh)} &bull; {formatStartProblemTime(r.actionTerakhirWaktu) !== '-' ? formatStartProblemTime(r.actionTerakhirWaktu) : (r.actionTerakhirWaktu || '-')}</span>
                                   </span>
@@ -5998,7 +5998,7 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
                                 <button
                                   type="button"
                                   onClick={() => handleOpenDetailDrawer(r)}
-                                  className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-[#EFF4FF] hover:bg-[#4FD1C5] hover:text-[#005750] text-[#006A63] text-xs font-semibold transition-colors cursor-pointer"
+                                  className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-[#EFF4FF] hover:bg-blue-600 hover:text-blue-700 text-blue-600 text-xs font-semibold transition-colors cursor-pointer"
                                 >
                                   <span>Update</span>
                                   <Edit3 size={12} />
@@ -6089,7 +6089,7 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
                       setFreqSearch(e.target.value);
                       setCurrentPageFreq(1);
                     }}
-                    className="w-full h-9 pl-9 pr-3 rounded-xl bg-[#F8F9FF] text-xs text-[#0D1C2E] border border-[#EFF4FF] outline-none focus:bg-white focus:ring-1 focus:ring-[#4FD1C5]"
+                    className="w-full h-9 pl-9 pr-3 rounded-xl bg-[#F8F9FF] text-xs text-[#0D1C2E] border border-[#EFF4FF] outline-none focus:bg-white focus:ring-1 focus:ring-blue-500"
                   />
                 </div>
 
@@ -6100,11 +6100,11 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
                     onClick={() => setIsEventCodeDropdownOpenFreq((prev) => !prev)}
                     className={`h-9 px-3 rounded-xl text-xs font-medium border flex items-center gap-1.5 cursor-pointer ${
                       selectedEventCodesFreq.length > 0
-                        ? 'bg-[#E6FFFA] text-[#006A63] border-[#4FD1C5]'
+                        ? 'bg-blue-50 text-blue-600 border-blue-600'
                         : 'bg-[#F8F9FF] hover:bg-[#EFF4FF] text-[#0D1C2E] border-[#EFF4FF]'
                     }`}
                   >
-                    <SlidersHorizontal size={13} className="text-[#006A63]" />
+                    <SlidersHorizontal size={13} className="text-blue-600" />
                     <span className="truncate max-w-[160px]">
                       {selectedEventCodesFreq.length === 0
                         ? `Event Code (${freqAvailableEvents.length})`
@@ -6121,7 +6121,7 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
                           <button
                             type="button"
                             onClick={selectAllEventCodesFreq}
-                            className="text-[11px] text-[#006A63] hover:underline font-semibold px-2 py-0.5 rounded cursor-pointer"
+                            className="text-[11px] text-blue-600 hover:underline font-semibold px-2 py-0.5 rounded cursor-pointer"
                           >
                             Pilih Semua
                           </button>
@@ -6143,7 +6143,7 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
                           placeholder="Cari deskripsi event..."
                           value={eventCodeSearchFreq}
                           onChange={(e) => setEventCodeSearchFreq(e.target.value)}
-                          className="w-full pl-8 pr-7 py-1.5 text-xs bg-slate-50 border border-slate-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-[#4FD1C5]"
+                          className="w-full pl-8 pr-7 py-1.5 text-xs bg-slate-50 border border-slate-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-blue-500"
                         />
                       </div>
 
@@ -6156,14 +6156,14 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
                               <label
                                 key={code}
                                 className={`flex items-start gap-2.5 px-2 py-1.5 rounded-lg cursor-pointer text-xs transition-colors ${
-                                  isChecked ? 'bg-[#E6FFFA] text-[#006A63] font-semibold' : 'hover:bg-slate-50 text-slate-700'
+                                  isChecked ? 'bg-blue-50 text-blue-600 font-semibold' : 'hover:bg-slate-50 text-slate-700'
                                 }`}
                               >
                                 <input
                                   type="checkbox"
                                   checked={isChecked}
                                   onChange={() => toggleEventCodeFreq(code)}
-                                  className="mt-0.5 h-3.5 w-3.5 rounded border-slate-300 text-[#006A63] focus:ring-[#4FD1C5] cursor-pointer"
+                                  className="mt-0.5 h-3.5 w-3.5 rounded border-slate-300 text-blue-600 focus:ring-blue-500 cursor-pointer"
                                 />
                                 <span className="leading-snug break-words">{code}</span>
                               </label>
@@ -6190,7 +6190,7 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
                 </select>
 
                 {/* Date Filter: Range Dari & Sampai */}
-                <div className="flex items-center gap-1.5 h-9 px-2.5 rounded-xl bg-[#F8F9FF] border border-[#EFF4FF] text-xs">
+                <div className="flex items-center gap-1.5 h-9 px-2.5 rounded-xl bg-white border border-[#E5EAF2] text-xs">
                   <span className="text-[10px] font-bold text-slate-400 uppercase">Dari:</span>
                   <select
                     value={freqStartDate}
@@ -6254,7 +6254,7 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
                   type="button"
                   onClick={() => fetchDailyIncidentsFromDb(historyMonth)}
                   disabled={isLoadingDailyFromDb}
-                  className="inline-flex items-center gap-1.5 h-9 px-3 rounded-xl bg-[#EFF4FF] hover:bg-[#E5EEFF] text-[#006A63] text-xs font-semibold shadow-2xs transition-all cursor-pointer"
+                  className="inline-flex items-center gap-1.5 h-9 px-3 rounded-xl bg-[#EFF4FF] hover:bg-[#E5EEFF] text-blue-600 text-xs font-semibold shadow-2xs transition-all cursor-pointer"
                   title="Sinkronkan data frekuensi dari database spreadsheet"
                 >
                   <RefreshCw size={13} className={isLoadingDailyFromDb ? 'animate-spin' : ''} />
@@ -6278,7 +6278,7 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
                       `Frekuensi_Problem_${dateStr}.xlsx`
                     );
                   }}
-                  className="inline-flex items-center gap-1.5 h-9 px-3.5 rounded-xl bg-[#EFF4FF] hover:bg-[#E5EEFF] text-[#006A63] text-xs font-semibold shadow-2xs transition-all cursor-pointer"
+                  className="inline-flex items-center gap-1.5 h-9 px-3.5 rounded-xl bg-[#EFF4FF] hover:bg-[#E5EEFF] text-blue-600 text-xs font-semibold shadow-2xs transition-all cursor-pointer"
                 >
                   <Download size={14} />
                   <span>Export Excel</span>
@@ -6295,7 +6295,7 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
               >
                 <table className="w-full text-left text-xs border-collapse">
                   <thead>
-                    <tr className="bg-[#F8F9FF] text-[#555F71] font-bold uppercase tracking-wider text-[11px] border-b border-[#EFF4FF] select-none h-10">
+                    <tr className="bg-[#F8F9FF] text-[#555F71] font-bold uppercase tracking-wider text-[11px] border-b border-[#E5EAF2] select-none h-10">
                       <th className="py-2 px-3 w-12 text-center">No</th>
                       <th
                         onClick={() => handleSortFreq('wsid')}
@@ -6303,7 +6303,7 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
                       >
                         <div className="flex items-center gap-1">
                           <span>WSID</span>
-                          <ArrowUpDown size={12} className={sortFieldFreq === 'wsid' ? 'text-[#006A63]' : 'text-slate-400'} />
+                          <ArrowUpDown size={12} className={sortFieldFreq === 'wsid' ? 'text-blue-600' : 'text-slate-400'} />
                         </div>
                       </th>
                       <th
@@ -6312,7 +6312,7 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
                       >
                         <div className="flex items-center gap-1">
                           <span>Lokasi</span>
-                          <ArrowUpDown size={12} className={sortFieldFreq === 'lokasi' ? 'text-[#006A63]' : 'text-slate-400'} />
+                          <ArrowUpDown size={12} className={sortFieldFreq === 'lokasi' ? 'text-blue-600' : 'text-slate-400'} />
                         </div>
                       </th>
                       <th
@@ -6321,7 +6321,7 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
                       >
                         <div className="flex items-center gap-1">
                           <span>Service Point - Sektor</span>
-                          <ArrowUpDown size={12} className={sortFieldFreq === 'servicePointSektor' ? 'text-[#006A63]' : 'text-slate-400'} />
+                          <ArrowUpDown size={12} className={sortFieldFreq === 'servicePointSektor' ? 'text-blue-600' : 'text-slate-400'} />
                         </div>
                       </th>
                       <th
@@ -6330,7 +6330,7 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
                       >
                         <div className="flex items-center gap-1">
                           <span>Problem (Event Code)</span>
-                          <ArrowUpDown size={12} className={sortFieldFreq === 'eventCodeDesc' ? 'text-[#006A63]' : 'text-slate-400'} />
+                          <ArrowUpDown size={12} className={sortFieldFreq === 'eventCodeDesc' ? 'text-blue-600' : 'text-slate-400'} />
                         </div>
                       </th>
 
@@ -6343,13 +6343,13 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
                             onClick={() => handleSortFreq(date)}
                             className={`py-2 px-2 text-center whitespace-nowrap min-w-[70px] cursor-pointer select-none transition-all ${
                               isSorted
-                                ? 'bg-[#E6FFFA] text-[#006A63] border-x border-[#4FD1C5]/30 font-bold'
+                                ? 'bg-blue-50 text-blue-600 border-x border-blue-200 font-bold'
                                 : 'hover:bg-slate-100 text-[#555F71]'
                             }`}
                           >
                             <div className="flex items-center justify-center gap-1">
                               <span>{date.slice(0, 5)}</span>
-                              <ArrowUpDown size={11} className={isSorted ? 'text-[#006A63]' : 'text-slate-400'} />
+                              <ArrowUpDown size={11} className={isSorted ? 'text-blue-600' : 'text-slate-400'} />
                             </div>
                           </th>
                         );
@@ -6357,11 +6357,11 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
 
                       <th
                         onClick={() => handleSortFreq('totalFrekuensi')}
-                        className="py-2 px-3 text-center cursor-pointer hover:bg-slate-100/80 transition-colors bg-[#E6FFFA]/50 text-[#006A63] border-x border-[#4FD1C5]/30"
+                        className="py-2 px-3 text-center cursor-pointer hover:bg-slate-100/80 transition-colors bg-blue-50/50 text-blue-600 border-x border-blue-200"
                       >
                         <div className="flex items-center justify-center gap-1">
                           <span>Total Frekuensi</span>
-                          <ArrowUpDown size={12} className={sortFieldFreq === 'totalFrekuensi' ? 'text-[#006A63]' : 'text-slate-400'} />
+                          <ArrowUpDown size={12} className={sortFieldFreq === 'totalFrekuensi' ? 'text-blue-600' : 'text-slate-400'} />
                         </div>
                       </th>
 
@@ -6371,11 +6371,11 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
                       >
                         <div className="flex items-center justify-end gap-1">
                           <span>Total Durasi</span>
-                          <ArrowUpDown size={12} className={sortFieldFreq === 'totalDurasi' ? 'text-[#006A63]' : 'text-slate-400'} />
+                          <ArrowUpDown size={12} className={sortFieldFreq === 'totalDurasi' ? 'text-blue-600' : 'text-slate-400'} />
                         </div>
                       </th>
 
-                      <th className="py-2 px-3 text-center whitespace-nowrap text-[#006A63] bg-[#E6FFFA]/50 font-semibold border-l border-[#4FD1C5]/30">
+                      <th className="py-2 px-3 text-center whitespace-nowrap text-blue-600 bg-blue-50/50 font-semibold border-l border-blue-200">
                         Penanganan Problem
                       </th>
                     </tr>
@@ -6397,7 +6397,7 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
                               <button
                                 type="button"
                                 onClick={() => handleOpenFreqDetail(item)}
-                                className="font-bold text-[#0D1C2E] font-mono hover:text-[#006A63] hover:underline cursor-pointer text-left"
+                                className="font-bold text-[#0D1C2E] font-mono hover:text-blue-600 hover:underline cursor-pointer text-left"
                                 title="Klik untuk melihat rekap penanganan mesin ini"
                               >
                                 {item.wsid}
@@ -6421,7 +6421,7 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
                                 <td
                                   key={date}
                                   className={`py-1 px-2 text-center font-mono transition-colors ${
-                                    isSorted ? 'bg-[#E6FFFA]/40 border-x border-[#4FD1C5]/20' : ''
+                                    isSorted ? 'bg-blue-50/40 border-x border-blue-100' : ''
                                   }`}
                                 >
                                   {count > 0 ? (
@@ -6430,7 +6430,7 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
                                       onClick={() => handleOpenFreqDetail(item, date)}
                                       className={`inline-block px-2 py-0.5 rounded font-bold text-[11px] cursor-pointer hover:scale-105 transition-all ${
                                         isSorted
-                                          ? 'bg-[#006A63] text-white shadow-2xs'
+                                          ? 'bg-blue-600 text-white shadow-2xs'
                                           : count >= 5
                                           ? 'bg-rose-100 text-rose-800 font-extrabold border border-rose-300'
                                           : count >= 3
@@ -6448,8 +6448,8 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
                               );
                             })}
 
-                            <td className="py-1 px-3 text-center whitespace-nowrap bg-[#E6FFFA]/30">
-                              <span className="px-2.5 py-0.5 rounded-full font-bold font-mono text-xs bg-[#006A63] text-white shadow-2xs">
+                            <td className="py-1 px-3 text-center whitespace-nowrap bg-blue-50/30">
+                              <span className="px-2.5 py-0.5 rounded-full font-bold font-mono text-xs bg-blue-600 text-white shadow-2xs">
                                 {item.totalFrekuensi}x
                               </span>
                             </td>
@@ -6467,12 +6467,12 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
                                     onClick={() => handleOpenFreqDetail(item)}
                                     className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-xl text-xs font-bold transition-all shadow-2xs cursor-pointer ${
                                       pCount > 0
-                                        ? 'bg-[#E6FFFA] hover:bg-[#cbfbf0] text-[#006A63] border border-[#4FD1C5]/40 hover:scale-[1.02]'
+                                        ? 'bg-blue-50 hover:bg-[#cbfbf0] text-blue-600 border border-blue-200 hover:scale-[1.02]'
                                         : 'bg-[#F8F9FF] hover:bg-[#EFF4FF] text-[#555F71] border border-[#EFF4FF]'
                                     }`}
                                     title="Klik untuk melihat detail penanganan tiap tanggal kejadian"
                                   >
-                                    <Wrench size={13} className={pCount > 0 ? 'text-[#006A63]' : 'text-slate-400'} />
+                                    <Wrench size={13} className={pCount > 0 ? 'text-blue-600' : 'text-slate-400'} />
                                     <span>{pCount > 0 ? `${pCount} Penanganan` : 'Detail / Catat'}</span>
                                   </button>
                                 );
@@ -6548,7 +6548,7 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                 <div>
                   <div className="flex items-center gap-2">
-                    <div className="w-8 h-8 rounded-lg bg-[#4FD1C5]/20 flex items-center justify-center text-[#006A63] font-bold">
+                    <div className="w-8 h-8 rounded-lg bg-blue-50 flex items-center justify-center text-blue-600 font-bold">
                       <TrendingUp size={18} />
                     </div>
                     <h2 className="text-base font-bold text-[#0D1C2E]">
@@ -6579,7 +6579,7 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
                     type="button"
                     onClick={() => fetchGfData(gfMode, gfSingleMonth, gfStartMonth, gfEndMonth)}
                     disabled={isLoadingGfData}
-                    className="px-3.5 py-1.5 rounded-xl bg-[#006A63] text-white text-xs font-semibold hover:bg-[#00524c] disabled:opacity-50 flex items-center gap-1.5 shadow-sm transition-all cursor-pointer"
+                    className="px-3.5 py-1.5 rounded-xl bg-blue-600 text-white text-xs font-semibold hover:bg-[#00524c] disabled:opacity-50 flex items-center gap-1.5 shadow-sm transition-all cursor-pointer"
                   >
                     <RefreshCw size={13} className={isLoadingGfData ? 'animate-spin' : ''} />
                     <span>{isLoadingGfData ? 'Memuat Data...' : 'Sinkron Data'}</span>
@@ -6601,7 +6601,7 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
                       }}
                       className={`px-3 py-1.5 rounded-lg transition-all cursor-pointer ${
                         gfMode === 'SINGLE'
-                          ? 'bg-white text-[#006A63] shadow-xs font-bold'
+                          ? 'bg-white text-blue-600 shadow-xs font-bold'
                           : 'text-slate-600 hover:text-slate-900'
                       }`}
                     >
@@ -6615,7 +6615,7 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
                       }}
                       className={`px-3 py-1.5 rounded-lg transition-all cursor-pointer ${
                         gfMode === 'RANGE'
-                          ? 'bg-white text-[#006A63] shadow-xs font-bold'
+                          ? 'bg-white text-blue-600 shadow-xs font-bold'
                           : 'text-slate-600 hover:text-slate-900'
                       }`}
                     >
@@ -6634,7 +6634,7 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
                           setGfSingleMonth(val);
                           fetchGfData('SINGLE', val, gfStartMonth, gfEndMonth);
                         }}
-                        className="h-9 px-3 rounded-xl bg-[#F8F9FF] border border-slate-200 text-xs font-semibold text-[#0D1C2E] outline-none focus:ring-1 focus:ring-[#4FD1C5] cursor-pointer"
+                        className="h-9 px-3 rounded-xl bg-[#F8F9FF] border border-slate-200 text-xs font-semibold text-[#0D1C2E] outline-none focus:ring-1 focus:ring-blue-500 cursor-pointer"
                       >
                         {gfAvailableMonths.map((m) => (
                           <option key={m} value={m}>
@@ -6652,7 +6652,7 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
                       <select
                         value={gfStartMonth}
                         onChange={(e) => setGfStartMonth(e.target.value)}
-                        className="h-9 px-3 rounded-xl bg-[#F8F9FF] border border-slate-200 text-xs font-semibold text-[#0D1C2E] outline-none focus:ring-1 focus:ring-[#4FD1C5] cursor-pointer"
+                        className="h-9 px-3 rounded-xl bg-[#F8F9FF] border border-slate-200 text-xs font-semibold text-[#0D1C2E] outline-none focus:ring-1 focus:ring-blue-500 cursor-pointer"
                       >
                         {gfAvailableMonths.map((m) => (
                           <option key={m} value={m}>
@@ -6665,7 +6665,7 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
                       <select
                         value={gfEndMonth}
                         onChange={(e) => setGfEndMonth(e.target.value)}
-                        className="h-9 px-3 rounded-xl bg-[#F8F9FF] border border-slate-200 text-xs font-semibold text-[#0D1C2E] outline-none focus:ring-1 focus:ring-[#4FD1C5] cursor-pointer"
+                        className="h-9 px-3 rounded-xl bg-[#F8F9FF] border border-slate-200 text-xs font-semibold text-[#0D1C2E] outline-none focus:ring-1 focus:ring-blue-500 cursor-pointer"
                       >
                         {gfAvailableMonths.map((m) => (
                           <option key={m} value={m}>
@@ -6678,7 +6678,7 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
                         type="button"
                         onClick={() => fetchGfData('RANGE', gfSingleMonth, gfStartMonth, gfEndMonth)}
                         disabled={isLoadingGfData}
-                        className="h-9 px-3.5 rounded-xl bg-[#4FD1C5]/20 text-[#006A63] font-bold text-xs hover:bg-[#4FD1C5]/30 flex items-center gap-1.5 transition-colors cursor-pointer"
+                        className="h-9 px-3.5 rounded-xl bg-blue-50 text-blue-600 font-bold text-xs hover:bg-blue-100 flex items-center gap-1.5 transition-colors cursor-pointer"
                       >
                         <RefreshCw size={12} className={isLoadingGfData ? 'animate-spin' : ''} />
                         <span>Terapkan Rentang</span>
@@ -6706,7 +6706,7 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
                     <button
                       type="button"
                       onClick={() => setIsGfProblemOpen((prev) => !prev)}
-                      className="w-full h-9 px-3 rounded-xl bg-[#F8F9FF] border border-slate-200 text-xs font-semibold text-[#0D1C2E] flex items-center justify-between gap-1.5 cursor-pointer hover:border-[#4FD1C5]"
+                      className="w-full h-9 px-3 rounded-xl bg-[#F8F9FF] border border-slate-200 text-xs font-semibold text-[#0D1C2E] flex items-center justify-between gap-1.5 cursor-pointer hover:border-blue-600"
                     >
                       <span className="truncate">
                         {gfSelectedProblems.length === 0
@@ -6726,7 +6726,7 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
                             placeholder="Cari jenis problem..."
                             value={gfProblemSearch}
                             onChange={(e) => setGfProblemSearch(e.target.value)}
-                            className="w-full h-8 pl-8 pr-2 rounded-lg bg-slate-50 text-xs text-slate-800 border border-slate-200 outline-none focus:bg-white focus:ring-1 focus:ring-[#4FD1C5]"
+                            className="w-full h-8 pl-8 pr-2 rounded-lg bg-slate-50 text-xs text-slate-800 border border-slate-200 outline-none focus:bg-white focus:ring-1 focus:ring-blue-500"
                           />
                         </div>
 
@@ -6739,12 +6739,12 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
                             }}
                             className={`w-full px-2.5 py-1.5 rounded-lg text-left text-xs font-semibold flex items-center justify-between cursor-pointer ${
                               gfSelectedProblems.length === 0
-                                ? 'bg-[#4FD1C5]/20 text-[#006A63]'
+                                ? 'bg-blue-50 text-blue-600'
                                 : 'hover:bg-slate-50 text-slate-700'
                             }`}
                           >
                             <span>Semua Problem</span>
-                            {gfSelectedProblems.length === 0 && <Check size={14} className="text-[#006A63]" />}
+                            {gfSelectedProblems.length === 0 && <Check size={14} className="text-blue-600" />}
                           </button>
 
                           {gfAvailableProblems
@@ -6762,12 +6762,12 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
                                   }}
                                   className={`w-full px-2.5 py-1.5 rounded-lg text-left text-xs flex items-center justify-between cursor-pointer ${
                                     isChecked
-                                      ? 'bg-[#4FD1C5]/15 text-[#006A63] font-bold'
+                                      ? 'bg-blue-50/75 text-blue-600 font-bold'
                                       : 'hover:bg-slate-50 text-slate-700'
                                   }`}
                                 >
                                   <span className="truncate pr-2">{p}</span>
-                                  {isChecked && <Check size={14} className="text-[#006A63] shrink-0" />}
+                                  {isChecked && <Check size={14} className="text-blue-600 shrink-0" />}
                                 </button>
                               );
                             })}
@@ -6793,7 +6793,7 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
                     <select
                       value={gfServicePoint}
                       onChange={(e) => setGfServicePoint(e.target.value)}
-                      className="w-full h-9 px-3 rounded-xl bg-[#F8F9FF] border border-slate-200 text-xs font-semibold text-[#0D1C2E] outline-none focus:ring-1 focus:ring-[#4FD1C5] cursor-pointer"
+                      className="w-full h-9 px-3 rounded-xl bg-[#F8F9FF] border border-slate-200 text-xs font-semibold text-[#0D1C2E] outline-none focus:ring-1 focus:ring-blue-500 cursor-pointer"
                     >
                       <option value="ALL">Semua Service Point ({gfAvailableSPs.length})</option>
                       {gfAvailableSPs.map((sp) => (
@@ -6828,7 +6828,7 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
                           setGfWsidSearch(e.target.value);
                           setGfTablePage(1);
                         }}
-                        className="w-full h-9 pl-9 pr-8 rounded-xl bg-[#F8F9FF] border border-slate-200 text-xs text-[#0D1C2E] outline-none focus:bg-white focus:ring-1 focus:ring-[#4FD1C5]"
+                        className="w-full h-9 pl-9 pr-8 rounded-xl bg-[#F8F9FF] border border-slate-200 text-xs text-[#0D1C2E] outline-none focus:bg-white focus:ring-1 focus:ring-blue-500"
                       />
                       {gfWsidSearch && (
                         <button
@@ -6850,7 +6850,7 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
               <div className="bg-white rounded-2xl p-4 border border-[#EFF4FF] shadow-xs flex flex-col justify-between">
                 <div className="flex items-center justify-between mb-2">
                   <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Total Frekuensi</span>
-                  <div className="w-7 h-7 rounded-lg bg-[#4FD1C5]/20 flex items-center justify-center text-[#006A63]">
+                  <div className="w-7 h-7 rounded-lg bg-blue-50 flex items-center justify-center text-blue-600">
                     <Activity size={15} />
                   </div>
                 </div>
@@ -6939,7 +6939,7 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
                 <div>
                   <h3 className="text-sm font-bold text-[#0D1C2E] flex items-center gap-2">
                     <span>Tren Pergerakan Frekuensi Problem</span>
-                    <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-[#EFF4FF] text-[#006A63]">
+                    <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-[#EFF4FF] text-blue-600">
                       {gfMode === 'SINGLE' ? formatGfMonthLabel(gfSingleMonth) : `${formatGfMonthLabel(gfStartMonth)} - ${formatGfMonthLabel(gfEndMonth)}`}
                     </span>
                   </h3>
@@ -6957,7 +6957,7 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
                         type="button"
                         onClick={() => setGfTrendGrouping('daily')}
                         className={`px-2.5 py-1 rounded-md transition-all cursor-pointer ${
-                          gfTrendGrouping === 'daily' ? 'bg-white text-[#006A63] font-bold shadow-2xs' : 'text-slate-600'
+                          gfTrendGrouping === 'daily' ? 'bg-white text-blue-600 font-bold shadow-2xs' : 'text-slate-600'
                         }`}
                       >
                         Harian
@@ -6966,7 +6966,7 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
                         type="button"
                         onClick={() => setGfTrendGrouping('monthly')}
                         className={`px-2.5 py-1 rounded-md transition-all cursor-pointer ${
-                          gfTrendGrouping === 'monthly' ? 'bg-white text-[#006A63] font-bold shadow-2xs' : 'text-slate-600'
+                          gfTrendGrouping === 'monthly' ? 'bg-white text-blue-600 font-bold shadow-2xs' : 'text-slate-600'
                         }`}
                       >
                         Bulanan
@@ -6980,7 +6980,7 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
                     onClick={() => setGfCumulative((prev) => !prev)}
                     className={`px-2.5 py-1 rounded-lg text-[11px] font-semibold border transition-all cursor-pointer ${
                       gfCumulative
-                        ? 'bg-[#4FD1C5]/20 border-[#4FD1C5] text-[#006A63] font-bold'
+                        ? 'bg-blue-50 border-blue-600 text-blue-600 font-bold'
                         : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-50'
                     }`}
                   >
@@ -6993,7 +6993,7 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
                       type="button"
                       onClick={() => setGfChartType('area')}
                       className={`px-2.5 py-1 rounded-md transition-all cursor-pointer ${
-                        gfChartType === 'area' ? 'bg-white text-[#006A63] font-bold shadow-2xs' : 'text-slate-600'
+                        gfChartType === 'area' ? 'bg-white text-blue-600 font-bold shadow-2xs' : 'text-slate-600'
                       }`}
                     >
                       Area
@@ -7002,7 +7002,7 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
                       type="button"
                       onClick={() => setGfChartType('bar')}
                       className={`px-2.5 py-1 rounded-md transition-all cursor-pointer ${
-                        gfChartType === 'bar' ? 'bg-white text-[#006A63] font-bold shadow-2xs' : 'text-slate-600'
+                        gfChartType === 'bar' ? 'bg-white text-blue-600 font-bold shadow-2xs' : 'text-slate-600'
                       }`}
                     >
                       Bar
@@ -7011,7 +7011,7 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
                       type="button"
                       onClick={() => setGfChartType('line')}
                       className={`px-2.5 py-1 rounded-md transition-all cursor-pointer ${
-                        gfChartType === 'line' ? 'bg-white text-[#006A63] font-bold shadow-2xs' : 'text-slate-600'
+                        gfChartType === 'line' ? 'bg-white text-blue-600 font-bold shadow-2xs' : 'text-slate-600'
                       }`}
                     >
                       Line
@@ -7033,8 +7033,8 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
                       <AreaChart data={gfTrendData} margin={{ top: 10, right: 20, left: -10, bottom: 0 }}>
                         <defs>
                           <linearGradient id="gfTrendGrad" x1="0" y1="0" x2="0" y2="1">
-                            <stop offset="5%" stopColor="#006A63" stopOpacity={0.35} />
-                            <stop offset="95%" stopColor="#4FD1C5" stopOpacity={0.0} />
+                            <stop offset="5%" stopColor="#2563eb" stopOpacity={0.35} />
+                            <stop offset="95%" stopColor="#60a5fa" stopOpacity={0.0} />
                           </linearGradient>
                         </defs>
                         <CartesianGrid strokeDasharray="3 3" stroke="#EFF4FF" vertical={false} />
@@ -7047,7 +7047,7 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
                               return (
                                 <div className="bg-white/95 backdrop-blur-sm p-3 rounded-xl shadow-lg border border-slate-100 text-xs">
                                   <div className="font-bold text-slate-700">{label} ({d.key})</div>
-                                  <div className="text-[#006A63] font-bold mt-1">
+                                  <div className="text-blue-600 font-bold mt-1">
                                     {gfCumulative ? `Kumulatif: ${d.total} kasus` : `Frekuensi: ${d.total} kejadian`}
                                   </div>
                                   {gfCumulative && (
@@ -7059,7 +7059,7 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
                             return null;
                           }}
                         />
-                        <Area type="monotone" dataKey="total" name="Frekuensi" stroke="#006A63" strokeWidth={2.5} fillOpacity={1} fill="url(#gfTrendGrad)" />
+                        <Area type="monotone" dataKey="total" name="Frekuensi" stroke="#2563eb" strokeWidth={2.5} fillOpacity={1} fill="url(#gfTrendGrad)" />
                       </AreaChart>
                     ) : gfChartType === 'bar' ? (
                       <BarChart data={gfTrendData} margin={{ top: 10, right: 20, left: -10, bottom: 0 }}>
@@ -7073,7 +7073,7 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
                               return (
                                 <div className="bg-white/95 backdrop-blur-sm p-3 rounded-xl shadow-lg border border-slate-100 text-xs">
                                   <div className="font-bold text-slate-700">{label} ({d.key})</div>
-                                  <div className="text-[#006A63] font-bold mt-1">
+                                  <div className="text-blue-600 font-bold mt-1">
                                     Frekuensi: {d.total} kejadian
                                   </div>
                                 </div>
@@ -7082,7 +7082,7 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
                             return null;
                           }}
                         />
-                        <Bar dataKey="total" fill="#006A63" radius={[4, 4, 0, 0]} />
+                        <Bar dataKey="total" fill="#2563eb" radius={[4, 4, 0, 0]} />
                       </BarChart>
                     ) : (
                       <LineChart data={gfTrendData} margin={{ top: 10, right: 20, left: -10, bottom: 0 }}>
@@ -7096,7 +7096,7 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
                               return (
                                 <div className="bg-white/95 backdrop-blur-sm p-3 rounded-xl shadow-lg border border-slate-100 text-xs">
                                   <div className="font-bold text-slate-700">{label} ({d.key})</div>
-                                  <div className="text-[#006A63] font-bold mt-1">
+                                  <div className="text-blue-600 font-bold mt-1">
                                     Frekuensi: {d.total} kejadian
                                   </div>
                                 </div>
@@ -7105,7 +7105,7 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
                             return null;
                           }}
                         />
-                        <Line type="monotone" dataKey="total" stroke="#006A63" strokeWidth={2.5} dot={{ r: 3, fill: '#006A63' }} activeDot={{ r: 5 }} />
+                        <Line type="monotone" dataKey="total" stroke="#2563eb" strokeWidth={2.5} dot={{ r: 3, fill: '#2563eb' }} activeDot={{ r: 5 }} />
                       </LineChart>
                     )}
                   </ResponsiveContainer>
@@ -7145,7 +7145,7 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
                               return (
                                 <div className="bg-white p-2.5 rounded-xl shadow-lg border border-slate-100 text-xs">
                                   <div className="font-bold text-slate-800">{d.fullProblem}</div>
-                                  <div className="text-[#006A63] font-bold mt-1">
+                                  <div className="text-blue-600 font-bold mt-1">
                                     {d.count} kejadian ({d.pct}% dari total)
                                   </div>
                                 </div>
@@ -7154,9 +7154,9 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
                             return null;
                           }}
                         />
-                        <Bar dataKey="count" fill="#4FD1C5" radius={[0, 6, 6, 0]}>
+                        <Bar dataKey="count" fill="#3b82f6" radius={[0, 6, 6, 0]}>
                           {gfTopProblemsData.map((entry, index) => (
-                            <Cell key={`cell-${index}`} fill={index === 0 ? '#006A63' : '#4FD1C5'} />
+                            <Cell key={`cell-${index}`} fill={index === 0 ? '#2563eb' : '#3b82f6'} />
                           ))}
                         </Bar>
                       </BarChart>
@@ -7206,7 +7206,7 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
                         />
                         <Bar dataKey="count" fill="#6366F1" radius={[6, 6, 0, 0]}>
                           {gfSpDistributionData.map((entry, index) => {
-                            const colors = ['#006A63', '#10B981', '#6366F1', '#F59E0B', '#EF4444', '#8B5CF6', '#3B82F6', '#14B8A6'];
+                            const colors = ['#2563eb', '#10b981', '#6366F1', '#F59E0B', '#EF4444', '#8B5CF6', '#3B82F6', '#14B8A6'];
                             return <Cell key={`sp-${index}`} fill={colors[index % colors.length]} />;
                           })}
                         </Bar>
@@ -7283,9 +7283,9 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
               <div className="p-4 sm:p-5 border-b border-slate-100 flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-[#F8F9FF]/50">
                 <div>
                   <h3 className="text-sm font-bold text-[#0D1C2E] flex items-center gap-2">
-                    <Table size={16} className="text-[#006A63]" />
+                    <Table size={16} className="text-blue-600" />
                     <span>Rangkuman Frekuensi WSID & Problem</span>
-                    <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-[#4FD1C5]/20 text-[#006A63]">
+                    <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-blue-50 text-blue-600">
                       {gfAggregatedItems.length} Kombinasi
                     </span>
                   </h3>
@@ -7355,7 +7355,7 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
                               {item.typeMesin}
                             </td>
                             <td className="py-3 px-3.5">
-                              <span className="px-2 py-1 rounded-lg bg-[#4FD1C5]/10 text-[#006A63] font-bold text-[11px]">
+                              <span className="px-2 py-1 rounded-lg bg-blue-50/50 text-blue-600 font-bold text-[11px]">
                                 {item.eventCodeDesc}
                               </span>
                             </td>
@@ -7365,7 +7365,7 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
                                   ? 'bg-rose-100 text-rose-700'
                                   : item.totalFrekuensi >= 3
                                   ? 'bg-amber-100 text-amber-800'
-                                  : 'bg-[#EFF4FF] text-[#006A63]'
+                                  : 'bg-[#EFF4FF] text-blue-600'
                               }`}>
                                 {item.totalFrekuensi}x
                               </span>
@@ -7435,7 +7435,7 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                 <div>
                   <div className="flex items-center gap-2">
-                    <div className="w-8 h-8 rounded-lg bg-[#4FD1C5]/20 flex items-center justify-center text-[#006A63] font-bold">
+                    <div className="w-8 h-8 rounded-lg bg-blue-50 flex items-center justify-center text-blue-600 font-bold">
                       <BarChart3 size={18} />
                     </div>
                     <h2 className="text-base font-bold text-[#0D1C2E]">
@@ -7471,7 +7471,7 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
                     type="button"
                     onClick={() => fetchDailyIncidentsFromDb()}
                     disabled={isLoadingDailyFromDb}
-                    className="h-9 px-3.5 rounded-xl bg-[#006A63] hover:bg-[#005750] text-white text-xs font-bold transition-all shadow-2xs flex items-center gap-1.5 cursor-pointer disabled:opacity-60"
+                    className="h-9 px-3.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold transition-all shadow-2xs flex items-center gap-1.5 cursor-pointer disabled:opacity-60"
                   >
                     <RefreshCw size={13} className={isLoadingDailyFromDb ? 'animate-spin' : ''} />
                     <span>Sinkron DB</span>
@@ -7484,7 +7484,7 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
                 {/* 1. Filter Service Point */}
                 <div className="space-y-1">
                   <label className="text-[11px] font-semibold text-[#555F71] flex items-center gap-1">
-                    <MapPin size={11} className="text-[#006A63]" />
+                    <MapPin size={11} className="text-blue-600" />
                     <span>Service Point:</span>
                   </label>
                   <select
@@ -7494,7 +7494,7 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
                       setGrafik24Sektor('ALL');
                       setGrafik24CurrentPage(1);
                     }}
-                    className="w-full h-9 px-3 rounded-xl bg-[#F8F9FF] border border-slate-200 text-xs font-semibold text-[#0D1C2E] outline-none focus:ring-1 focus:ring-[#4FD1C5] cursor-pointer"
+                    className="w-full h-9 px-3 rounded-xl bg-[#F8F9FF] border border-slate-200 text-xs font-semibold text-[#0D1C2E] outline-none focus:ring-1 focus:ring-blue-500 cursor-pointer"
                   >
                     <option value="ALL">Semua Service Point ({grafik24AvailableSPs.length})</option>
                     {grafik24AvailableSPs.map((sp) => (
@@ -7509,7 +7509,7 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
                 <div className="space-y-1 relative" ref={grafik24SektorRef}>
                   <label className="text-[11px] font-semibold text-[#555F71] flex items-center justify-between">
                     <span className="flex items-center gap-1">
-                      <Layers size={11} className="text-[#006A63]" />
+                      <Layers size={11} className="text-blue-600" />
                       <span>Sektor:</span>
                     </span>
                     {grafik24Sektor !== 'ALL' && (
@@ -7528,7 +7528,7 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
                   <button
                     type="button"
                     onClick={() => setIsGrafik24SektorOpen((prev) => !prev)}
-                    className="w-full h-9 px-3 rounded-xl bg-[#F8F9FF] border border-slate-200 text-xs font-semibold text-[#0D1C2E] flex items-center justify-between gap-1.5 cursor-pointer hover:border-[#4FD1C5]"
+                    className="w-full h-9 px-3 rounded-xl bg-[#F8F9FF] border border-slate-200 text-xs font-semibold text-[#0D1C2E] flex items-center justify-between gap-1.5 cursor-pointer hover:border-blue-600"
                   >
                     <span className="truncate">
                       {grafik24Sektor === 'ALL'
@@ -7548,7 +7548,7 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
                           value={grafik24SektorSearch}
                           onChange={(e) => setGrafik24SektorSearch(e.target.value)}
                           placeholder="Cari nama sektor..."
-                          className="w-full h-8 pl-8 pr-7 bg-[#F8F9FF] border border-slate-200 rounded-lg text-xs outline-none focus:ring-1 focus:ring-[#4FD1C5]"
+                          className="w-full h-8 pl-8 pr-7 bg-[#F8F9FF] border border-slate-200 rounded-lg text-xs outline-none focus:ring-1 focus:ring-blue-500"
                           autoFocus
                         />
                         {grafik24SektorSearch && (
@@ -7572,7 +7572,7 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
                           }}
                           className={`w-full px-2.5 py-1.5 rounded-lg text-left flex items-center justify-between transition-colors cursor-pointer ${
                             grafik24Sektor === 'ALL'
-                              ? 'bg-[#E6FFFA] text-[#006A63] font-bold'
+                              ? 'bg-blue-50 text-blue-600 font-bold'
                               : 'text-slate-700 hover:bg-[#F8F9FF]'
                           }`}
                         >
@@ -7595,7 +7595,7 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
                                 }}
                                 className={`w-full px-2.5 py-1.5 rounded-lg text-left flex items-center justify-between transition-colors cursor-pointer ${
                                   isSelected
-                                    ? 'bg-[#E6FFFA] text-[#006A63] font-bold'
+                                    ? 'bg-blue-50 text-blue-600 font-bold'
                                     : 'text-slate-700 hover:bg-[#F8F9FF]'
                                 }`}
                               >
@@ -7621,7 +7621,7 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
                 <div className="space-y-1 relative" ref={grafik24ProblemRef}>
                   <label className="text-[11px] font-semibold text-[#555F71] flex items-center justify-between">
                     <span className="flex items-center gap-1">
-                      <AlertTriangle size={11} className="text-[#006A63]" />
+                      <AlertTriangle size={11} className="text-blue-600" />
                       <span>Jenis Problem:</span>
                     </span>
                     {grafik24Problem !== 'ALL' && (
@@ -7640,7 +7640,7 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
                   <button
                     type="button"
                     onClick={() => setIsGrafik24ProblemOpen((prev) => !prev)}
-                    className="w-full h-9 px-3 rounded-xl bg-[#F8F9FF] border border-slate-200 text-xs font-semibold text-[#0D1C2E] flex items-center justify-between gap-1.5 cursor-pointer hover:border-[#4FD1C5]"
+                    className="w-full h-9 px-3 rounded-xl bg-[#F8F9FF] border border-slate-200 text-xs font-semibold text-[#0D1C2E] flex items-center justify-between gap-1.5 cursor-pointer hover:border-blue-600"
                   >
                     <span className="truncate">
                       {grafik24Problem === 'ALL'
@@ -7660,7 +7660,7 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
                           value={grafik24ProblemSearch}
                           onChange={(e) => setGrafik24ProblemSearch(e.target.value)}
                           placeholder="Cari jenis problem (COM, Cash, Card...)"
-                          className="w-full h-8 pl-8 pr-7 bg-[#F8F9FF] border border-slate-200 rounded-lg text-xs outline-none focus:ring-1 focus:ring-[#4FD1C5]"
+                          className="w-full h-8 pl-8 pr-7 bg-[#F8F9FF] border border-slate-200 rounded-lg text-xs outline-none focus:ring-1 focus:ring-blue-500"
                           autoFocus
                         />
                         {grafik24ProblemSearch && (
@@ -7684,7 +7684,7 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
                           }}
                           className={`w-full px-2.5 py-1.5 rounded-lg text-left flex items-center justify-between transition-colors cursor-pointer ${
                             grafik24Problem === 'ALL'
-                              ? 'bg-[#E6FFFA] text-[#006A63] font-bold'
+                              ? 'bg-blue-50 text-blue-600 font-bold'
                               : 'text-slate-700 hover:bg-[#F8F9FF]'
                           }`}
                         >
@@ -7707,12 +7707,12 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
                                 }}
                                 className={`w-full px-2.5 py-1.5 rounded-lg text-left flex items-center justify-between transition-colors cursor-pointer ${
                                   isSelected
-                                    ? 'bg-[#E6FFFA] text-[#006A63] font-bold'
+                                    ? 'bg-blue-50 text-blue-600 font-bold'
                                     : 'text-slate-700 hover:bg-[#F8F9FF]'
                                 }`}
                               >
                                 <span className="truncate pr-2 font-medium">{prob}</span>
-                                {isSelected && <Check size={13} className="shrink-0 text-[#006A63]" />}
+                                {isSelected && <Check size={13} className="shrink-0 text-blue-600" />}
                               </button>
                             );
                           })}
@@ -7732,7 +7732,7 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
                 {/* 4. Filter Periode Tanggal (Dari & Sampai) */}
                 <div className="space-y-1">
                   <label className="text-[11px] font-semibold text-[#555F71] flex items-center gap-1">
-                    <Calendar size={11} className="text-[#006A63]" />
+                    <Calendar size={11} className="text-blue-600" />
                     <span>Periode Tanggal:</span>
                   </label>
                   <div className="flex items-center gap-1.5 h-9 px-2 bg-[#F8F9FF] border border-slate-200 rounded-xl text-xs">
@@ -7784,7 +7784,7 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
                       <button
                         type="button"
                         onClick={() => setSelectedHour24(null)}
-                        className="px-2 py-0.5 rounded-md bg-slate-100 hover:bg-slate-200 text-[#006A63] text-[10px] font-bold flex items-center gap-1 cursor-pointer transition-colors"
+                        className="px-2 py-0.5 rounded-md bg-slate-100 hover:bg-slate-200 text-blue-600 text-[10px] font-bold flex items-center gap-1 cursor-pointer transition-colors"
                       >
                         <RotateCcw size={10} />
                         <span>Tampilkan Semua Jam</span>
@@ -7797,11 +7797,11 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
                       <span className="font-bold text-amber-700">Peak Hour</span>
                     </span>
                     <span className="flex items-center gap-1">
-                      <span className="w-2.5 h-2.5 rounded-xs bg-[#006A63] ring-1 ring-[#006A63] inline-block" />
-                      <span className="font-bold text-[#006A63]">Jam Terpilih</span>
+                      <span className="w-2.5 h-2.5 rounded-xs bg-blue-600 ring-1 ring-blue-500 inline-block" />
+                      <span className="font-bold text-blue-600">Jam Terpilih</span>
                     </span>
                     <span className="flex items-center gap-1">
-                      <span className="w-2.5 h-2.5 rounded-xs bg-[#4FD1C5] inline-block" />
+                      <span className="w-2.5 h-2.5 rounded-xs bg-blue-600 inline-block" />
                       <span>Frekuensi Normal</span>
                     </span>
                   </div>
@@ -7856,7 +7856,7 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
                           {hoveredHour24 === b.hour && (
                             <div className="absolute bottom-full mb-3 z-30 pointer-events-none bg-[#0D1C2E] text-white p-2.5 rounded-xl shadow-xl text-left min-w-[190px] border border-slate-700 animate-in fade-in zoom-in-95 duration-100">
                               <div className="flex items-center justify-between border-b border-slate-700 pb-1 mb-1.5">
-                                <span className="font-bold text-xs text-[#4FD1C5]">
+                                <span className="font-bold text-xs text-blue-600">
                                   Pukul {b.hourRange}
                                 </span>
                                 {b.isPeak && (
@@ -7891,7 +7891,7 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
                                     ))}
                                   </div>
                                 )}
-                                <div className="pt-1 mt-1 border-t border-slate-700 text-[10px] text-[#4FD1C5] font-semibold text-center">
+                                <div className="pt-1 mt-1 border-t border-slate-700 text-[10px] text-blue-600 font-semibold text-center">
                                   Klik untuk tampilkan tabel
                                 </div>
                               </div>
@@ -7903,7 +7903,7 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
                             b.isPeak
                               ? 'text-amber-700 font-extrabold'
                               : isSelected
-                              ? 'text-[#006A63] font-extrabold'
+                              ? 'text-blue-600 font-extrabold'
                               : b.count > 0
                               ? 'text-slate-600'
                               : 'text-slate-300'
@@ -7918,9 +7918,9 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
                               b.isPeak
                                 ? 'bg-gradient-to-t from-amber-500 via-amber-400 to-orange-500 shadow-[0_2px_10px_rgba(245,158,11,0.4)]'
                                 : isSelected
-                                ? 'bg-gradient-to-t from-[#006A63] to-[#4FD1C5] ring-2 ring-[#006A63] ring-offset-1'
+                                ? 'bg-gradient-to-t from-blue-600 to-blue-400 ring-2 ring-blue-500 ring-offset-1'
                                 : b.count > 0
-                                ? 'bg-gradient-to-t from-[#006A63]/60 to-[#4FD1C5]/80 group-hover:from-[#006A63] group-hover:to-[#4FD1C5]'
+                                ? 'bg-gradient-to-t from-blue-600/60 to-blue-400/80 group-hover:from-blue-600 group-hover:to-blue-400'
                                 : 'bg-slate-200/80 group-hover:bg-slate-300'
                             }`}
                           />
@@ -7944,7 +7944,7 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
                             b.isPeak
                               ? 'text-amber-700 font-bold'
                               : isSelected
-                              ? 'text-[#006A63] font-bold underline'
+                              ? 'text-blue-600 font-bold underline'
                               : 'text-slate-500 hover:text-[#0D1C2E]'
                           }`}
                         >
@@ -7962,9 +7962,9 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
             {/* 4. Table Section: Data Problem pada Jam Terpilih */}
             <div className="bg-white rounded-2xl shadow-sm border border-[#EFF4FF] overflow-hidden flex flex-col">
               {/* Table Header Controls */}
-              <div className="p-4 border-b border-[#EFF4FF] flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 bg-[#F8F9FF]/60">
+              <div className="p-4 border-b border-[#E5EAF2] flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 bg-[#F8F9FF]/60">
                 <div className="flex items-center gap-2.5">
-                  <div className="w-9 h-9 rounded-xl bg-teal-50 border border-teal-200 flex items-center justify-center text-[#006A63]">
+                  <div className="w-9 h-9 rounded-xl bg-teal-50 border border-teal-200 flex items-center justify-center text-blue-600">
                     <Clock size={18} />
                   </div>
                   <div>
@@ -7980,7 +7980,7 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
                           <span>PEAK HOUR</span>
                         </span>
                       )}
-                      <span className="px-2 py-0.5 rounded-full bg-[#EFF4FF] text-[#006A63] text-xs font-bold font-mono">
+                      <span className="px-2 py-0.5 rounded-full bg-[#EFF4FF] text-blue-600 text-xs font-bold font-mono">
                         {displayed24hRows.length} Problem
                       </span>
                     </div>
@@ -8003,7 +8003,7 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
                         setGrafik24CurrentPage(1);
                       }}
                       placeholder="Cari WSID, Problem, SP..."
-                      className="w-full h-8.5 pl-8 pr-3 bg-white border border-slate-200 rounded-xl text-xs outline-none focus:ring-1 focus:ring-[#4FD1C5]"
+                      className="w-full h-8.5 pl-8 pr-3 bg-white border border-slate-200 rounded-xl text-xs outline-none focus:ring-1 focus:ring-blue-500"
                     />
                     {grafik24Search && (
                       <button
@@ -8030,7 +8030,7 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
                   <button
                     type="button"
                     onClick={handleExport24hToExcel}
-                    className="h-8.5 px-3.5 rounded-xl bg-[#006A63] hover:bg-[#005750] text-white text-xs font-bold transition-all shadow-2xs flex items-center gap-1.5 cursor-pointer"
+                    className="h-8.5 px-3.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold transition-all shadow-2xs flex items-center gap-1.5 cursor-pointer"
                   >
                     <Download size={13} />
                     <span>Export Excel</span>
@@ -8042,7 +8042,7 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
               <div className="overflow-x-auto">
                 <table className="w-full text-left text-xs border-collapse min-w-[960px]">
                   <thead>
-                    <tr className="bg-[#F8F9FF] text-[#555F71] font-bold uppercase tracking-wider text-[11px] border-b border-[#EFF4FF] h-10 select-none">
+                    <tr className="bg-[#F8F9FF] text-[#555F71] font-bold uppercase tracking-wider text-[11px] border-b border-[#E5EAF2] h-10 select-none">
                       <th className="py-2.5 px-3 w-12 text-center">No</th>
                       <th className="py-2.5 px-3 whitespace-nowrap">WSID & Tipe Mesin</th>
                       <th className="py-2.5 px-3 min-w-[160px] whitespace-nowrap">Lokasi</th>
@@ -8096,7 +8096,7 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
 
                             {/* Problem */}
                             <td className="py-3 px-3 min-w-[280px] whitespace-nowrap">
-                              <span className="font-semibold text-[#006A63] text-xs block">
+                              <span className="font-semibold text-blue-600 text-xs block">
                                 {r.eventCodeDesc || r.eventCode || '-'}
                               </span>
                             </td>
@@ -8141,7 +8141,7 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
                                 <button
                                   type="button"
                                   onClick={() => handleOpenActionFrom24h(r)}
-                                  className="px-2.5 py-1 rounded-lg bg-[#E6FFFA] hover:bg-[#319795] text-[#006A63] hover:text-white text-[11px] font-bold border border-[#4FD1C5]/40 transition-all cursor-pointer flex items-center gap-1"
+                                  className="px-2.5 py-1 rounded-lg bg-blue-50 hover:bg-blue-700 text-blue-600 hover:text-white text-[11px] font-bold border border-blue-200 transition-all cursor-pointer flex items-center gap-1"
                                   title="Buka form catatan update / penanganan"
                                 >
                                   <Edit3 size={11} />
@@ -8242,12 +8242,12 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
                       setCurrentPageHistory(1);
                     }}
                     placeholder="Cari WSID / Lokasi / Event / Keterangan..."
-                    className="w-full h-9 pl-9 pr-3 rounded-xl bg-[#F8F9FF] text-xs text-[#0D1C2E] border border-[#EFF4FF] outline-none focus:bg-white focus:ring-1 focus:ring-[#4FD1C5]"
+                    className="w-full h-9 pl-9 pr-3 rounded-xl bg-[#F8F9FF] text-xs text-[#0D1C2E] border border-[#EFF4FF] outline-none focus:bg-white focus:ring-1 focus:ring-blue-500"
                   />
                 </div>
 
                 {/* Filter Periode Tanggal Dari & Sampai */}
-                <div className="flex items-center gap-1.5 h-9 px-2.5 rounded-xl bg-[#F8F9FF] border border-[#EFF4FF] text-xs">
+                <div className="flex items-center gap-1.5 h-9 px-2.5 rounded-xl bg-white border border-[#E5EAF2] text-xs">
                   <Calendar size={13} className="text-[#555F71]" />
                   <span className="text-[10px] font-bold text-slate-400 uppercase">Dari:</span>
                   <input
@@ -8296,11 +8296,11 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
                     onClick={() => setIsEventCodeDropdownOpenHistory((prev) => !prev)}
                     className={`h-9 px-3 rounded-xl text-xs font-medium border flex items-center gap-1.5 cursor-pointer ${
                       selectedEventCodesHistory.length > 0
-                        ? 'bg-[#E6FFFA] text-[#006A63] border-[#4FD1C5] font-semibold'
+                        ? 'bg-blue-50 text-blue-600 border-blue-600 font-semibold'
                         : 'bg-[#F8F9FF] hover:bg-[#EFF4FF] text-[#0D1C2E] border-[#EFF4FF]'
                     }`}
                   >
-                    <SlidersHorizontal size={13} className={selectedEventCodesHistory.length > 0 ? 'text-[#006A63]' : 'text-[#555F71]'} />
+                    <SlidersHorizontal size={13} className={selectedEventCodesHistory.length > 0 ? 'text-blue-600' : 'text-[#555F71]'} />
                     <span className="truncate max-w-[160px]">
                       {selectedEventCodesHistory.length === 0
                         ? `Event (${historyAvailableEvents.length})`
@@ -8317,7 +8317,7 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
                           <button
                             type="button"
                             onClick={selectAllEventCodesHistory}
-                            className="text-[11px] text-[#006A63] hover:underline font-semibold px-2 py-0.5 rounded cursor-pointer"
+                            className="text-[11px] text-blue-600 hover:underline font-semibold px-2 py-0.5 rounded cursor-pointer"
                           >
                             Pilih Semua
                           </button>
@@ -8339,7 +8339,7 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
                           placeholder="Cari deskripsi event..."
                           value={eventCodeSearchHistory}
                           onChange={(e) => setEventCodeSearchHistory(e.target.value)}
-                          className="w-full pl-8 pr-7 py-1.5 text-xs bg-slate-50 border border-slate-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-[#4FD1C5]"
+                          className="w-full pl-8 pr-7 py-1.5 text-xs bg-slate-50 border border-slate-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-blue-500"
                         />
                         {eventCodeSearchHistory && (
                           <button
@@ -8362,7 +8362,7 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
                               <label
                                 key={code}
                                 className={`flex items-start justify-between gap-2 px-2 py-1.5 rounded-lg cursor-pointer text-xs transition-colors ${
-                                  isChecked ? 'bg-[#E6FFFA] text-[#006A63] font-semibold' : 'hover:bg-slate-50 text-slate-700'
+                                  isChecked ? 'bg-blue-50 text-blue-600 font-semibold' : 'hover:bg-slate-50 text-slate-700'
                                 }`}
                               >
                                 <div className="flex items-start gap-2">
@@ -8370,12 +8370,12 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
                                     type="checkbox"
                                     checked={isChecked}
                                     onChange={() => toggleEventCodeHistory(code)}
-                                    className="mt-0.5 h-3.5 w-3.5 rounded border-slate-300 text-[#006A63] focus:ring-[#4FD1C5] cursor-pointer"
+                                    className="mt-0.5 h-3.5 w-3.5 rounded border-slate-300 text-blue-600 focus:ring-blue-500 cursor-pointer"
                                   />
                                   <span className="leading-snug break-words">{code}</span>
                                 </div>
                                 {countInHistory > 0 ? (
-                                  <span className="shrink-0 px-1.5 py-0.2 rounded-full text-[10px] font-bold bg-[#EFF4FF] text-[#006A63]">
+                                  <span className="shrink-0 px-1.5 py-0.2 rounded-full text-[10px] font-bold bg-[#EFF4FF] text-blue-600">
                                     {countInHistory}
                                   </span>
                                 ) : (
@@ -8410,7 +8410,7 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
                   type="button"
                   onClick={() => handleSearchHistory(true)}
                   disabled={isLoadingSearchHistory}
-                  className="h-9 px-3 rounded-xl bg-[#EFF4FF] hover:bg-[#E5EEFF] text-[#006A63] text-xs font-medium transition-colors cursor-pointer flex items-center gap-1"
+                  className="h-9 px-3 rounded-xl bg-[#EFF4FF] hover:bg-[#E5EEFF] text-blue-600 text-xs font-medium transition-colors cursor-pointer flex items-center gap-1"
                   title="Refresh dari server"
                 >
                   <RefreshCw size={13} className={isLoadingSearchHistory ? 'animate-spin' : ''} />
@@ -8448,7 +8448,7 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
                       `Riwayat_Insiden_${historyMonth}_${dateStr}.xlsx`
                     );
                   }}
-                  className="inline-flex items-center gap-1.5 h-9 px-3.5 rounded-xl bg-[#EFF4FF] hover:bg-[#E5EEFF] text-[#006A63] text-xs font-semibold shadow-2xs transition-all cursor-pointer"
+                  className="inline-flex items-center gap-1.5 h-9 px-3.5 rounded-xl bg-[#EFF4FF] hover:bg-[#E5EEFF] text-blue-600 text-xs font-semibold shadow-2xs transition-all cursor-pointer"
                 >
                   <Download size={14} />
                   <span>Export Excel</span>
@@ -8469,7 +8469,7 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
                         <div className="flex items-center gap-1.5">
                           <span>WSID / Lokasi</span>
                           {historySortColumn === 'wsid' ? (
-                            historySortDirection === 'asc' ? <ChevronUp size={12} className="text-[#006A63]" /> : <ChevronDown size={12} className="text-[#006A63]" />
+                            historySortDirection === 'asc' ? <ChevronUp size={12} className="text-blue-600" /> : <ChevronDown size={12} className="text-blue-600" />
                           ) : (
                             <ArrowUpDown size={12} className="text-slate-400" />
                           )}
@@ -8482,7 +8482,7 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
                         <div className="flex items-center gap-1.5">
                           <span>Tipe / Vendor</span>
                           {historySortColumn === 'typeMesin' ? (
-                            historySortDirection === 'asc' ? <ChevronUp size={12} className="text-[#006A63]" /> : <ChevronDown size={12} className="text-[#006A63]" />
+                            historySortDirection === 'asc' ? <ChevronUp size={12} className="text-blue-600" /> : <ChevronDown size={12} className="text-blue-600" />
                           ) : (
                             <ArrowUpDown size={12} className="text-slate-400" />
                           )}
@@ -8495,7 +8495,7 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
                         <div className="flex items-center gap-1.5">
                           <span>Problem</span>
                           {historySortColumn === 'eventCodeDesc' ? (
-                            historySortDirection === 'asc' ? <ChevronUp size={12} className="text-[#006A63]" /> : <ChevronDown size={12} className="text-[#006A63]" />
+                            historySortDirection === 'asc' ? <ChevronUp size={12} className="text-blue-600" /> : <ChevronDown size={12} className="text-blue-600" />
                           ) : (
                             <ArrowUpDown size={12} className="text-slate-400" />
                           )}
@@ -8508,7 +8508,7 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
                         <div className="flex items-center gap-1.5">
                           <span>Start</span>
                           {historySortColumn === 'startTime' ? (
-                            historySortDirection === 'asc' ? <ChevronUp size={12} className="text-[#006A63]" /> : <ChevronDown size={12} className="text-[#006A63]" />
+                            historySortDirection === 'asc' ? <ChevronUp size={12} className="text-blue-600" /> : <ChevronDown size={12} className="text-blue-600" />
                           ) : (
                             <ArrowUpDown size={12} className="text-slate-400" />
                           )}
@@ -8521,7 +8521,7 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
                         <div className="flex items-center gap-1.5">
                           <span>End</span>
                           {historySortColumn === 'endTime' ? (
-                            historySortDirection === 'asc' ? <ChevronUp size={12} className="text-[#006A63]" /> : <ChevronDown size={12} className="text-[#006A63]" />
+                            historySortDirection === 'asc' ? <ChevronUp size={12} className="text-blue-600" /> : <ChevronDown size={12} className="text-blue-600" />
                           ) : (
                             <ArrowUpDown size={12} className="text-slate-400" />
                           )}
@@ -8534,7 +8534,7 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
                         <div className="flex items-center gap-1.5">
                           <span>Durasi</span>
                           {historySortColumn === 'durasiOpr' ? (
-                            historySortDirection === 'asc' ? <ChevronUp size={12} className="text-[#006A63]" /> : <ChevronDown size={12} className="text-[#006A63]" />
+                            historySortDirection === 'asc' ? <ChevronUp size={12} className="text-blue-600" /> : <ChevronDown size={12} className="text-blue-600" />
                           ) : (
                             <ArrowUpDown size={12} className="text-slate-400" />
                           )}
@@ -8547,7 +8547,7 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
                         <div className="flex items-center gap-1.5">
                           <span>Chronic Status</span>
                           {historySortColumn === 'chronic' ? (
-                            historySortDirection === 'asc' ? <ChevronUp size={12} className="text-[#006A63]" /> : <ChevronDown size={12} className="text-[#006A63]" />
+                            historySortDirection === 'asc' ? <ChevronUp size={12} className="text-blue-600" /> : <ChevronDown size={12} className="text-blue-600" />
                           ) : (
                             <ArrowUpDown size={12} className="text-slate-400" />
                           )}
@@ -8560,7 +8560,7 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
                         <div className="flex items-center gap-1.5">
                           <span>Action (Keterangan)</span>
                           {historySortColumn === 'actionTerakhir' ? (
-                            historySortDirection === 'asc' ? <ChevronUp size={12} className="text-[#006A63]" /> : <ChevronDown size={12} className="text-[#006A63]" />
+                            historySortDirection === 'asc' ? <ChevronUp size={12} className="text-blue-600" /> : <ChevronDown size={12} className="text-blue-600" />
                           ) : (
                             <ArrowUpDown size={12} className="text-slate-400" />
                           )}
@@ -8640,7 +8640,7 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
                                       ? 'bg-[#BA1A1A]'
                                       : r.durasiOpr >= 60
                                       ? 'bg-amber-500'
-                                      : 'bg-[#4FD1C5]'
+                                      : 'bg-blue-600'
                                   }`}
                                 />
                                 <span className="text-[#0D1C2E] font-medium truncate max-w-[180px]" title={r.eventCodeDesc}>
@@ -8708,9 +8708,9 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
                               ) : chronic?.is3x5Hari ? (
                                 <span
                                   title={`Problem yang sama terjadi ${chronic.fiveDayCount}x dlm 5 hari`}
-                                  className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-[#EFF4FF] text-[#006A63] text-[10px] font-bold"
+                                  className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-[#EFF4FF] text-blue-600 text-[10px] font-bold"
                                 >
-                                  <Repeat size={11} className="text-[#006A63]" />
+                                  <Repeat size={11} className="text-blue-600" />
                                   <span>3x/5 hari</span>
                                 </span>
                               ) : (
@@ -8732,7 +8732,7 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
                                     {r.actionTerakhir}
                                   </span>
                                   <span className="text-[10px] text-[#555F71] flex items-center gap-1.5 truncate">
-                                    <CheckCircle2 size={11} className="text-[#006A63] shrink-0" />
+                                    <CheckCircle2 size={11} className="text-blue-600 shrink-0" />
                                     {renderAuthorBadge(r.actionTerakhirOleh)}
                                     <span className="truncate">
                                       {cleanAuthorName(r.actionTerakhirOleh)} &bull; {formatStartProblemTime(r.actionTerakhirWaktu) !== '-' ? formatStartProblemTime(r.actionTerakhirWaktu) : (r.actionTerakhirWaktu || '-')}
@@ -8778,7 +8778,7 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
                                 <button
                                   type="button"
                                   onClick={() => handleOpenDetailDrawer(r)}
-                                  className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-[#EFF4FF] hover:bg-[#4FD1C5] hover:text-[#005750] text-[#006A63] text-xs font-semibold transition-colors cursor-pointer"
+                                  className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-[#EFF4FF] hover:bg-blue-600 hover:text-blue-700 text-blue-600 text-xs font-semibold transition-colors cursor-pointer"
                                 >
                                   Detail
                                 </button>
@@ -8865,7 +8865,7 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
               <div className="space-y-1">
                 <div className="flex items-center gap-2">
                   <h2 className="text-lg font-bold text-[#0D1C2E]">Upload Data Incident Report CSV</h2>
-                  <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-[#E6FFFA] text-[#006A63]">
+                  <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-blue-50 text-blue-600">
                     Akselerasi Batch Instan
                   </span>
                 </div>
@@ -8882,11 +8882,11 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
                 }}
                 className={`border-2 border-dashed rounded-2xl p-8 sm:p-12 text-center cursor-pointer transition-all flex flex-col items-center justify-center space-y-3 ${
                   petugasName.trim()
-                    ? 'border-[#4FD1C5] hover:border-[#006A63] bg-[#E6FFFA]/20 hover:bg-[#E6FFFA]/40'
+                    ? 'border-blue-600 hover:border-blue-600 bg-blue-50/20 hover:bg-blue-50/40'
                     : 'border-slate-200 bg-slate-50 opacity-60'
                 }`}
               >
-                <div className="w-14 h-14 rounded-2xl bg-white shadow-sm flex items-center justify-center text-[#006A63]">
+                <div className="w-14 h-14 rounded-2xl bg-white shadow-sm flex items-center justify-center text-blue-600">
                   <UploadCloud size={30} />
                 </div>
                 <div>
@@ -8897,8 +8897,8 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
 
               {/* Upload Progress Bar */}
               {isUploadingCsv && (
-                <div className="space-y-2 p-4 rounded-xl bg-[#E6FFFA] border border-[#4FD1C5]/30">
-                  <div className="flex justify-between text-xs font-semibold text-[#006A63]">
+                <div className="space-y-2 p-4 rounded-xl bg-blue-50 border border-blue-200">
+                  <div className="flex justify-between text-xs font-semibold text-blue-600">
                     <span className="flex items-center gap-2">
                       <Clock size={14} className="animate-spin" />
                       <span>{uploadMessage}</span>
@@ -8907,7 +8907,7 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
                   </div>
                   <div className="w-full h-2 bg-white rounded-full overflow-hidden">
                     <div
-                      className="h-full bg-[#006A63] transition-all duration-300"
+                      className="h-full bg-blue-600 transition-all duration-300"
                       style={{ width: `${uploadProgress}%` }}
                     />
                   </div>
@@ -8916,8 +8916,8 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
 
               {/* Upload Result Stats */}
               {uploadStats && (
-                <div className="p-4 rounded-xl bg-[#E6FFFA] border border-[#4FD1C5]/30 text-xs space-y-2">
-                  <div className="flex items-center gap-2 font-bold text-[#006A63]">
+                <div className="p-4 rounded-xl bg-blue-50 border border-blue-200 text-xs space-y-2">
+                  <div className="flex items-center gap-2 font-bold text-blue-600">
                     <CheckCircle2 size={16} />
                     <span>Sinkronisasi Selesai — Status Mesin Berhasil Diperbarui</span>
                   </div>
@@ -8931,8 +8931,8 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
                       <div className="font-bold text-rose-700 text-base">{uploadStats.newCount.toLocaleString()}</div>
                     </div>
                     <div className="bg-white p-2.5 rounded-xl border border-[#EFF4FF]">
-                      <span className="text-[10px] text-[#006A63]">Diperbarui:</span>
-                      <div className="font-bold text-[#006A63] text-base">{uploadStats.updatedCount.toLocaleString()}</div>
+                      <span className="text-[10px] text-blue-600">Diperbarui:</span>
+                      <div className="font-bold text-blue-600 text-base">{uploadStats.updatedCount.toLocaleString()}</div>
                     </div>
                     <div className="bg-white p-2.5 rounded-xl border border-[#EFF4FF]">
                       <span className="text-[10px] text-slate-500">Tanpa Ubah:</span>
@@ -8946,7 +8946,7 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
             {/* Riwayat Upload Log */}
             <div className="bg-white rounded-2xl border border-[#EFF4FF] p-5 space-y-3 shadow-sm">
               <h3 className="text-sm font-bold text-[#0D1C2E] flex items-center gap-2">
-                <History size={16} className="text-[#006A63]" />
+                <History size={16} className="text-blue-600" />
                 <span>Riwayat Upload Terakhir (Database Server)</span>
               </h3>
 
@@ -8960,7 +8960,7 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
                       <th className="px-3">Nama File</th>
                       <th className="px-3 text-right">Total Baris</th>
                       <th className="px-3 text-right text-rose-600">Baru</th>
-                      <th className="px-3 text-right text-[#006A63]">Diupdate</th>
+                      <th className="px-3 text-right text-blue-600">Diupdate</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-[#EFF4FF] font-mono text-[11px]">
@@ -8979,7 +8979,7 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
                           <td className="px-3 text-[#555F71] truncate max-w-[180px]">{log.namaFile}</td>
                           <td className="px-3 text-right text-[#555F71]">{log.totalLines?.toLocaleString() || '-'}</td>
                           <td className="px-3 text-right font-bold text-rose-600">{log.baru?.toLocaleString() || 0}</td>
-                          <td className="px-3 text-right font-bold text-[#006A63]">{log.diupdate?.toLocaleString() || 0}</td>
+                          <td className="px-3 text-right font-bold text-blue-600">{log.diupdate?.toLocaleString() || 0}</td>
                         </tr>
                       ))
                     )}
@@ -9002,7 +9002,7 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
         {activeIncidentDetail && (
           <>
             {/* Drawer Header */}
-            <div className="p-5 border-b border-[#EFF4FF] flex items-start justify-between bg-[#F8F9FF]/80">
+            <div className="p-5 border-b border-[#E5EAF2] flex items-start justify-between bg-[#F8F9FF]/80">
               <div className="flex flex-col pr-2">
                 <div className="flex items-center gap-2 mb-1">
                   <span className="font-extrabold text-lg text-[#0D1C2E] font-mono tracking-tight">
@@ -9034,7 +9034,7 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
                 <div className="flex items-center gap-1.5 mt-1 text-[11px] text-[#555F71]">
                   <span>{activeIncidentDetail.typeMesin} &bull; {activeIncidentDetail.vendor}</span>
                   <span>&bull;</span>
-                  <span className="text-[#006A63] font-semibold truncate max-w-[170px]">
+                  <span className="text-blue-600 font-semibold truncate max-w-[170px]">
                     {activeIncidentDetail.eventCodeDesc}
                   </span>
                 </div>
@@ -9119,7 +9119,7 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
 
                 return (
                   <div className="bg-[#EFF4FF] border border-[#d2e3fc] p-3 rounded-xl flex flex-col gap-1.5 text-xs">
-                    <div className="flex items-center gap-1.5 font-bold text-[#006A63]">
+                    <div className="flex items-center gap-1.5 font-bold text-blue-600">
                       <MessageSquare size={14} />
                       <span>Update / Tindakan Terkini:</span>
                     </div>
@@ -9134,7 +9134,7 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
               })()}
 
               {/* Dropdown Kategori Action: Update vs Penanganan */}
-              <div className="flex flex-col gap-1.5 p-3 rounded-xl bg-[#F8F9FF] border border-[#EFF4FF]">
+              <div className="flex flex-col gap-1.5 p-3 rounded-xl bg-white border border-[#E5EAF2]">
                 <div className="flex items-center justify-between">
                   <label htmlFor="drawer-kategori-select" className="text-xs font-bold text-[#0D1C2E] flex items-center gap-1.5">
                     {actionCategory === 'PENANGANAN' ? (
@@ -9197,7 +9197,7 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
                       ? 'Contoh: Replenish Ulang, modul presenter diganti teknisi, normal kembali...'
                       : 'Contoh: Tim teknisi vendor sedang OTW menuju lokasi mesin...'
                   }
-                  className="w-full p-3 rounded-xl bg-[#F8F9FF] text-xs text-[#0D1C2E] border border-[#EFF4FF] placeholder:text-slate-400 focus:outline-none focus:ring-1 focus:ring-[#4FD1C5] focus:bg-white resize-none transition-all"
+                  className="w-full p-3 rounded-xl bg-[#F8F9FF] text-xs text-[#0D1C2E] border border-[#EFF4FF] placeholder:text-slate-400 focus:outline-none focus:ring-1 focus:ring-blue-500 focus:bg-white resize-none transition-all"
                 />
               </div>
 
@@ -9215,7 +9215,7 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
                       className={`px-2.5 py-1 rounded-lg text-[11px] font-medium transition-colors cursor-pointer ${
                         actionCategory === 'PENANGANAN'
                           ? 'bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-200'
-                          : 'bg-[#EFF4FF] hover:bg-[#E5EEFF] hover:text-[#006A63] text-[#0D1C2E]'
+                          : 'bg-[#EFF4FF] hover:bg-[#E5EEFF] hover:text-blue-600 text-[#0D1C2E]'
                       }`}
                     >
                       + {preset}
@@ -9225,19 +9225,19 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
               </div>
 
               {/* Operator Context & Save CTA */}
-              <div className="p-3.5 rounded-xl bg-[#F8F9FF] border border-[#EFF4FF] flex flex-col gap-3">
+              <div className="p-3.5 rounded-xl bg-white border border-[#E5EAF2] flex flex-col gap-3">
                 <div className="flex items-center justify-between text-xs">
                   <div className="flex items-center gap-1.5 text-[#555F71]">
-                    <User size={13} className="text-[#006A63]" />
+                    <User size={13} className="text-blue-600" />
                     <span>Diupdate sebagai:</span>
                   </div>
-                  <strong className={petugasName.trim() ? 'text-[#006A63]' : 'text-rose-600'}>
+                  <strong className={petugasName.trim() ? 'text-blue-600' : 'text-rose-600'}>
                     {petugasName.trim() || 'Belum Diisi (Wajib)'}
                   </strong>
                 </div>
 
                 {actionSaveSuccess && (
-                  <div className="p-2 rounded-lg bg-[#E6FFFA] text-[#006A63] text-xs font-semibold flex items-center gap-1.5">
+                  <div className="p-2 rounded-lg bg-blue-50 text-blue-600 text-xs font-semibold flex items-center gap-1.5">
                     <CheckCircle2 size={14} />
                     <span>Catatan action tersimpan sukses!</span>
                   </div>
@@ -9247,7 +9247,7 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
                   type="button"
                   onClick={() => handleSubmitSingleAction()}
                   disabled={!singleActionText.trim()}
-                  className="w-full h-10 rounded-xl bg-[#4FD1C5] hover:bg-[#319795] disabled:bg-slate-200 disabled:text-slate-400 text-[#005750] hover:text-white text-xs font-bold shadow-sm transition-all flex items-center justify-center gap-2 cursor-pointer disabled:cursor-not-allowed"
+                  className="w-full h-10 rounded-xl bg-blue-600 hover:bg-blue-700 disabled:bg-slate-200 disabled:text-slate-400 text-white text-xs font-bold shadow-sm transition-all flex items-center justify-center gap-2 cursor-pointer disabled:cursor-not-allowed"
                 >
                   <Check size={16} />
                   <span>Simpan Update Tindakan</span>
@@ -9263,18 +9263,18 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
 
                 {isLoadingHistory ? (
                   <div className="py-4 text-center text-xs text-slate-400">
-                    <Clock size={16} className="animate-spin mx-auto mb-1 text-[#006A63]" />
+                    <Clock size={16} className="animate-spin mx-auto mb-1 text-blue-600" />
                     <span>Memuat log riwayat...</span>
                   </div>
                 ) : incidentHistory.length === 0 ? (
-                  <div className="p-4 rounded-xl bg-[#F8F9FF] border border-[#EFF4FF] text-center text-xs text-[#555F71]">
+                  <div className="p-4 rounded-xl bg-white border border-[#E5EAF2] text-center text-xs text-[#555F71]">
                     Belum ada catatan riwayat tindakan sebelumnya.
                   </div>
                 ) : (
                   <div className="relative pl-6 space-y-4 before:content-[''] before:absolute before:left-2 before:top-2 before:bottom-2 before:w-[2px] before:bg-[#EFF4FF]">
                     {incidentHistory.map((item, idx) => (
                       <div key={idx} className="relative flex flex-col gap-1">
-                        <span className="absolute -left-6 top-1 w-3.5 h-3.5 rounded-full bg-[#006A63] ring-4 ring-white"></span>
+                        <span className="absolute -left-6 top-1 w-3.5 h-3.5 rounded-full bg-blue-600 ring-4 ring-white"></span>
                         <div className="flex items-center gap-1.5 text-[11px]">
                           {renderAuthorBadge(item.namaPetugas)}
                           <strong className="text-[#0D1C2E] font-semibold">{cleanAuthorName(item.namaPetugas)}</strong>
@@ -9307,9 +9307,9 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
       {selectedIncidentKeys.size > 0 && (
         <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-30 bg-[#1A202C] text-white rounded-full px-6 py-2.5 shadow-2xl flex items-center gap-5 sm:gap-8 backdrop-blur-md animate-in slide-in-from-bottom-5 duration-200">
           <div className="flex items-center gap-2 text-xs">
-            <span className="w-2 h-2 rounded-full bg-[#4FD1C5] animate-pulse"></span>
+            <span className="w-2 h-2 rounded-full bg-blue-600 animate-pulse"></span>
             <span>
-              <strong className="text-[#4FD1C5] font-bold text-sm">{selectedIncidentKeys.size}</strong> dipilih &bull;{' '}
+              <strong className="text-blue-600 font-bold text-sm">{selectedIncidentKeys.size}</strong> dipilih &bull;{' '}
               <button
                 type="button"
                 onClick={handleToggleSelectAll}
@@ -9327,7 +9327,7 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
                 if (!requirePetugasName()) return;
                 setShowBulkModal(true);
               }}
-              className="inline-flex items-center gap-1.5 px-4 py-1.5 rounded-full bg-[#4FD1C5] hover:bg-[#319795] text-[#005750] hover:text-white text-xs font-bold transition-all shadow-sm cursor-pointer"
+              className="inline-flex items-center gap-1.5 px-4 py-1.5 rounded-full bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold transition-all shadow-sm cursor-pointer"
             >
               <MessageSquare size={14} />
               <span>Update Action ({selectedIncidentKeys.size})</span>
@@ -9351,7 +9351,7 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-[#0D1C2E]/50 backdrop-blur-xs animate-in fade-in duration-150">
           <div className="w-full max-w-md bg-white rounded-2xl p-6 shadow-2xl flex flex-col gap-4 border border-[#EFF4FF]">
             <div className="flex items-start justify-between">
-              <div className="w-10 h-10 rounded-xl bg-[#4FD1C5]/20 text-[#006A63] flex items-center justify-center">
+              <div className="w-10 h-10 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center">
                 <ShieldCheck size={22} />
               </div>
               <button
@@ -9382,7 +9382,7 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
                   value={dutyOperatorInput}
                   onChange={(e) => setDutyOperatorInput(e.target.value)}
                   placeholder="Contoh: Budi Prasetyo"
-                  className="w-full h-10 pl-9 pr-3 rounded-xl bg-[#F8F9FF] text-xs text-[#0D1C2E] border border-[#EFF4FF] outline-none focus:ring-1 focus:ring-[#4FD1C5] focus:bg-white"
+                  className="w-full h-10 pl-9 pr-3 rounded-xl bg-[#F8F9FF] text-xs text-[#0D1C2E] border border-[#EFF4FF] outline-none focus:ring-1 focus:ring-blue-500 focus:bg-white"
                   autoFocus
                 />
               </div>
@@ -9400,7 +9400,7 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
               <button
                 type="button"
                 onClick={saveDutyOperator}
-                className="px-5 py-2 rounded-xl bg-[#4FD1C5] hover:bg-[#319795] text-[#005750] hover:text-white text-xs font-bold shadow-md transition-colors cursor-pointer"
+                className="px-5 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold shadow-md transition-colors cursor-pointer"
               >
                 Mulai Monitoring
               </button>
@@ -9418,7 +9418,7 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
             <div className="flex items-start justify-between">
               <div className="flex flex-col gap-0.5">
                 <div className="flex items-center gap-2">
-                  <span className="w-2.5 h-2.5 rounded-full bg-[#4FD1C5]"></span>
+                  <span className="w-2.5 h-2.5 rounded-full bg-blue-600"></span>
                   <h2 className="font-bold text-base text-[#0D1C2E]">Upload Data CSV Per Jam</h2>
                 </div>
                 <p className="text-xs text-[#555F71]">
@@ -9437,9 +9437,9 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
             {/* Dropzone */}
             <div
               onClick={() => fileUploadInputRef.current?.click()}
-              className="rounded-xl bg-[#F8F9FF] p-6 flex flex-col items-center justify-center text-center cursor-pointer border-2 border-dashed border-[#4FD1C5] hover:bg-[#E6FFFA]/40 transition group"
+              className="rounded-xl bg-[#F8F9FF] p-6 flex flex-col items-center justify-center text-center cursor-pointer border-2 border-dashed border-blue-600 hover:bg-blue-50/40 transition group"
             >
-              <div className="w-12 h-12 rounded-xl bg-white shadow-sm flex items-center justify-center text-[#006A63] mb-2 group-hover:scale-105 transition-transform">
+              <div className="w-12 h-12 rounded-xl bg-white shadow-sm flex items-center justify-center text-blue-600 mb-2 group-hover:scale-105 transition-transform">
                 <UploadCloud size={26} />
               </div>
               <span className="text-xs font-semibold text-[#0D1C2E]">
@@ -9450,7 +9450,7 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
 
             {/* Operator Identifier */}
             <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-[#EFF4FF] text-xs text-[#555F71]">
-              <ShieldCheck size={15} className="text-[#006A63]" />
+              <ShieldCheck size={15} className="text-blue-600" />
               <span>Diupload oleh: <strong className="text-[#0D1C2E] font-semibold">{petugasName || 'Budi'}</strong></span>
             </div>
 
@@ -9466,7 +9466,7 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
               <button
                 type="button"
                 onClick={() => fileUploadInputRef.current?.click()}
-                className="px-5 py-2 rounded-xl bg-[#006A63] hover:bg-[#005750] text-white text-xs font-bold shadow-md transition-all flex items-center gap-1.5 cursor-pointer"
+                className="px-5 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold shadow-md transition-all flex items-center gap-1.5 cursor-pointer"
               >
                 <UploadCloud size={14} />
                 <span>Pilih File CSV</span>
@@ -9484,7 +9484,7 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
           <div className="bg-white border border-[#EFF4FF] rounded-2xl max-w-lg w-full p-6 shadow-2xl space-y-4 text-[#0D1C2E]">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
-                <div className="p-2 bg-[#E6FFFA] text-[#006A63] rounded-xl">
+                <div className="p-2 bg-blue-50 text-blue-600 rounded-xl">
                   <MessageSquare size={18} />
                 </div>
                 <h3 className="text-base font-bold text-[#0D1C2E]">
@@ -9512,7 +9512,7 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
                   value={petugasName}
                   onChange={(e) => handlePetugasNameChange(e.target.value)}
                   placeholder="Ketik nama Anda..."
-                  className="w-full px-3.5 py-2 bg-[#F8F9FF] border border-[#EFF4FF] rounded-xl text-xs text-[#0D1C2E] outline-none focus:ring-1 focus:ring-[#4FD1C5]"
+                  className="w-full px-3.5 py-2 bg-white border border-[#E5EAF2] rounded-xl text-xs text-[#0D1C2E] outline-none focus:ring-1 focus:ring-blue-500"
                 />
               </div>
 
@@ -9550,7 +9550,7 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
                       className={`px-2.5 py-1 rounded-lg text-[11px] font-medium transition-all cursor-pointer ${
                         bulkActionCategory === 'PENANGANAN'
                           ? 'bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-200'
-                          : 'bg-[#EFF4FF] hover:bg-[#E5EEFF] hover:text-[#006A63] text-[#0D1C2E]'
+                          : 'bg-[#EFF4FF] hover:bg-[#E5EEFF] hover:text-blue-600 text-[#0D1C2E]'
                       }`}
                     >
                       + {preset}
@@ -9566,7 +9566,7 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
                   value={bulkActionText}
                   onChange={(e) => setBulkActionText(e.target.value)}
                   placeholder="Contoh: Dispatch teknisi vendor ke seluruh unit terpilih..."
-                  className="w-full p-3 bg-[#F8F9FF] border border-[#EFF4FF] rounded-xl text-xs text-[#0D1C2E] outline-none focus:ring-1 focus:ring-[#4FD1C5]"
+                  className="w-full p-3 bg-white border border-[#E5EAF2] rounded-xl text-xs text-[#0D1C2E] outline-none focus:ring-1 focus:ring-blue-500"
                 />
               </div>
 
@@ -9581,7 +9581,7 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
                 <button
                   type="submit"
                   disabled={isSavingBulk || !bulkActionText.trim() || !petugasName.trim()}
-                  className="px-5 py-2 rounded-xl bg-[#006A63] hover:bg-[#005750] disabled:bg-slate-200 disabled:text-slate-400 text-white text-xs font-bold shadow-md flex items-center gap-1.5 cursor-pointer disabled:cursor-not-allowed"
+                  className="px-5 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 disabled:bg-slate-200 disabled:text-slate-400 text-white text-xs font-bold shadow-md flex items-center gap-1.5 cursor-pointer disabled:cursor-not-allowed"
                 >
                   {isSavingBulk ? (
                     <>
@@ -9608,9 +9608,9 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
         <div className="fixed inset-0 z-50 bg-[#0D1C2E]/50 backdrop-blur-xs flex items-center justify-center p-4 animate-in fade-in duration-150">
           <div className="bg-white border border-[#EFF4FF] rounded-2xl max-w-4xl w-full max-h-[90vh] flex flex-col shadow-2xl text-[#0D1C2E] overflow-hidden">
             {/* Modal Header */}
-            <div className="p-5 border-b border-[#EFF4FF] bg-[#F8F9FF] flex items-start justify-between">
+            <div className="p-5 border-b border-[#E5EAF2] bg-[#F8F9FF] flex items-start justify-between">
               <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-xl bg-[#E6FFFA] border border-[#4FD1C5]/30 flex items-center justify-center text-[#006A63] shrink-0">
+                <div className="w-10 h-10 rounded-xl bg-blue-50 border border-blue-200 flex items-center justify-center text-blue-600 shrink-0">
                   <Wrench size={20} />
                 </div>
                 <div>
@@ -9623,7 +9623,7 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
                     </span>
                   </div>
                   <div className="flex items-center gap-2 mt-0.5 text-xs text-[#555F71]">
-                    <span className="font-semibold text-[#006A63]">{selectedFreqItemForDetail.eventCodeDesc}</span>
+                    <span className="font-semibold text-blue-600">{selectedFreqItemForDetail.eventCodeDesc}</span>
                     <span>&bull;</span>
                     <span>{selectedFreqItemForDetail.servicePointSektor}</span>
                   </div>
@@ -9634,7 +9634,7 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
                 <button
                   type="button"
                   onClick={() => setShowAddPenangananInModal((prev) => !prev)}
-                  className="px-3 py-1.5 rounded-xl bg-[#4FD1C5] hover:bg-[#319795] text-[#005750] hover:text-white text-xs font-bold transition-all shadow-2xs flex items-center gap-1.5 cursor-pointer"
+                  className="px-3 py-1.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold transition-all shadow-2xs flex items-center gap-1.5 cursor-pointer"
                 >
                   <Plus size={14} />
                   <span>{showAddPenangananInModal ? 'Tutup Form' : 'Catat Penanganan Baru'}</span>
@@ -9653,11 +9653,11 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
             <div className="p-5 flex-1 overflow-y-auto space-y-4">
               {/* Summary KPIs */}
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-                <div className="p-3 rounded-xl bg-[#F8F9FF] border border-[#EFF4FF]">
+                <div className="p-3 rounded-xl bg-white border border-[#E5EAF2]">
                   <span className="text-[11px] text-[#555F71] block">Total Frekuensi Kejadian</span>
-                  <strong className="text-lg font-bold text-[#006A63] font-mono">{selectedFreqItemForDetail.totalFrekuensi}x</strong>
+                  <strong className="text-lg font-bold text-blue-600 font-mono">{selectedFreqItemForDetail.totalFrekuensi}x</strong>
                 </div>
-                <div className="p-3 rounded-xl bg-[#F8F9FF] border border-[#EFF4FF]">
+                <div className="p-3 rounded-xl bg-white border border-[#E5EAF2]">
                   <span className="text-[11px] text-[#555F71] block">Total Durasi Problem</span>
                   <strong className="text-lg font-bold text-[#0D1C2E] font-mono">{formatDurationHuman(selectedFreqItemForDetail.totalDurasi)}</strong>
                 </div>
@@ -9682,9 +9682,9 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
 
               {/* Form Input Penanganan Cepat jika aktif */}
               {showAddPenangananInModal && (
-                <div className="p-4 rounded-xl bg-[#E6FFFA]/50 border border-[#4FD1C5]/40 space-y-3 animate-in slide-in-from-top-2 duration-150">
+                <div className="p-4 rounded-xl bg-blue-50/50 border border-blue-200 space-y-3 animate-in slide-in-from-top-2 duration-150">
                   <div className="flex items-center justify-between">
-                    <span className="text-xs font-bold text-[#006A63] flex items-center gap-1.5">
+                    <span className="text-xs font-bold text-blue-600 flex items-center gap-1.5">
                       <Wrench size={14} />
                       <span>Input Catatan Penanganan / Update Mesin {selectedFreqItemForDetail.wsid}</span>
                     </span>
@@ -9748,7 +9748,7 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
                       value={modalPenangananText}
                       onChange={(e) => setModalPenangananText(e.target.value)}
                       placeholder="Contoh: Replenish Ulang, bersihkan sensor penarik, test dispense 50 lembar normal..."
-                      className="w-full p-2.5 rounded-lg border border-slate-200 bg-white text-xs outline-none focus:ring-1 focus:ring-[#4FD1C5]"
+                      className="w-full p-2.5 rounded-lg border border-slate-200 bg-white text-xs outline-none focus:ring-1 focus:ring-blue-500"
                     />
                   </div>
 
@@ -9764,7 +9764,7 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
                       type="button"
                       onClick={handleSaveModalPenanganan}
                       disabled={isSavingModalPenanganan || !modalPenangananText.trim()}
-                      className="px-4 py-1.5 rounded-lg text-xs font-bold bg-[#006A63] hover:bg-[#005750] text-white disabled:bg-slate-300 transition-all cursor-pointer flex items-center gap-1.5"
+                      className="px-4 py-1.5 rounded-lg text-xs font-bold bg-blue-600 hover:bg-blue-700 text-white disabled:bg-slate-300 transition-all cursor-pointer flex items-center gap-1.5"
                     >
                       {isSavingModalPenanganan ? (
                         <>
@@ -9796,7 +9796,7 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
                     onClick={() => setFreqDetailDateFilter('ALL')}
                     className={`px-3 py-1 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
                       freqDetailDateFilter === 'ALL'
-                        ? 'bg-[#006A63] text-white shadow-2xs'
+                        ? 'bg-blue-600 text-white shadow-2xs'
                         : 'bg-[#F8F9FF] text-[#555F71] hover:bg-[#EFF4FF] border border-[#EFF4FF]'
                     }`}
                   >
@@ -9813,7 +9813,7 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
                         onClick={() => setFreqDetailDateFilter(dt)}
                         className={`px-2.5 py-1 rounded-lg text-xs font-medium transition-all cursor-pointer flex items-center gap-1.5 ${
                           isSelected
-                            ? 'bg-[#006A63] text-white font-bold shadow-2xs'
+                            ? 'bg-blue-600 text-white font-bold shadow-2xs'
                             : 'bg-white hover:bg-[#F8F9FF] text-[#0D1C2E] border border-slate-200'
                         }`}
                       >
@@ -9849,7 +9849,7 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
                     <span className="text-xs font-bold text-[#0D1C2E]">
                       Daftar Catatan Penanganan Tiap Tanggal
                     </span>
-                    <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-[#E6FFFA] text-[#006A63] border border-[#4FD1C5]/30">
+                    <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-blue-50 text-blue-600 border border-blue-200">
                       {freqDetailRows.length} {freqDetailOnlyWithNotes ? 'Catatan' : 'Kejadian'}
                     </span>
                   </div>
@@ -9860,7 +9860,7 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
                       onClick={() => setFreqDetailOnlyWithNotes((prev) => !prev)}
                       className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-semibold transition-all cursor-pointer border ${
                         freqDetailOnlyWithNotes
-                          ? 'bg-[#006A63] text-white border-[#006A63] shadow-2xs'
+                          ? 'bg-blue-600 text-white border-blue-600 shadow-2xs'
                           : 'bg-white hover:bg-slate-50 text-slate-600 border-slate-200'
                       }`}
                       title={freqDetailOnlyWithNotes ? 'Saat ini hanya menampilkan yang memiliki catatan. Klik untuk melihat semua kejadian.' : 'Klik untuk menyaring hanya kejadian yang memiliki catatan.'}
@@ -9873,7 +9873,7 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
 
                 <div className="border border-[#EFF4FF] rounded-xl overflow-hidden shadow-2xs">
                   <table className="w-full text-xs text-left">
-                    <thead className="bg-[#F8F9FF] text-[#555F71] border-b border-[#EFF4FF] text-[11px] font-semibold">
+                    <thead className="bg-[#F8F9FF] text-[#555F71] border-b border-[#E5EAF2] text-[11px] font-semibold">
                       <tr>
                         <th className="py-2.5 px-3 text-center w-10">No</th>
                         <th className="py-2.5 px-3 whitespace-nowrap">Tanggal & Jam Problem</th>
@@ -9903,7 +9903,7 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
                                     setModalPenangananDate(freqDetailDateFilter);
                                   }
                                 }}
-                                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[#006A63] text-white text-xs font-bold hover:bg-[#005750] transition-all cursor-pointer mt-1"
+                                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-blue-600 text-white text-xs font-bold hover:bg-blue-700 transition-all cursor-pointer mt-1"
                               >
                                 <Plus size={13} />
                                 <span>Input Catatan Penanganan Sekarang</span>
@@ -9973,12 +9973,12 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
               {freqDetailHistory.length > 0 && (
                 <div className="space-y-1.5 pt-2">
                   <span className="text-xs font-bold text-[#0D1C2E] flex items-center gap-1.5">
-                    <History size={13} className="text-[#006A63]" />
+                    <History size={13} className="text-blue-600" />
                     <span>Log Riwayat Tindakan Mesin (Semua Tanggal)</span>
                   </span>
                   <div className="space-y-2">
                     {freqDetailHistory.map((hist, hIdx) => (
-                      <div key={hIdx} className="p-2.5 rounded-xl bg-[#F8F9FF] border border-[#EFF4FF] flex items-start justify-between gap-3 text-xs">
+                      <div key={hIdx} className="p-2.5 rounded-xl bg-white border border-[#E5EAF2] flex items-start justify-between gap-3 text-xs">
                         <div className="space-y-0.5">
                           <div className="flex items-center gap-2">
                             <span className={`px-2 py-0.2 rounded-full text-[10px] font-bold ${

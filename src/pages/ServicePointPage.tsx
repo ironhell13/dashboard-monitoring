@@ -161,8 +161,8 @@ export default function ServicePointPage() {
       return <ArrowUpDown size={14} className="inline ml-1 text-slate-300 group-hover:text-slate-500" />;
     }
     return sortConfig.direction === 'asc' 
-      ? <ArrowUp size={14} className="inline ml-1 text-indigo-500" />
-      : <ArrowDown size={14} className="inline ml-1 text-indigo-500" />;
+      ? <ArrowUp size={14} className="inline ml-1 text-blue-600" />
+      : <ArrowDown size={14} className="inline ml-1 text-blue-600" />;
   };
 
   const handleExport = () => {
@@ -180,303 +180,303 @@ export default function ServicePointPage() {
   };
 
   return (
-    <div className="space-y-6 animate-fade-in">
-      <div className="flex flex-col md:flex-row md:items-end justify-between gap-4">
+    <div className="space-y-5 animate-fade-in">
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-3">
         <div>
-          <h2 className="text-2xl font-bold text-slate-800">
+          <h2 className="text-xl font-bold text-slate-900 tracking-tight">
             Distribusi Mesin per Service Point
           </h2>
-          <p className="text-slate-500 text-sm mt-1">
-            Dikelompokkan berdasarkan Service Point.
+          <p className="text-slate-500 text-xs mt-0.5">
+            Daftar hierarki performa uptime dan downtime dikelompokkan berdasarkan Service Point.
           </p>
         </div>
+        <div className="flex items-center gap-2">
+          <button 
+            onClick={handleExport}
+            className="flex items-center gap-2 px-3.5 py-1.5 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-lg transition-colors text-xs shadow-2xs"
+          >
+            <Download size={14} />
+            Export Excel
+          </button>
+        </div>
       </div>
 
-      <div className={`grid grid-cols-1 ${selectedWsid ? 'xl:grid-cols-3' : ''} gap-6 transition-all duration-300`}>
-        <div className={`glass-card rounded-2xl overflow-hidden shadow-sm border border-slate-200 ${selectedWsid ? 'xl:col-span-2' : ''}`}>
-        <div className="overflow-x-auto">
-          <div className="p-4 bg-white border-b border-slate-100 flex justify-end">
-            <button 
-              onClick={handleExport}
-              className="flex items-center gap-2 px-4 py-2 bg-emerald-50 text-emerald-600 hover:bg-emerald-100 font-semibold rounded-lg transition-colors text-sm"
-            >
-              <Download size={16} />
-              Export Excel
-            </button>
-          </div>
-          <table className="w-full text-sm text-left">
-            <thead className="bg-slate-50/80 text-slate-600 font-semibold border-b border-slate-200 select-none">
-              <tr>
-                <th className="px-6 py-4 cursor-pointer hover:bg-slate-100" onClick={() => handleSort('servicePoint')}>
-                  Service Point {renderSortIcon('servicePoint')}
-                </th>
-                <th className="px-6 py-4 text-center cursor-pointer hover:bg-slate-100" onClick={() => handleSort('jumlahSektor')}>
-                  Jumlah Sektor {renderSortIcon('jumlahSektor')}
-                </th>
-                <th className="px-6 py-4 text-center cursor-pointer hover:bg-slate-100" onClick={() => handleSort('jumlahMesin')}>
-                  Jumlah Mesin Aktif {renderSortIcon('jumlahMesin')}
-                </th>
-                <th className="px-6 py-4 text-center cursor-pointer hover:bg-slate-100" onClick={() => handleSort('rataRataUptime')}>
-                  Rata-rata Uptime (%) {renderSortIcon('rataRataUptime')}
-                </th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-100">
-              {dataServicePoint.length === 0 ? (
+      <div className={`grid grid-cols-1 ${selectedMachine ? 'xl:grid-cols-3' : ''} gap-5 transition-all duration-200`}>
+        <div className={`bg-white rounded-lg border border-[#E5EAF2] shadow-2xs overflow-hidden ${selectedMachine ? 'xl:col-span-2' : ''}`}>
+          <div className="overflow-x-auto">
+            <table className="w-full text-xs text-left">
+              <thead className="bg-[#F8FAFC] text-slate-600 font-semibold border-b border-[#E5EAF2] select-none">
                 <tr>
-                  <td colSpan={4} className="px-6 py-12 text-center text-slate-500">
-                    Tidak ada data yang tersedia untuk filter saat ini.
-                  </td>
+                  <th className="px-4 py-3 cursor-pointer hover:bg-slate-100/70 transition-colors" onClick={() => handleSort('servicePoint')}>
+                    Service Point {renderSortIcon('servicePoint')}
+                  </th>
+                  <th className="px-4 py-3 text-center cursor-pointer hover:bg-slate-100/70 transition-colors" onClick={() => handleSort('jumlahSektor')}>
+                    Jumlah Sektor {renderSortIcon('jumlahSektor')}
+                  </th>
+                  <th className="px-4 py-3 text-center cursor-pointer hover:bg-slate-100/70 transition-colors" onClick={() => handleSort('jumlahMesin')}>
+                    Jumlah Mesin Aktif {renderSortIcon('jumlahMesin')}
+                  </th>
+                  <th className="px-4 py-3 text-center cursor-pointer hover:bg-slate-100/70 transition-colors" onClick={() => handleSort('rataRataUptime')}>
+                    Rata-rata Uptime (%) {renderSortIcon('rataRataUptime')}
+                  </th>
                 </tr>
-              ) : (
-                dataServicePoint.map((row) => {
-                  const isExpanded = expandedSP === row.servicePoint;
-                  
-                  return (
-                    <React.Fragment key={row.servicePoint}>
-                      <tr 
-                        onClick={() => toggleExpand(row.servicePoint)}
-                        className={`cursor-pointer transition-colors ${isExpanded ? 'bg-indigo-50/30' : 'hover:bg-slate-50/50'}`}
-                      >
-                        <td className="px-6 py-4 font-semibold text-slate-800">
-                          <div className="flex items-center gap-2">
-                            {isExpanded ? <ChevronUp size={16} className="text-indigo-500" /> : <ChevronDown size={16} className="text-slate-400" />}
-                            {row.servicePoint}
-                          </div>
-                        </td>
-                        <td className="px-6 py-4 text-center">
-                          <span className="font-semibold text-slate-700 bg-slate-100 px-3 py-1 rounded-full">{row.jumlahSektor}</span>
-                        </td>
-                        <td className="px-6 py-4 text-center font-bold text-slate-700">{row.jumlahMesin.toLocaleString()}</td>
-                        <td className="px-6 py-4 text-center font-semibold text-emerald-600">{row.rataRataUptime.toFixed(2)}%</td>
-                      </tr>
-                      {isExpanded && (
-                        <tr>
-                          <td colSpan={4} className="p-0 bg-slate-50 border-b-2 border-indigo-100">
-                            <div className="p-6">
-                              <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
-                                <div className="bg-indigo-50/50 px-4 py-3 border-b border-slate-200 flex justify-between items-center">
-                                  <h4 className="font-bold text-indigo-800">Daftar Sektor dalam {row.servicePoint}</h4>
-                                  <span className="text-xs font-semibold bg-indigo-100 text-indigo-700 px-2 py-0.5 rounded-full">{row.sektorList.length} Sektor</span>
-                                </div>
-                                <div className="max-h-[400px] overflow-y-auto">
-                                  <table className="w-full text-sm text-left">
-                                    <thead className="bg-slate-50 sticky top-0 border-b border-slate-200 text-slate-500">
-                                      <tr>
-                                        <th className="px-6 py-3">Nama Sektor</th>
-                                        <th className="px-6 py-3 text-center">Jumlah Mesin BCA Aktif</th>
-                                        <th className="px-6 py-3 text-center">Uptime per Sektor (%)</th>
-                                      </tr>
-                                    </thead>
-                                    <tbody className="divide-y divide-slate-100">
-                                      {row.sektorList.map((s, idx) => {
-                                        const isSektorExpanded = expandedSektor === s.namaSektor;
-                                        return (
-                                          <React.Fragment key={idx}>
-                                            <tr 
-                                              className={`cursor-pointer transition-colors ${isSektorExpanded ? 'bg-indigo-50/20' : 'hover:bg-slate-50'}`}
-                                              onClick={() => setExpandedSektor(isSektorExpanded ? null : s.namaSektor)}
-                                            >
-                                              <td className="px-6 py-3 font-medium text-slate-700">
-                                                <div className="flex items-center gap-2">
-                                                  {isSektorExpanded ? <ChevronUp size={14} className="text-indigo-500" /> : <ChevronDown size={14} className="text-slate-400" />}
-                                                  {s.namaSektor}
-                                                </div>
-                                              </td>
-                                              <td className="px-6 py-3 text-center text-slate-600">{s.jumlahMesin}</td>
-                                              <td className="px-6 py-3 text-center font-semibold text-emerald-600">{s.uptime.toFixed(2)}%</td>
-                                            </tr>
-                                            {isSektorExpanded && (
-                                              <tr>
-                                                <td colSpan={3} className="p-0 bg-white border-b border-indigo-50">
-                                                  <div className="px-8 py-4 bg-slate-50/50">
-                                                    <h5 className="text-sm font-semibold text-slate-600 mb-3">Daftar WSID (Diurutkan dari Downtime Terburuk):</h5>
-                                                    <div className="overflow-x-auto rounded-lg border border-slate-200">
-                                                      <table className="w-full text-xs text-left bg-white">
-                                                        <thead className="bg-slate-100 text-slate-500 border-b border-slate-200">
-                                                          <tr>
-                                                            <th className="px-4 py-2 font-semibold">WSID</th>
-                                                            <th className="px-4 py-2 font-semibold">Lokasi</th>
-                                                            <th className="px-4 py-2 font-semibold">Vendor</th>
-                                                            <th className="px-4 py-2 font-semibold text-right">Downtime (%)</th>
-                                                          </tr>
-                                                        </thead>
-                                                        <tbody className="divide-y divide-slate-100">
-                                                          {s.bcaMachines
-                                                            .map(m => {
-                                                              const agg = aggregateMachinesData([m]);
-                                                              const downtime = agg?.total || 0;
-                                                              return { m, downtime };
-                                                            })
-                                                            .sort((a, b) => b.downtime - a.downtime)
-                                                            .map((item, mIdx) => (
-                                                            <tr 
-                                                              key={mIdx} 
-                                                              className={`cursor-pointer transition-colors ${selectedWsid === item.m.wsid ? 'bg-blue-50/80 border-l-4 border-blue-500' : 'hover:bg-slate-50 border-l-4 border-transparent'}`}
-                                                              onClick={(e) => {
-                                                                e.stopPropagation();
-                                                                handleSelectWsid(item.m.wsid);
-                                                              }}
-                                                            >
-                                                              <td className="px-4 py-2 font-bold text-slate-700">{item.m.wsid}</td>
-                                                              <td className="px-4 py-2 text-slate-500 truncate max-w-[200px]" title={item.m.lokasi}>{item.m.lokasi}</td>
-                                                              <td className="px-4 py-2 whitespace-nowrap">
-                                                                <span className="px-2 py-0.5 bg-slate-100 text-slate-700 rounded text-[11px] font-semibold border border-slate-200">
-                                                                  {item.m.vendor || '-'}
-                                                                </span>
-                                                              </td>
-                                                              <td className="px-4 py-2 font-semibold text-rose-500 text-right">{item.downtime.toFixed(2)}%</td>
-                                                            </tr>
-                                                          ))}
-                                                          {s.bcaMachines.length === 0 && (
-                                                            <tr>
-                                                              <td colSpan={4} className="px-4 py-4 text-center text-slate-400">Tidak ada WSID</td>
-                                                            </tr>
-                                                          )}
-                                                        </tbody>
-                                                      </table>
-                                                    </div>
-                                                  </div>
-                                                </td>
-                                              </tr>
-                                            )}
-                                          </React.Fragment>
-                                        );
-                                      })}
-                                    </tbody>
-                                  </table>
-                                </div>
-                              </div>
+              </thead>
+              <tbody className="divide-y divide-[#E5EAF2]">
+                {dataServicePoint.length === 0 ? (
+                  <tr>
+                    <td colSpan={4} className="px-4 py-10 text-center text-slate-500">
+                      Tidak ada data yang tersedia untuk filter saat ini.
+                    </td>
+                  </tr>
+                ) : (
+                  dataServicePoint.map((row) => {
+                    const isExpanded = expandedSP === row.servicePoint;
+                    
+                    return (
+                      <React.Fragment key={row.servicePoint}>
+                        <tr 
+                          onClick={() => toggleExpand(row.servicePoint)}
+                          className={`cursor-pointer transition-colors ${isExpanded ? 'bg-blue-50/30' : 'hover:bg-slate-50/70'}`}
+                        >
+                          <td className="px-4 py-3 font-semibold text-slate-900">
+                            <div className="flex items-center gap-2">
+                              {isExpanded ? <ChevronUp size={15} className="text-blue-600" /> : <ChevronDown size={15} className="text-slate-400" />}
+                              {row.servicePoint}
                             </div>
                           </td>
+                          <td className="px-4 py-3 text-center">
+                            <span className="font-medium text-slate-700 bg-slate-100 px-2.5 py-0.5 rounded text-[11px] border border-slate-200">{row.jumlahSektor}</span>
+                          </td>
+                          <td className="px-4 py-3 text-center font-semibold text-slate-800">{row.jumlahMesin.toLocaleString()}</td>
+                          <td className="px-4 py-3 text-center font-semibold text-emerald-700">{row.rataRataUptime.toFixed(2)}%</td>
                         </tr>
-                      )}
-                    </React.Fragment>
-                  );
-                })
-              )}
-            </tbody>
-          </table>
-        </div>
-      </div>
-
-      {/* Side Panel */}
-      {selectedMachine && (
-        <div className="xl:col-span-1 animate-slide-in-right">
-          <div className="bg-white rounded-2xl shadow-lg border border-slate-200 overflow-hidden sticky top-6">
-            <div className="bg-indigo-600 px-6 py-4 text-white flex justify-between items-center">
-              <div>
-                <div className="flex items-center gap-2">
-                  <h3 className="font-bold text-lg">{selectedMachine.wsid}</h3>
-                  {selectedMachine.vendor && selectedMachine.vendor !== '-' && (
-                    <span className="px-2 py-0.5 bg-white/20 text-white rounded text-xs font-semibold tracking-wide">
-                      {selectedMachine.vendor}
-                    </span>
-                  )}
-                </div>
-                <p className="text-indigo-100 text-xs truncate max-w-[250px]" title={selectedMachine.lokasi}>{selectedMachine.lokasi}</p>
-              </div>
-              <button 
-                onClick={() => handleSelectWsid(selectedMachine.wsid)}
-                className="p-1 hover:bg-white/20 rounded-full transition-colors"
-              >
-                <X size={20} />
-              </button>
-            </div>
-
-            <div className="p-6">
-              {!showDetailCategories ? (
-                <div className="space-y-6">
-                  <div className="text-center">
-                    <h4 className="text-sm font-semibold text-slate-500 uppercase tracking-wider mb-4">Total Downtime</h4>
-                    
-                    <div className="grid grid-cols-2 gap-4 mb-4">
-                      <div className="bg-slate-50 rounded-xl p-4 border border-slate-100">
-                        <div className="text-xs text-slate-500 font-semibold mb-1">Total FRX</div>
-                        <div className="text-2xl font-bold text-slate-800">{(selectedMachine as any).aggregatedData?.frxTotal?.toFixed(2) || 0}</div>
-                      </div>
-                      <div className="bg-slate-50 rounded-xl p-4 border border-slate-100">
-                        <div className="text-xs text-slate-500 font-semibold mb-1">Total DUR</div>
-                        <div className="text-2xl font-bold text-slate-800">{(selectedMachine as any).aggregatedData?.durTotal?.toFixed(2) || 0}</div>
-                      </div>
-                    </div>
-                    
-                    <div className="bg-rose-50 rounded-xl p-4 border border-rose-100">
-                      <div className="text-xs text-rose-500 font-semibold mb-1">Total (%)</div>
-                      <div className="text-3xl font-bold text-rose-600">{((selectedMachine as any).aggregatedData?.total || 0).toFixed(2)}%</div>
-                    </div>
-                  </div>
-
-                  <button 
-                    onClick={() => setShowDetailCategories(true)}
-                    className="w-full py-3 px-4 bg-indigo-50 text-indigo-700 hover:bg-indigo-100 font-semibold rounded-xl transition-colors flex items-center justify-center gap-2 mt-4"
-                  >
-                    Lihat Detail per Kategori
-                    <ChevronRight size={18} />
-                  </button>
-                </div>
-              ) : (
-                <div className="space-y-4 animate-fade-in">
-                  <div className="flex items-center gap-2 mb-4 pb-2 border-b border-slate-100">
-                    <button 
-                      onClick={() => setShowDetailCategories(false)}
-                      className="p-1 hover:bg-slate-100 rounded-lg text-slate-500 transition-colors"
-                    >
-                      <ChevronRight size={20} className="rotate-180" />
-                    </button>
-                    <h4 className="font-bold text-slate-700">Detail per Kategori</h4>
-                  </div>
-                  
-                  <div className="space-y-3 max-h-[calc(100vh-320px)] overflow-y-auto pr-2">
-                    <button 
-                      onClick={() => navigate(`/wsid/${selectedMachine.wsid}`)}
-                      className="w-full py-2.5 px-4 mb-2 bg-blue-600 text-white hover:bg-blue-700 font-semibold rounded-xl transition-colors flex items-center justify-center gap-2"
-                    >
-                      Detail Tiap Bulan
-                      <ChevronRight size={16} />
-                    </button>
-                    {['uh', 'kom', 'up', 'hw', 'll'].map(cat => {
-                      const agg = (selectedMachine as any).aggregatedData;
-                      const frxDur = getFrxDurForCategory(agg, cat);
-                      const pct = agg[cat] || 0;
-                      
-                      const labelMap: Record<string, string> = {
-                        'uh': 'Uang Habis (UH)',
-                        'kom': 'Komunikasi (KOM)',
-                        'up': 'Uang Penuh (UP)',
-                        'hw': 'Hardware (H/W)',
-                        'll': 'Lain-lain (LL)'
-                      };
-                      
-                      return (
-                        <div key={cat} className="bg-white border border-slate-200 rounded-xl p-3 shadow-sm hover:border-indigo-300 transition-colors">
-                          <div className="font-semibold text-slate-700 text-sm mb-2 pb-2 border-b border-slate-100">{labelMap[cat]}</div>
-                          <div className="flex justify-between items-center text-xs">
-                            <div className="text-center px-2 flex-1">
-                              <div className="text-slate-400 mb-0.5">FREQ</div>
-                              <div className="font-bold text-slate-700">{typeof frxDur.frx === 'number' ? frxDur.frx.toFixed(2) : frxDur.frx}</div>
-                            </div>
-                            <div className="w-px h-6 bg-slate-100"></div>
-                            <div className="text-center px-2 flex-1">
-                              <div className="text-slate-400 mb-0.5">DUR</div>
-                              <div className="font-bold text-slate-700">{typeof frxDur.dur === 'number' ? frxDur.dur.toFixed(2) : frxDur.dur}</div>
-                            </div>
-                            <div className="w-px h-6 bg-slate-100"></div>
-                            <div className="text-center px-2 flex-1">
-                              <div className="text-slate-400 mb-0.5">%</div>
-                              <div className="font-bold text-rose-600">{pct.toFixed(2)}%</div>
-                            </div>
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                </div>
-              )}
-            </div>
+                        {isExpanded && (
+                          <tr>
+                            <td colSpan={4} className="p-0 bg-[#F8FAFC] border-b border-[#E5EAF2]">
+                              <div className="p-4">
+                                <div className="bg-white rounded-lg border border-[#E5EAF2] shadow-2xs overflow-hidden">
+                                  <div className="bg-slate-50 px-4 py-2.5 border-b border-[#E5EAF2] flex justify-between items-center">
+                                    <h4 className="font-semibold text-slate-800 text-xs">Daftar Sektor dalam {row.servicePoint}</h4>
+                                    <span className="text-[11px] font-medium bg-blue-50 text-blue-700 px-2 py-0.5 rounded border border-blue-100">{row.sektorList.length} Sektor</span>
+                                  </div>
+                                  <div className="max-h-[400px] overflow-y-auto">
+                                    <table className="w-full text-xs text-left">
+                                      <thead className="bg-slate-50 sticky top-0 border-b border-[#E5EAF2] text-slate-600">
+                                        <tr>
+                                          <th className="px-4 py-2.5 font-semibold">Nama Sektor</th>
+                                          <th className="px-4 py-2.5 text-center font-semibold">Jumlah Mesin BCA Aktif</th>
+                                          <th className="px-4 py-2.5 text-center font-semibold">Uptime per Sektor (%)</th>
+                                        </tr>
+                                      </thead>
+                                      <tbody className="divide-y divide-[#E5EAF2]">
+                                        {row.sektorList.map((s, idx) => {
+                                          const isSektorExpanded = expandedSektor === s.namaSektor;
+                                          return (
+                                            <React.Fragment key={idx}>
+                                              <tr 
+                                                className={`cursor-pointer transition-colors ${isSektorExpanded ? 'bg-blue-50/20' : 'hover:bg-slate-50'}`}
+                                                onClick={() => setExpandedSektor(isSektorExpanded ? null : s.namaSektor)}
+                                              >
+                                                <td className="px-4 py-2.5 font-medium text-slate-800">
+                                                  <div className="flex items-center gap-2">
+                                                    {isSektorExpanded ? <ChevronUp size={13} className="text-blue-600" /> : <ChevronDown size={13} className="text-slate-400" />}
+                                                    {s.namaSektor}
+                                                  </div>
+                                                </td>
+                                                <td className="px-4 py-2.5 text-center text-slate-700">{s.jumlahMesin}</td>
+                                                <td className="px-4 py-2.5 text-center font-semibold text-emerald-700">{s.uptime.toFixed(2)}%</td>
+                                              </tr>
+                                              {isSektorExpanded && (
+                                                <tr>
+                                                  <td colSpan={3} className="p-0 bg-white border-b border-[#E5EAF2]">
+                                                    <div className="px-6 py-3 bg-[#F8FAFC]">
+                                                      <h5 className="text-[11px] font-semibold text-slate-600 mb-2 uppercase tracking-wider">Daftar WSID (Diurutkan Downtime Terburuk):</h5>
+                                                      <div className="overflow-x-auto rounded-lg border border-[#E5EAF2]">
+                                                        <table className="w-full text-xs text-left bg-white">
+                                                          <thead className="bg-[#F8FAFC] text-slate-600 border-b border-[#E5EAF2]">
+                                                            <tr>
+                                                              <th className="px-3.5 py-2 font-semibold">WSID</th>
+                                                              <th className="px-3.5 py-2 font-semibold">Lokasi</th>
+                                                              <th className="px-3.5 py-2 font-semibold">Vendor</th>
+                                                              <th className="px-3.5 py-2 font-semibold text-right">Downtime (%)</th>
+                                                            </tr>
+                                                          </thead>
+                                                          <tbody className="divide-y divide-[#E5EAF2]">
+                                                            {s.bcaMachines
+                                                              .map(m => {
+                                                                const agg = aggregateMachinesData([m]);
+                                                                const downtime = agg?.total || 0;
+                                                                return { m, downtime };
+                                                              })
+                                                              .sort((a, b) => b.downtime - a.downtime)
+                                                              .map((item, mIdx) => (
+                                                              <tr 
+                                                                key={mIdx} 
+                                                                className={`cursor-pointer transition-colors ${selectedWsid === item.m.wsid ? 'bg-blue-50/80 border-l-2 border-blue-600' : 'hover:bg-slate-50 border-l-2 border-transparent'}`}
+                                                                onClick={(e) => {
+                                                                  e.stopPropagation();
+                                                                  handleSelectWsid(item.m.wsid);
+                                                                }}
+                                                              >
+                                                                <td className="px-3.5 py-2 font-semibold text-slate-900">{item.m.wsid}</td>
+                                                                <td className="px-3.5 py-2 text-slate-500 truncate max-w-[200px]" title={item.m.lokasi}>{item.m.lokasi}</td>
+                                                                <td className="px-3.5 py-2 whitespace-nowrap">
+                                                                  <span className="px-2 py-0.5 bg-slate-100 text-slate-700 rounded text-[10px] font-medium border border-slate-200">
+                                                                    {item.m.vendor || '-'}
+                                                                  </span>
+                                                                </td>
+                                                                <td className="px-3.5 py-2 font-semibold text-rose-600 text-right">{item.downtime.toFixed(2)}%</td>
+                                                              </tr>
+                                                            ))}
+                                                            {s.bcaMachines.length === 0 && (
+                                                              <tr>
+                                                                <td colSpan={4} className="px-3.5 py-3 text-center text-slate-400">Tidak ada WSID</td>
+                                                              </tr>
+                                                            )}
+                                                          </tbody>
+                                                        </table>
+                                                      </div>
+                                                    </div>
+                                                  </td>
+                                                </tr>
+                                              )}
+                                            </React.Fragment>
+                                          );
+                                        })}
+                                      </tbody>
+                                    </table>
+                                  </div>
+                                </div>
+                              </div>
+                            </td>
+                          </tr>
+                        )}
+                      </React.Fragment>
+                    );
+                  })
+                )}
+              </tbody>
+            </table>
           </div>
         </div>
-      )}
+
+        {/* Side Panel Inspector */}
+        {selectedMachine && (
+          <div className="xl:col-span-1 animate-fade-in">
+            <div className="bg-white rounded-lg border border-[#E5EAF2] shadow-sm overflow-hidden sticky top-6">
+              <div className="bg-slate-900 px-4 py-3 text-white flex justify-between items-center border-b border-slate-800">
+                <div>
+                  <div className="flex items-center gap-2">
+                    <h3 className="font-semibold text-sm text-white">{selectedMachine.wsid}</h3>
+                    {selectedMachine.vendor && selectedMachine.vendor !== '-' && (
+                      <span className="px-1.5 py-0.5 bg-slate-800 text-slate-200 rounded text-[10px] font-medium border border-slate-700">
+                        {selectedMachine.vendor}
+                      </span>
+                    )}
+                  </div>
+                  <p className="text-slate-400 text-[11px] truncate max-w-[230px]" title={selectedMachine.lokasi}>{selectedMachine.lokasi}</p>
+                </div>
+                <button 
+                  onClick={() => handleSelectWsid(selectedMachine.wsid)}
+                  className="p-1 hover:bg-slate-800 rounded transition-colors text-slate-400 hover:text-white"
+                >
+                  <X size={16} />
+                </button>
+              </div>
+
+              <div className="p-4">
+                {!showDetailCategories ? (
+                  <div className="space-y-4">
+                    <div className="text-center">
+                      <h4 className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider mb-3">Total Downtime</h4>
+                      
+                      <div className="grid grid-cols-2 gap-3 mb-3">
+                        <div className="bg-slate-50 rounded-lg p-3 border border-[#E5EAF2]">
+                          <div className="text-[10px] text-slate-500 font-semibold mb-0.5 uppercase">Total FRX</div>
+                          <div className="text-xl font-bold text-slate-900">{(selectedMachine as any).aggregatedData?.frxTotal?.toFixed(2) || 0}</div>
+                        </div>
+                        <div className="bg-slate-50 rounded-lg p-3 border border-[#E5EAF2]">
+                          <div className="text-[10px] text-slate-500 font-semibold mb-0.5 uppercase">Total DUR</div>
+                          <div className="text-xl font-bold text-slate-900">{(selectedMachine as any).aggregatedData?.durTotal?.toFixed(2) || 0}</div>
+                        </div>
+                      </div>
+                      
+                      <div className="bg-rose-50/70 rounded-lg p-3 border border-rose-200">
+                        <div className="text-[10px] text-rose-700 font-semibold mb-0.5 uppercase">Total Downtime (%)</div>
+                        <div className="text-2xl font-bold text-rose-600">{((selectedMachine as any).aggregatedData?.total || 0).toFixed(2)}%</div>
+                      </div>
+                    </div>
+
+                    <button 
+                      onClick={() => setShowDetailCategories(true)}
+                      className="w-full py-2.5 px-3 bg-blue-50 text-blue-700 hover:bg-blue-100 font-semibold rounded-lg transition-colors flex items-center justify-center gap-1.5 text-xs border border-blue-100"
+                    >
+                      Lihat Detail per Kategori
+                      <ChevronRight size={14} />
+                    </button>
+                  </div>
+                ) : (
+                  <div className="space-y-3 animate-fade-in">
+                    <div className="flex items-center gap-2 mb-2 pb-2 border-b border-[#E5EAF2]">
+                      <button 
+                        onClick={() => setShowDetailCategories(false)}
+                        className="p-1 hover:bg-slate-100 rounded text-slate-500 transition-colors"
+                      >
+                        <ChevronRight size={16} className="rotate-180" />
+                      </button>
+                      <h4 className="font-semibold text-slate-800 text-xs">Detail per Kategori</h4>
+                    </div>
+                    
+                    <div className="space-y-2.5 max-h-[calc(100vh-320px)] overflow-y-auto pr-1">
+                      <button 
+                        onClick={() => navigate(`/wsid/${selectedMachine.wsid}`)}
+                        className="w-full py-2 px-3 mb-2 bg-blue-600 text-white hover:bg-blue-700 font-medium rounded-lg transition-colors flex items-center justify-center gap-1.5 text-xs shadow-2xs"
+                      >
+                        Detail Tiap Bulan
+                        <ChevronRight size={14} />
+                      </button>
+                      {['uh', 'kom', 'up', 'hw', 'll'].map(cat => {
+                        const agg = (selectedMachine as any).aggregatedData;
+                        const frxDur = getFrxDurForCategory(agg, cat);
+                        const pct = agg[cat] || 0;
+                        
+                        const labelMap: Record<string, string> = {
+                          'uh': 'Uang Habis (UH)',
+                          'kom': 'Komunikasi (KOM)',
+                          'up': 'Uang Penuh (UP)',
+                          'hw': 'Hardware (H/W)',
+                          'll': 'Lain-lain (LL)'
+                        };
+                        
+                        return (
+                          <div key={cat} className="bg-white border border-[#E5EAF2] rounded-lg p-2.5 shadow-2xs hover:border-blue-300 transition-colors">
+                            <div className="font-medium text-slate-800 text-xs mb-1.5 pb-1 border-b border-[#E5EAF2]">{labelMap[cat]}</div>
+                            <div className="flex justify-between items-center text-xs">
+                              <div className="text-center px-2 flex-1">
+                                <div className="text-[10px] text-slate-400 font-medium mb-0.5">FREQ</div>
+                                <div className="font-semibold text-slate-800">{typeof frxDur.frx === 'number' ? frxDur.frx.toFixed(2) : frxDur.frx}</div>
+                              </div>
+                              <div className="w-px h-5 bg-[#E5EAF2]"></div>
+                              <div className="text-center px-2 flex-1">
+                                <div className="text-[10px] text-slate-400 font-medium mb-0.5">DUR</div>
+                                <div className="font-semibold text-slate-800">{typeof frxDur.dur === 'number' ? frxDur.dur.toFixed(2) : frxDur.dur}</div>
+                              </div>
+                              <div className="w-px h-5 bg-[#E5EAF2]"></div>
+                              <div className="text-center px-2 flex-1">
+                                <div className="text-[10px] text-slate-400 font-medium mb-0.5">%</div>
+                                <div className="font-semibold text-rose-600">{pct.toFixed(2)}%</div>
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );

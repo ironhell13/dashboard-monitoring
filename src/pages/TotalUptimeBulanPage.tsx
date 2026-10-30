@@ -76,170 +76,156 @@ export default function TotalUptimeBulanPage() {
   }, [chartData]);
 
   return (
-    <div className="space-y-6 animate-fade-in">
+    <div className="space-y-5 animate-fade-in">
       {/* Header & Export Action */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-        <div className="flex items-center gap-3">
-          <div className="w-12 h-12 rounded-2xl bg-gradient-to-tr from-blue-600 to-indigo-600 flex items-center justify-center text-white shadow-md shadow-blue-500/20">
-            <Activity size={26} />
-          </div>
-          <div>
-            <h1 className="text-2xl font-bold text-slate-800 tracking-tight">Total Uptime & Mesin (Abacus Jakarta)</h1>
-            <p className="text-sm text-slate-500">Perhitungan performa terpisah antara mesin ATM dan CRM dengan grafik tren bulanan</p>
-          </div>
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+        <div>
+          <h1 className="text-xl font-bold text-slate-900 tracking-tight">Total Uptime & Mesin (Abacus Jakarta)</h1>
+          <p className="text-xs text-slate-500 mt-0.5">Perhitungan performa terpisah antara mesin ATM dan CRM dengan grafik tren bulanan</p>
         </div>
 
         <button
           onClick={handleExportAll}
-          className="inline-flex items-center gap-2 px-4 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-sm font-semibold transition-all shadow-sm hover:shadow-emerald-600/20 active:scale-95 cursor-pointer self-start sm:self-auto"
+          className="inline-flex items-center gap-2 px-3.5 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-xs font-medium transition-colors shadow-2xs cursor-pointer self-start sm:self-auto"
         >
-          <Download size={18} />
+          <Download size={14} />
           <span>Export Laporan Lengkap (.xlsx)</span>
         </button>
       </div>
 
       {/* KPI Cards: Separated ATM & CRM Performance */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         {/* ATM SLA Card */}
-        <div className="bg-white rounded-2xl p-5 border border-slate-200/80 shadow-sm relative overflow-hidden group hover:border-blue-300 transition-all">
-          <div className="absolute top-0 right-0 w-24 h-24 bg-blue-50 rounded-full -mr-8 -mt-8 transition-transform group-hover:scale-110" />
-          <div className="relative">
-            <div className="flex items-center justify-between mb-3">
-              <span className="text-xs font-bold tracking-wider text-blue-600 uppercase bg-blue-50 px-2.5 py-1 rounded-lg">
-                Mesin ATM BCA
-              </span>
-              <span className="text-xs text-slate-400 font-medium">
-                {latestMonth ? latestMonth.periodeLabel : '-'}
-              </span>
-            </div>
-            
-            <div className="flex items-baseline gap-2 mb-2">
-              <span className="text-3xl font-extrabold text-slate-800">
-                {latestMonth?.uptimeATM ? `${latestMonth.uptimeATM.toFixed(2)}%` : '-'}
-              </span>
-              <span className="text-xs font-semibold text-slate-500">
-                Target: {SLA_ATM}%
-              </span>
-            </div>
+        <div className="bg-white rounded-lg p-4 border border-[#E5EAF2] shadow-2xs transition-colors">
+          <div className="flex items-center justify-between mb-2">
+            <span className="text-[11px] font-semibold tracking-wider text-slate-500 uppercase">
+              Mesin ATM BCA
+            </span>
+            <span className="text-[11px] text-slate-400 font-medium">
+              {latestMonth ? latestMonth.periodeLabel : '-'}
+            </span>
+          </div>
+          
+          <div className="flex items-baseline gap-2 mb-2">
+            <span className="text-2xl font-bold text-slate-900">
+              {latestMonth?.uptimeATM ? `${latestMonth.uptimeATM.toFixed(2)}%` : '-'}
+            </span>
+            <span className="text-xs font-medium text-slate-500">
+              SLA: {SLA_ATM}%
+            </span>
+          </div>
 
-            <div className="flex items-center justify-between pt-2 border-t border-slate-100">
-              <div className="flex items-center gap-1.5">
-                {latestMonth && latestMonth.uptimeATM !== null ? (
-                  latestMonth.uptimeATM >= SLA_ATM ? (
-                    <span className="inline-flex items-center gap-1 text-xs font-bold text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-full">
-                      <CheckCircle2 size={13} />
-                      ACHIEVED (+{(latestMonth.uptimeATM - SLA_ATM).toFixed(2)}%)
-                    </span>
-                  ) : (
-                    <span className="inline-flex items-center gap-1 text-xs font-bold text-rose-600 bg-rose-50 px-2 py-0.5 rounded-full">
-                      <AlertTriangle size={13} />
-                      NOT ACHIEVED ({(latestMonth.uptimeATM - SLA_ATM).toFixed(2)}%)
-                    </span>
-                  )
+          <div className="flex items-center justify-between pt-2 border-t border-[#E5EAF2]">
+            <div className="flex items-center gap-1.5">
+              {latestMonth && latestMonth.uptimeATM !== null ? (
+                latestMonth.uptimeATM >= SLA_ATM ? (
+                  <span className="inline-flex items-center gap-1 text-[11px] font-medium text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200">
+                    <CheckCircle2 size={12} />
+                    ACHIEVED (+{(latestMonth.uptimeATM - SLA_ATM).toFixed(2)}%)
+                  </span>
                 ) : (
-                  <span className="text-xs text-slate-400">-</span>
-                )}
-              </div>
-              <span className="text-xs font-medium text-slate-500">
-                Populasi: <strong className="text-slate-700">{latestMonth?.mesinATM?.toLocaleString() || 0}</strong> mesin
-              </span>
+                  <span className="inline-flex items-center gap-1 text-[11px] font-medium text-rose-700 bg-rose-50 px-2 py-0.5 rounded border border-rose-200">
+                    <AlertTriangle size={12} />
+                    NOT ACHIEVED ({(latestMonth.uptimeATM - SLA_ATM).toFixed(2)}%)
+                  </span>
+                )
+              ) : (
+                <span className="text-xs text-slate-400">-</span>
+              )}
             </div>
+            <span className="text-[11px] font-medium text-slate-500">
+              Populasi: <strong className="text-slate-700 font-semibold">{latestMonth?.mesinATM?.toLocaleString() || 0}</strong>
+            </span>
           </div>
         </div>
 
         {/* CRM SLA Card */}
-        <div className="bg-white rounded-2xl p-5 border border-slate-200/80 shadow-sm relative overflow-hidden group hover:border-emerald-300 transition-all">
-          <div className="absolute top-0 right-0 w-24 h-24 bg-emerald-50 rounded-full -mr-8 -mt-8 transition-transform group-hover:scale-110" />
-          <div className="relative">
-            <div className="flex items-center justify-between mb-3">
-              <span className="text-xs font-bold tracking-wider text-emerald-600 uppercase bg-emerald-50 px-2.5 py-1 rounded-lg">
-                Mesin CRM / ATS BCA
-              </span>
-              <span className="text-xs text-slate-400 font-medium">
-                {latestMonth ? latestMonth.periodeLabel : '-'}
-              </span>
-            </div>
-            
-            <div className="flex items-baseline gap-2 mb-2">
-              <span className="text-3xl font-extrabold text-slate-800">
-                {latestMonth?.uptimeCRM ? `${latestMonth.uptimeCRM.toFixed(2)}%` : '-'}
-              </span>
-              <span className="text-xs font-semibold text-slate-500">
-                Target: {SLA_CRM}%
-              </span>
-            </div>
+        <div className="bg-white rounded-lg p-4 border border-[#E5EAF2] shadow-2xs transition-colors">
+          <div className="flex items-center justify-between mb-2">
+            <span className="text-[11px] font-semibold tracking-wider text-slate-500 uppercase">
+              Mesin CRM / ATS BCA
+            </span>
+            <span className="text-[11px] text-slate-400 font-medium">
+              {latestMonth ? latestMonth.periodeLabel : '-'}
+            </span>
+          </div>
+          
+          <div className="flex items-baseline gap-2 mb-2">
+            <span className="text-2xl font-bold text-slate-900">
+              {latestMonth?.uptimeCRM ? `${latestMonth.uptimeCRM.toFixed(2)}%` : '-'}
+            </span>
+            <span className="text-xs font-medium text-slate-500">
+              SLA: {SLA_CRM}%
+            </span>
+          </div>
 
-            <div className="flex items-center justify-between pt-2 border-t border-slate-100">
-              <div className="flex items-center gap-1.5">
-                {latestMonth && latestMonth.uptimeCRM !== null ? (
-                  latestMonth.uptimeCRM >= SLA_CRM ? (
-                    <span className="inline-flex items-center gap-1 text-xs font-bold text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-full">
-                      <CheckCircle2 size={13} />
-                      ACHIEVED (+{(latestMonth.uptimeCRM - SLA_CRM).toFixed(2)}%)
-                    </span>
-                  ) : (
-                    <span className="inline-flex items-center gap-1 text-xs font-bold text-rose-600 bg-rose-50 px-2 py-0.5 rounded-full">
-                      <AlertTriangle size={13} />
-                      NOT ACHIEVED ({(latestMonth.uptimeCRM - SLA_CRM).toFixed(2)}%)
-                    </span>
-                  )
+          <div className="flex items-center justify-between pt-2 border-t border-[#E5EAF2]">
+            <div className="flex items-center gap-1.5">
+              {latestMonth && latestMonth.uptimeCRM !== null ? (
+                latestMonth.uptimeCRM >= SLA_CRM ? (
+                  <span className="inline-flex items-center gap-1 text-[11px] font-medium text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200">
+                    <CheckCircle2 size={12} />
+                    ACHIEVED (+{(latestMonth.uptimeCRM - SLA_CRM).toFixed(2)}%)
+                  </span>
                 ) : (
-                  <span className="text-xs text-slate-400">-</span>
-                )}
-              </div>
-              <span className="text-xs font-medium text-slate-500">
-                Populasi: <strong className="text-slate-700">{latestMonth?.mesinCRM?.toLocaleString() || 0}</strong> mesin
-              </span>
+                  <span className="inline-flex items-center gap-1 text-[11px] font-medium text-rose-700 bg-rose-50 px-2 py-0.5 rounded border border-rose-200">
+                    <AlertTriangle size={12} />
+                    NOT ACHIEVED ({(latestMonth.uptimeCRM - SLA_CRM).toFixed(2)}%)
+                  </span>
+                )
+              ) : (
+                <span className="text-xs text-slate-400">-</span>
+              )}
             </div>
+            <span className="text-[11px] font-medium text-slate-500">
+              Populasi: <strong className="text-slate-700 font-semibold">{latestMonth?.mesinCRM?.toLocaleString() || 0}</strong>
+            </span>
           </div>
         </div>
 
         {/* Total Active Machines Card */}
-        <div className="bg-white rounded-2xl p-5 border border-slate-200/80 shadow-sm relative overflow-hidden group hover:border-indigo-300 transition-all">
-          <div className="absolute top-0 right-0 w-24 h-24 bg-indigo-50 rounded-full -mr-8 -mt-8 transition-transform group-hover:scale-110" />
-          <div className="relative">
-            <div className="flex items-center justify-between mb-3">
-              <span className="text-xs font-bold tracking-wider text-indigo-600 uppercase bg-indigo-50 px-2.5 py-1 rounded-lg">
-                Total Populasi Mesin
-              </span>
-              <span className="text-xs text-slate-400 font-medium">Abacus Jakarta</span>
-            </div>
-            
-            <div className="flex items-baseline gap-2 mb-2">
-              <span className="text-3xl font-extrabold text-slate-800">
-                {latestMonth?.totalMesin?.toLocaleString() || 0}
-              </span>
-              <span className="text-xs font-semibold text-slate-500">
-                Mesin Aktif
-              </span>
-            </div>
+        <div className="bg-white rounded-lg p-4 border border-[#E5EAF2] shadow-2xs transition-colors">
+          <div className="flex items-center justify-between mb-2">
+            <span className="text-[11px] font-semibold tracking-wider text-slate-500 uppercase">
+              Total Populasi Mesin
+            </span>
+            <span className="text-[11px] text-slate-400 font-medium">Abacus Jakarta</span>
+          </div>
+          
+          <div className="flex items-baseline gap-2 mb-2">
+            <span className="text-2xl font-bold text-slate-900">
+              {latestMonth?.totalMesin?.toLocaleString() || 0}
+            </span>
+            <span className="text-xs font-medium text-slate-500">
+              Mesin Aktif
+            </span>
+          </div>
 
-            <div className="flex items-center justify-between pt-2 border-t border-slate-100 text-xs text-slate-500">
-              <span>ATM: <strong className="text-blue-600">{latestMonth?.mesinATM || 0}</strong></span>
-              <span>CRM: <strong className="text-emerald-600">{latestMonth?.mesinCRM || 0}</strong></span>
-              <span>Periode: <strong className="text-slate-700">{chartData.length} Bulan</strong></span>
-            </div>
+          <div className="flex items-center justify-between pt-2 border-t border-[#E5EAF2] text-[11px] text-slate-500">
+            <span>ATM: <strong className="text-blue-600 font-semibold">{latestMonth?.mesinATM || 0}</strong></span>
+            <span>CRM: <strong className="text-slate-700 font-semibold">{latestMonth?.mesinCRM || 0}</strong></span>
+            <span>Periode: <strong className="text-slate-700 font-semibold">{chartData.length} Bulan</strong></span>
           </div>
         </div>
       </div>
 
       {/* Visual Monthly Charts Section */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         {/* Chart 1: Uptime Trend (ATM vs CRM with SLA Reference Lines) */}
-        <div className="bg-white rounded-2xl p-6 border border-slate-200 shadow-sm">
-          <div className="flex items-center justify-between mb-4">
+        <div className="bg-white rounded-lg p-4 border border-[#E5EAF2] shadow-2xs">
+          <div className="flex items-center justify-between mb-3">
             <div>
-              <h2 className="text-base font-bold text-slate-800 flex items-center gap-2">
-                <TrendingUp size={18} className="text-blue-600" />
+              <h2 className="text-sm font-semibold text-slate-900 flex items-center gap-1.5">
+                <TrendingUp size={16} className="text-blue-600" />
                 Grafik Tren Uptime Bulanan (ATM vs CRM)
               </h2>
-              <p className="text-xs text-slate-500">Garis putus-putus menunjukkan standar Target SLA (ATM 99.00%, CRM 98.50%)</p>
+              <p className="text-[11px] text-slate-500 mt-0.5">Target SLA: ATM 99.00%, CRM 98.50%</p>
             </div>
           </div>
 
-          <div className="h-72 w-full">
+          <div className="h-64 w-full">
             {chartData.length === 0 ? (
-              <div className="h-full flex items-center justify-center text-slate-400 text-sm">
+              <div className="h-full flex items-center justify-center text-slate-400 text-xs">
                 Belum ada data bulanan untuk grafik
               </div>
             ) : (
@@ -257,11 +243,11 @@ export default function TotalUptimeBulanPage() {
                   />
                   <Tooltip 
                     contentStyle={{ 
-                      backgroundColor: 'rgba(255, 255, 255, 0.96)', 
-                      borderRadius: '12px', 
-                      boxShadow: '0 4px 20px rgba(0,0,0,0.08)',
-                      borderColor: '#e2e8f0',
-                      fontSize: '12px'
+                      backgroundColor: '#ffffff', 
+                      borderRadius: '8px', 
+                      boxShadow: '0 2px 8px rgba(0,0,0,0.06)',
+                      borderColor: '#E5EAF2',
+                      fontSize: '11px'
                     }}
                     formatter={(val: any, name: any) => {
                       if (val === null) return ['-', name];
@@ -277,7 +263,7 @@ export default function TotalUptimeBulanPage() {
                       return [`${num.toFixed(2)}%`, name];
                     }}
                   />
-                  <Legend wrapperStyle={{ fontSize: '12px', paddingTop: '10px' }} />
+                  <Legend wrapperStyle={{ fontSize: '11px', paddingTop: '8px' }} />
                   <ReferenceLine 
                     y={SLA_ATM} 
                     stroke="#dc2626" 
@@ -286,7 +272,7 @@ export default function TotalUptimeBulanPage() {
                   />
                   <ReferenceLine 
                     y={SLA_CRM} 
-                    stroke="#f59e0b" 
+                    stroke="#d97706" 
                     strokeDasharray="4 4" 
                     label={{ value: 'SLA CRM 98.50%', position: 'bottom', fill: '#d97706', fontSize: 10 }}
                   />
@@ -295,19 +281,19 @@ export default function TotalUptimeBulanPage() {
                     dataKey="uptimeATM" 
                     name="Uptime ATM (%)" 
                     stroke="#2563eb" 
-                    strokeWidth={3} 
-                    dot={{ r: 4, fill: '#2563eb' }}
-                    activeDot={{ r: 6 }}
+                    strokeWidth={2.5} 
+                    dot={{ r: 3.5, fill: '#2563eb' }}
+                    activeDot={{ r: 5 }}
                     connectNulls
                   />
                   <Line 
                     type="monotone" 
                     dataKey="uptimeCRM" 
                     name="Uptime CRM (%)" 
-                    stroke="#10b981" 
-                    strokeWidth={3} 
-                    dot={{ r: 4, fill: '#10b981' }}
-                    activeDot={{ r: 6 }}
+                    stroke="#0284c7" 
+                    strokeWidth={2.5} 
+                    dot={{ r: 3.5, fill: '#0284c7' }}
+                    activeDot={{ r: 5 }}
                     connectNulls
                   />
                 </LineChart>
@@ -317,20 +303,20 @@ export default function TotalUptimeBulanPage() {
         </div>
 
         {/* Chart 2: Machine Population Growth */}
-        <div className="bg-white rounded-2xl p-6 border border-slate-200 shadow-sm">
-          <div className="flex items-center justify-between mb-4">
+        <div className="bg-white rounded-lg p-4 border border-[#E5EAF2] shadow-2xs">
+          <div className="flex items-center justify-between mb-3">
             <div>
-              <h2 className="text-base font-bold text-slate-800 flex items-center gap-2">
-                <Layers size={18} className="text-indigo-600" />
+              <h2 className="text-sm font-semibold text-slate-900 flex items-center gap-1.5">
+                <Layers size={16} className="text-blue-600" />
                 Grafik Pertumbuhan Populasi Mesin (ATM vs CRM)
               </h2>
-              <p className="text-xs text-slate-500">Perkembangan jumlah mesin ATM dan CRM yang aktif beroperasi per periode</p>
+              <p className="text-[11px] text-slate-500 mt-0.5">Perkembangan jumlah mesin aktif per periode</p>
             </div>
           </div>
 
-          <div className="h-72 w-full">
+          <div className="h-64 w-full">
             {chartData.length === 0 ? (
-              <div className="h-full flex items-center justify-center text-slate-400 text-sm">
+              <div className="h-full flex items-center justify-center text-slate-400 text-xs">
                 Belum ada data populasi untuk grafik
               </div>
             ) : (
@@ -346,26 +332,26 @@ export default function TotalUptimeBulanPage() {
                   />
                   <Tooltip 
                     contentStyle={{ 
-                      backgroundColor: 'rgba(255, 255, 255, 0.96)', 
-                      borderRadius: '12px', 
-                      boxShadow: '0 4px 20px rgba(0,0,0,0.08)',
-                      borderColor: '#e2e8f0',
-                      fontSize: '12px'
+                      backgroundColor: '#ffffff', 
+                      borderRadius: '8px', 
+                      boxShadow: '0 2px 8px rgba(0,0,0,0.06)',
+                      borderColor: '#E5EAF2',
+                      fontSize: '11px'
                     }}
                     formatter={(val: any, name: any) => [`${Number(val).toLocaleString()} Mesin`, name]}
                   />
-                  <Legend wrapperStyle={{ fontSize: '12px', paddingTop: '10px' }} />
+                  <Legend wrapperStyle={{ fontSize: '11px', paddingTop: '8px' }} />
                   <Bar 
                     dataKey="mesinATM" 
                     name="Mesin ATM" 
-                    fill="#3b82f6" 
-                    radius={[6, 6, 0, 0]} 
+                    fill="#2563eb" 
+                    radius={[4, 4, 0, 0]} 
                   />
                   <Bar 
                     dataKey="mesinCRM" 
                     name="Mesin CRM / ATS" 
-                    fill="#10b981" 
-                    radius={[6, 6, 0, 0]} 
+                    fill="#60a5fa" 
+                    radius={[4, 4, 0, 0]} 
                   />
                 </BarChart>
               </ResponsiveContainer>
@@ -375,33 +361,33 @@ export default function TotalUptimeBulanPage() {
       </div>
 
       {/* Detailed Monthly Performance Table */}
-      <div className="bg-white rounded-2xl overflow-hidden shadow-sm border border-slate-200">
-        <div className="p-5 border-b border-slate-100 flex items-center justify-between">
+      <div className="bg-white rounded-lg overflow-hidden shadow-2xs border border-[#E5EAF2]">
+        <div className="px-4 py-3 border-b border-[#E5EAF2] flex items-center justify-between">
           <div>
-            <h3 className="font-bold text-slate-800 text-base">Tabel Rekapitulasi Performa Bulanan</h3>
-            <p className="text-xs text-slate-500">Perbandingan detail performa Uptime dan kepatuhan SLA BCA per bulan</p>
+            <h3 className="font-semibold text-slate-900 text-xs">Tabel Rekapitulasi Performa Bulanan</h3>
+            <p className="text-[11px] text-slate-500 mt-0.5">Perbandingan detail performa Uptime dan kepatuhan SLA BCA per bulan</p>
           </div>
-          <span className="text-xs text-slate-400 font-medium">Total: {chartData.length} Bulan</span>
+          <span className="text-[11px] text-slate-400 font-medium">Total: {chartData.length} Bulan</span>
         </div>
 
         <div className="overflow-x-auto">
-          <table className="w-full text-sm text-left">
-            <thead className="bg-slate-50/80 text-slate-600 font-semibold border-b border-slate-200">
+          <table className="w-full text-xs text-left">
+            <thead className="bg-[#F8FAFC] text-slate-600 font-semibold border-b border-[#E5EAF2]">
               <tr>
-                <th className="px-5 py-3.5">Periode Bulan</th>
-                <th className="px-5 py-3.5 text-center">Populasi ATM</th>
-                <th className="px-5 py-3.5 text-center">Uptime ATM (%)</th>
-                <th className="px-5 py-3.5 text-center">Status SLA ATM</th>
-                <th className="px-5 py-3.5 text-center">Populasi CRM</th>
-                <th className="px-5 py-3.5 text-center">Uptime CRM (%)</th>
-                <th className="px-5 py-3.5 text-center">Status SLA CRM</th>
-                <th className="px-5 py-3.5 text-center font-bold text-slate-700">Total Mesin</th>
+                <th className="px-4 py-2.5">Periode Bulan</th>
+                <th className="px-4 py-2.5 text-center">Populasi ATM</th>
+                <th className="px-4 py-2.5 text-center">Uptime ATM (%)</th>
+                <th className="px-4 py-2.5 text-center">Status SLA ATM</th>
+                <th className="px-4 py-2.5 text-center">Populasi CRM</th>
+                <th className="px-4 py-2.5 text-center">Uptime CRM (%)</th>
+                <th className="px-4 py-2.5 text-center">Status SLA CRM</th>
+                <th className="px-4 py-2.5 text-center font-bold text-slate-800">Total Mesin</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-slate-100">
+            <tbody className="divide-y divide-[#E5EAF2]">
               {chartData.length === 0 ? (
                 <tr>
-                  <td colSpan={8} className="px-6 py-12 text-center text-slate-400">
+                  <td colSpan={8} className="px-4 py-10 text-center text-slate-400">
                     Tidak ada data bulanan yang tersedia.
                   </td>
                 </tr>
@@ -411,47 +397,47 @@ export default function TotalUptimeBulanPage() {
                   const crmAchieved = data.uptimeCRM !== null && data.uptimeCRM >= SLA_CRM;
 
                   return (
-                    <tr key={data.periodeRaw} className="hover:bg-slate-50/60 transition-colors">
-                      <td className="px-5 py-3.5 font-semibold text-slate-800">{data.periodeLabel}</td>
+                    <tr key={data.periodeRaw} className="hover:bg-slate-50/70 transition-colors">
+                      <td className="px-4 py-2.5 font-semibold text-slate-900">{data.periodeLabel}</td>
                       
                       {/* ATM Info */}
-                      <td className="px-5 py-3.5 text-center text-slate-600">
+                      <td className="px-4 py-2.5 text-center text-slate-600">
                         {data.mesinATM.toLocaleString()}
                       </td>
-                      <td className="px-5 py-3.5 text-center font-bold text-blue-600">
+                      <td className="px-4 py-2.5 text-center font-bold text-blue-600">
                         {data.uptimeATM !== null ? `${data.uptimeATM.toFixed(2)}%` : '-'}
                       </td>
-                      <td className="px-5 py-3.5 text-center">
+                      <td className="px-4 py-2.5 text-center">
                         {data.uptimeATM !== null ? (
-                          <span className={`inline-flex items-center gap-1 text-xs font-semibold px-2.5 py-1 rounded-full ${
+                          <span className={`inline-flex items-center gap-1 text-[10px] font-semibold px-2 py-0.5 rounded ${
                             atmAchieved ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' : 'bg-rose-50 text-rose-700 border border-rose-200'
                           }`}>
-                            {atmAchieved ? <CheckCircle2 size={12} /> : <AlertTriangle size={12} />}
+                            {atmAchieved ? <CheckCircle2 size={11} /> : <AlertTriangle size={11} />}
                             {atmAchieved ? 'ACHIEVED' : 'NOT ACHIEVED'}
                           </span>
                         ) : '-'}
                       </td>
 
                       {/* CRM Info */}
-                      <td className="px-5 py-3.5 text-center text-slate-600">
+                      <td className="px-4 py-2.5 text-center text-slate-600">
                         {data.mesinCRM.toLocaleString()}
                       </td>
-                      <td className="px-5 py-3.5 text-center font-bold text-emerald-600">
+                      <td className="px-4 py-2.5 text-center font-bold text-blue-600">
                         {data.uptimeCRM !== null ? `${data.uptimeCRM.toFixed(2)}%` : '-'}
                       </td>
-                      <td className="px-5 py-3.5 text-center">
+                      <td className="px-4 py-2.5 text-center">
                         {data.uptimeCRM !== null ? (
-                          <span className={`inline-flex items-center gap-1 text-xs font-semibold px-2.5 py-1 rounded-full ${
+                          <span className={`inline-flex items-center gap-1 text-[10px] font-semibold px-2 py-0.5 rounded ${
                             crmAchieved ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' : 'bg-rose-50 text-rose-700 border border-rose-200'
                           }`}>
-                            {crmAchieved ? <CheckCircle2 size={12} /> : <AlertTriangle size={12} />}
+                            {crmAchieved ? <CheckCircle2 size={11} /> : <AlertTriangle size={11} />}
                             {crmAchieved ? 'ACHIEVED' : 'NOT ACHIEVED'}
                           </span>
                         ) : '-'}
                       </td>
 
                       {/* Total */}
-                      <td className="px-5 py-3.5 text-center font-bold text-slate-800">
+                      <td className="px-4 py-2.5 text-center font-bold text-slate-900">
                         {data.totalMesin.toLocaleString()}
                       </td>
                     </tr>

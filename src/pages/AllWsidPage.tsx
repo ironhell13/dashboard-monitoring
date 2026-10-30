@@ -255,7 +255,7 @@ export default function AllWsidPage() {
         <ArrowUpDown
           size={13}
           className={`inline ml-1 ${
-            sortConfig.direction === 'desc' ? 'text-[#319795]' : 'text-slate-400'
+            sortConfig.direction === 'desc' ? 'text-blue-600' : 'text-slate-400'
           }`}
         />
       );
@@ -301,14 +301,14 @@ export default function AllWsidPage() {
       {/* ======================================================== */}
       {/* 1. HEADER SECTION                                        */}
       {/* ======================================================== */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-3">
         <div>
           <div className="flex items-center gap-2.5">
-            <div className="w-10 h-10 rounded-2xl bg-teal-50 border border-teal-200/80 flex items-center justify-center text-[#319795] shadow-xs">
-              <Server size={22} />
+            <div className="w-8 h-8 rounded-lg bg-blue-50 border border-blue-100 flex items-center justify-center text-blue-600 shrink-0">
+              <Server size={17} />
             </div>
             <div>
-              <h1 className="text-2xl font-black tracking-tight text-slate-800">
+              <h1 className="text-xl font-bold tracking-tight text-slate-900">
                 Seluruh WSID Aktif (BCA)
               </h1>
               <p className="text-slate-500 text-xs mt-0.5">
@@ -318,10 +318,10 @@ export default function AllWsidPage() {
           </div>
         </div>
 
-        <div className="flex items-center gap-3 self-start md:self-auto shrink-0 flex-wrap">
-          <div className="text-xs text-slate-500 bg-white border border-slate-200/80 px-3.5 py-2 rounded-xl shadow-2xs font-medium">
+        <div className="flex items-center gap-2.5 self-start md:self-auto shrink-0 flex-wrap">
+          <div className="text-xs text-slate-600 bg-white border border-[#E5EAF2] px-3 py-1.5 rounded-lg shadow-2xs font-medium">
             Terfilter:{' '}
-            <strong className="text-slate-800 font-mono font-bold">
+            <strong className="text-slate-900 font-bold">
               {filteredMachines.length.toLocaleString('id-ID')}
             </strong>{' '}
             / {baseBcaAktifMachines.length.toLocaleString('id-ID')} Mesin
@@ -329,10 +329,10 @@ export default function AllWsidPage() {
 
           <button
             onClick={handleExport}
-            className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white font-bold rounded-xl transition-all text-xs whitespace-nowrap shadow-xs cursor-pointer active:scale-95"
+            className="flex items-center gap-1.5 px-3.5 py-1.5 bg-blue-600 hover:bg-blue-700 active:bg-blue-800 text-white font-medium rounded-lg transition-colors text-xs whitespace-nowrap shadow-xs cursor-pointer"
             title="Download Excel seluruh mesin BCA aktif yang terfilter"
           >
-            <Download size={15} />
+            <Download size={14} />
             <span>Export Excel</span>
           </button>
         </div>
@@ -345,95 +345,95 @@ export default function AllWsidPage() {
         {/* Card 1: Total WSID Aktif */}
         <div
           onClick={() => setSlaFilter('ALL')}
-          className={`p-4 rounded-2xl border transition-all cursor-pointer bg-white shadow-xs hover:shadow-md relative overflow-hidden group ${
+          className={`p-4 rounded-lg border transition-all cursor-pointer bg-white shadow-2xs relative overflow-hidden ${
             slaFilter === 'ALL'
-              ? 'border-[#319795] ring-2 ring-teal-200 bg-teal-50/20'
-              : 'border-slate-200/90 hover:border-slate-300'
+              ? 'border-blue-600 ring-1 ring-blue-500 bg-blue-50/20'
+              : 'border-[#E5EAF2] hover:border-slate-300'
           }`}
         >
           <div className="flex items-start justify-between">
             <div>
-              <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider block">
+              <span className="text-[10px] font-semibold text-slate-500 uppercase tracking-wider block">
                 Total WSID Aktif (BCA)
               </span>
-              <h3 className="text-2xl font-black text-slate-800 font-mono mt-1">
+              <h3 className="text-2xl font-bold text-slate-900 font-mono mt-0.5">
                 {kpiStats.total.toLocaleString('id-ID')}
               </h3>
               <p className="text-[11px] text-slate-500 mt-1 flex items-center gap-1">
                 <span>Rata-rata Uptime:</span>
-                <strong className="text-teal-700 font-mono">{kpiStats.avgUptime.toFixed(2)}%</strong>
+                <strong className="text-blue-700 font-semibold">{kpiStats.avgUptime.toFixed(2)}%</strong>
               </p>
             </div>
             <div
-              className={`w-10 h-10 rounded-xl flex items-center justify-center transition-transform group-hover:scale-110 ${
+              className={`w-9 h-9 rounded-md flex items-center justify-center transition-colors ${
                 slaFilter === 'ALL'
-                  ? 'bg-[#319795] text-white shadow-xs'
-                  : 'bg-teal-50 text-[#319795] border border-teal-200/60'
+                  ? 'bg-blue-600 text-white shadow-xs'
+                  : 'bg-blue-50 text-blue-600 border border-blue-200/60'
               }`}
             >
-              <Server size={18} />
+              <Server size={17} />
             </div>
           </div>
           {slaFilter === 'ALL' && (
-            <div className="absolute bottom-0 left-0 right-0 h-1 bg-[#319795]" />
+            <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-blue-600" />
           )}
         </div>
 
         {/* Card 2: Status Aman (Safe) */}
         <div
           onClick={() => setSlaFilter(slaFilter === 'SAFE' ? 'ALL' : 'SAFE')}
-          className={`p-4 rounded-2xl border transition-all cursor-pointer bg-white shadow-xs hover:shadow-md relative overflow-hidden group ${
+          className={`p-4 rounded-lg border transition-all cursor-pointer bg-white shadow-2xs relative overflow-hidden ${
             slaFilter === 'SAFE'
-              ? 'border-emerald-500 ring-2 ring-emerald-200 bg-emerald-50/30'
-              : 'border-slate-200/90 hover:border-emerald-300'
+              ? 'border-emerald-600 ring-1 ring-emerald-500 bg-emerald-50/20'
+              : 'border-[#E5EAF2] hover:border-slate-300'
           }`}
         >
           <div className="flex items-start justify-between">
             <div>
-              <span className="text-[11px] font-bold text-emerald-600 uppercase tracking-wider block">
+              <span className="text-[10px] font-semibold text-emerald-700 uppercase tracking-wider block">
                 SLA Aman (Safe)
               </span>
-              <h3 className="text-2xl font-black text-emerald-700 font-mono mt-1">
+              <h3 className="text-2xl font-bold text-emerald-700 font-mono mt-0.5">
                 {kpiStats.safe.toLocaleString('id-ID')}
               </h3>
               <p className="text-[11px] text-slate-500 mt-1 flex items-center gap-1">
                 <span>Persentase:</span>
-                <strong className="text-emerald-700 font-mono">
+                <strong className="text-emerald-700 font-semibold">
                   {((kpiStats.safe / (kpiStats.total || 1)) * 100).toFixed(1)}%
                 </strong>
                 <span>mesin sehat</span>
               </p>
             </div>
             <div
-              className={`w-10 h-10 rounded-xl flex items-center justify-center transition-transform group-hover:scale-110 ${
+              className={`w-9 h-9 rounded-md flex items-center justify-center transition-colors ${
                 slaFilter === 'SAFE'
                   ? 'bg-emerald-600 text-white shadow-xs'
-                  : 'bg-emerald-50 text-emerald-600 border border-emerald-200'
+                  : 'bg-emerald-50 text-emerald-700 border border-emerald-200'
               }`}
             >
-              <ShieldCheck size={18} />
+              <ShieldCheck size={17} />
             </div>
           </div>
           {slaFilter === 'SAFE' && (
-            <div className="absolute bottom-0 left-0 right-0 h-1 bg-emerald-500" />
+            <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-emerald-600" />
           )}
         </div>
 
         {/* Card 3: Perlu Perhatian (Warning) */}
         <div
           onClick={() => setSlaFilter(slaFilter === 'WARNING' ? 'ALL' : 'WARNING')}
-          className={`p-4 rounded-2xl border transition-all cursor-pointer bg-white shadow-xs hover:shadow-md relative overflow-hidden group ${
+          className={`p-4 rounded-lg border transition-all cursor-pointer bg-white shadow-2xs relative overflow-hidden ${
             slaFilter === 'WARNING'
-              ? 'border-amber-500 ring-2 ring-amber-200 bg-amber-50/30'
-              : 'border-slate-200/90 hover:border-amber-300'
+              ? 'border-amber-600 ring-1 ring-amber-500 bg-amber-50/20'
+              : 'border-[#E5EAF2] hover:border-slate-300'
           }`}
         >
           <div className="flex items-start justify-between">
             <div>
-              <span className="text-[11px] font-bold text-amber-600 uppercase tracking-wider block">
+              <span className="text-[10px] font-semibold text-amber-700 uppercase tracking-wider block">
                 Perlu Perhatian (Warning)
               </span>
-              <h3 className="text-2xl font-black text-amber-600 font-mono mt-1">
+              <h3 className="text-2xl font-bold text-amber-700 font-mono mt-0.5">
                 {kpiStats.warning.toLocaleString('id-ID')}
               </h3>
               <p className="text-[11px] text-slate-500 mt-1">
@@ -441,35 +441,35 @@ export default function AllWsidPage() {
               </p>
             </div>
             <div
-              className={`w-10 h-10 rounded-xl flex items-center justify-center transition-transform group-hover:scale-110 ${
+              className={`w-9 h-9 rounded-md flex items-center justify-center transition-colors ${
                 slaFilter === 'WARNING'
-                  ? 'bg-amber-500 text-white shadow-xs'
-                  : 'bg-amber-50 text-amber-600 border border-amber-200'
+                  ? 'bg-amber-600 text-white shadow-xs'
+                  : 'bg-amber-50 text-amber-700 border border-amber-200'
               }`}
             >
-              <AlertTriangle size={18} />
+              <AlertTriangle size={17} />
             </div>
           </div>
           {slaFilter === 'WARNING' && (
-            <div className="absolute bottom-0 left-0 right-0 h-1 bg-amber-500" />
+            <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-amber-600" />
           )}
         </div>
 
         {/* Card 4: Status Kritis (Critical) */}
         <div
           onClick={() => setSlaFilter(slaFilter === 'CRITICAL' ? 'ALL' : 'CRITICAL')}
-          className={`p-4 rounded-2xl border transition-all cursor-pointer bg-white shadow-xs hover:shadow-md relative overflow-hidden group ${
+          className={`p-4 rounded-lg border transition-all cursor-pointer bg-white shadow-2xs relative overflow-hidden ${
             slaFilter === 'CRITICAL'
-              ? 'border-rose-500 ring-2 ring-rose-200 bg-rose-50/30'
-              : 'border-slate-200/90 hover:border-rose-300'
+              ? 'border-rose-600 ring-1 ring-rose-500 bg-rose-50/20'
+              : 'border-[#E5EAF2] hover:border-slate-300'
           }`}
         >
           <div className="flex items-start justify-between">
             <div>
-              <span className="text-[11px] font-bold text-rose-600 uppercase tracking-wider block">
+              <span className="text-[10px] font-semibold text-rose-700 uppercase tracking-wider block">
                 Status Kritis (Critical)
               </span>
-              <h3 className="text-2xl font-black text-rose-600 font-mono mt-1">
+              <h3 className="text-2xl font-bold text-rose-700 font-mono mt-0.5">
                 {kpiStats.critical.toLocaleString('id-ID')}
               </h3>
               <p className="text-[11px] text-slate-500 mt-1">
@@ -477,17 +477,17 @@ export default function AllWsidPage() {
               </p>
             </div>
             <div
-              className={`w-10 h-10 rounded-xl flex items-center justify-center transition-transform group-hover:scale-110 ${
+              className={`w-9 h-9 rounded-md flex items-center justify-center transition-colors ${
                 slaFilter === 'CRITICAL'
                   ? 'bg-rose-600 text-white shadow-xs'
-                  : 'bg-rose-50 text-rose-600 border border-rose-200'
+                  : 'bg-rose-50 text-rose-700 border border-rose-200'
               }`}
             >
-              <Flame size={18} />
+              <Flame size={17} />
             </div>
           </div>
           {slaFilter === 'CRITICAL' && (
-            <div className="absolute bottom-0 left-0 right-0 h-1 bg-rose-500" />
+            <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-rose-600" />
           )}
         </div>
       </div>
@@ -495,16 +495,16 @@ export default function AllWsidPage() {
       {/* ======================================================== */}
       {/* 3. SMART FILTER TOOLBAR                                   */}
       {/* ======================================================== */}
-      <div className="bg-white p-4 rounded-2xl border border-slate-200/90 shadow-2xs space-y-3">
-        <div className="flex flex-col lg:flex-row items-stretch lg:items-center justify-between gap-3">
+      <div className="bg-white p-3.5 rounded-lg border border-[#E5EAF2] shadow-2xs space-y-3">
+        <div className="flex flex-col lg:flex-row items-stretch lg:items-center justify-between gap-2.5">
           {/* Search Box */}
           <div className="relative flex-1 max-w-md">
-            <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-400">
-              <Search size={16} />
+            <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-400">
+              <Search size={14} />
             </div>
             <input
               type="text"
-              className="pl-9 pr-9 py-2 bg-slate-50 border border-slate-200/90 rounded-xl w-full text-xs text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-teal-500/20 focus:border-[#319795] transition-all"
+              className="pl-8 pr-8 py-1.5 bg-slate-50 border border-[#E5EAF2] rounded-md w-full text-xs text-slate-800 placeholder-slate-400 focus:outline-none focus:border-blue-600 focus:ring-1 focus:ring-blue-600 transition-colors"
               placeholder="Cari WSID, Lokasi, Vendor, atau Sektor..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
@@ -513,10 +513,10 @@ export default function AllWsidPage() {
               <button
                 type="button"
                 onClick={() => setSearchTerm('')}
-                className="absolute inset-y-0 right-0 pr-3 flex items-center text-slate-400 hover:text-slate-600 cursor-pointer"
+                className="absolute inset-y-0 right-0 pr-2.5 flex items-center text-slate-400 hover:text-slate-600 cursor-pointer"
                 title="Hapus kata kunci pencarian"
               >
-                <X size={14} />
+                <X size={13} />
               </button>
             )}
           </div>
@@ -718,7 +718,7 @@ export default function AllWsidPage() {
                           <button
                             type="button"
                             onClick={handleResetFilters}
-                            className="mt-2 px-3 py-1.5 bg-teal-50 text-[#319795] border border-teal-200 rounded-xl text-xs font-bold hover:bg-teal-100 transition-colors cursor-pointer"
+                            className="mt-2 px-3 py-1.5 bg-white text-slate-700 border border-[#E5EAF2] rounded-lg text-xs font-medium hover:bg-slate-50 transition-colors cursor-pointer"
                           >
                             Reset Semua Filter
                           </button>
@@ -740,17 +740,17 @@ export default function AllWsidPage() {
                       <tr
                         key={m.wsid}
                         onClick={() => handleSelectWsid(m.wsid)}
-                        className={`cursor-pointer transition-all ${
+                        className={`cursor-pointer transition-colors ${
                           isSelected
-                            ? 'bg-teal-50/70 border-l-4 border-[#319795]'
-                            : 'hover:bg-slate-50/80 border-l-4 border-transparent'
+                            ? 'bg-blue-50/70 border-l-2 border-blue-600'
+                            : 'hover:bg-slate-50/80 border-l-2 border-transparent'
                         }`}
                       >
                         {/* WSID */}
-                        <td className="py-3 px-4 whitespace-nowrap font-mono font-bold text-slate-800">
+                        <td className="py-2.5 px-3.5 whitespace-nowrap font-mono font-bold text-slate-900">
                           <span
                             className={
-                              isSelected ? 'text-[#319795] underline underline-offset-2' : ''
+                              isSelected ? 'text-blue-600 font-bold' : ''
                             }
                           >
                             {m.wsid}
@@ -758,13 +758,13 @@ export default function AllWsidPage() {
                         </td>
 
                         {/* Jenis & Vendor */}
-                        <td className="py-3 px-3 whitespace-nowrap">
+                        <td className="py-2.5 px-3 whitespace-nowrap">
                           <div className="flex flex-col gap-1 items-start">
                             <span
-                              className={`px-2 py-0.5 rounded-full text-[10px] font-bold font-mono uppercase tracking-wider ${
+                              className={`px-1.5 py-0.2 rounded text-[10px] font-semibold font-mono uppercase tracking-wider ${
                                 isCrm
-                                  ? 'bg-teal-100/70 text-teal-800 border border-teal-200'
-                                  : 'bg-indigo-100/70 text-indigo-800 border border-indigo-200'
+                                  ? 'bg-blue-50 text-blue-700 border border-blue-200/70'
+                                  : 'bg-slate-100 text-slate-700 border border-slate-200'
                               }`}
                             >
                               {m.jenisMesin || 'ATM'}
@@ -861,22 +861,22 @@ export default function AllWsidPage() {
                         </td>
 
                         {/* Aksi Button */}
-                        <td className="py-3 px-3 text-center whitespace-nowrap">
+                        <td className="py-2.5 px-3 text-center whitespace-nowrap">
                           <button
                             type="button"
                             onClick={(e) => {
                               e.stopPropagation();
                               handleSelectWsid(m.wsid);
                             }}
-                            className={`p-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
+                            className={`p-1.5 rounded-md text-xs font-medium transition-colors cursor-pointer ${
                               isSelected
-                                ? 'bg-[#319795] text-white shadow-2xs'
-                                : 'bg-slate-100 hover:bg-teal-50 text-slate-600 hover:text-[#319795]'
+                                ? 'bg-blue-600 text-white shadow-2xs'
+                                : 'bg-slate-100 hover:bg-slate-200 text-slate-600 hover:text-slate-900'
                             }`}
                             title={isSelected ? 'Tutup Panel Detail' : 'Buka Panel Detail'}
                           >
                             <ChevronRight
-                              size={15}
+                              size={14}
                               className={`transition-transform ${isSelected ? 'rotate-90' : ''}`}
                             />
                           </button>
@@ -891,7 +891,7 @@ export default function AllWsidPage() {
 
           {/* Pagination Controls */}
           {pageSize > 0 && totalPages > 1 && (
-            <div className="p-4 bg-white border-t border-slate-200/80 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs">
+            <div className="p-3.5 bg-white border-t border-[#E5EAF2] flex flex-col sm:flex-row items-center justify-between gap-3 text-xs">
               <div className="text-slate-500">
                 Halaman <strong className="text-slate-800">{currentPage}</strong> dari{' '}
                 <strong className="text-slate-800">{totalPages}</strong>
@@ -905,10 +905,10 @@ export default function AllWsidPage() {
                     setCurrentPage(1);
                     tableTopRef.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
                   }}
-                  className="p-1.5 rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-50 disabled:opacity-30 disabled:pointer-events-none cursor-pointer"
+                  className="p-1.5 rounded-md border border-[#E5EAF2] text-slate-600 hover:bg-slate-50 disabled:opacity-30 disabled:pointer-events-none cursor-pointer"
                   title="Halaman Pertama"
                 >
-                  <ChevronsLeft size={15} />
+                  <ChevronsLeft size={14} />
                 </button>
                 <button
                   type="button"
@@ -917,10 +917,10 @@ export default function AllWsidPage() {
                     setCurrentPage((prev) => Math.max(1, prev - 1));
                     tableTopRef.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
                   }}
-                  className="p-1.5 rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-50 disabled:opacity-30 disabled:pointer-events-none cursor-pointer"
+                  className="p-1.5 rounded-md border border-[#E5EAF2] text-slate-600 hover:bg-slate-50 disabled:opacity-30 disabled:pointer-events-none cursor-pointer"
                   title="Halaman Sebelumnya"
                 >
-                  <ChevronLeft size={15} />
+                  <ChevronLeft size={14} />
                 </button>
 
                 {/* Number Pills */}
@@ -938,10 +938,10 @@ export default function AllWsidPage() {
                         setCurrentPage(p);
                         tableTopRef.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
                       }}
-                      className={`min-w-[30px] h-8 rounded-lg text-xs font-mono font-bold transition-all cursor-pointer ${
+                      className={`min-w-[28px] h-7 rounded-md text-xs font-mono font-medium transition-colors cursor-pointer ${
                         currentPage === p
-                          ? 'bg-[#319795] text-white shadow-xs'
-                          : 'bg-white border border-slate-200 text-slate-700 hover:bg-slate-50'
+                          ? 'bg-blue-600 text-white shadow-2xs'
+                          : 'bg-white border border-[#E5EAF2] text-slate-700 hover:bg-slate-50'
                       }`}
                     >
                       {p}
@@ -983,65 +983,65 @@ export default function AllWsidPage() {
         {/* ======================================================== */}
         {selectedMachine && (
           <div className="xl:col-span-1 animate-slide-in-right sticky top-6">
-            <div className="bg-white rounded-2xl shadow-lg border border-slate-200/90 overflow-hidden">
+            <div className="bg-white rounded-lg shadow-xs border border-[#E5EAF2] overflow-hidden">
               {/* Executive Header */}
-              <div className="p-5 bg-gradient-to-r from-slate-800 via-teal-900 to-slate-900 text-white flex justify-between items-start gap-3">
+              <div className="p-4 bg-slate-900 text-white flex justify-between items-start gap-3 border-b border-slate-800">
                 <div className="space-y-1">
                   <div className="flex items-center gap-2 flex-wrap">
-                    <span className="font-mono text-xl font-black tracking-tight text-white">
+                    <span className="font-mono text-lg font-bold tracking-tight text-white">
                       {selectedMachine.wsid}
                     </span>
-                    <span className="px-2 py-0.5 rounded-full text-[10px] font-bold font-mono bg-white/20 text-white backdrop-blur-md">
+                    <span className="px-2 py-0.5 rounded text-[10px] font-semibold font-mono bg-blue-900/60 text-blue-300 border border-blue-700/50">
                       {selectedMachine.jenisMesin || 'ATM'}
                     </span>
                     {selectedMachine.vendor && selectedMachine.vendor !== '-' && (
-                      <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-teal-400/20 text-teal-200 border border-teal-300/30">
+                      <span className="px-2 py-0.5 rounded text-[10px] font-medium bg-slate-800 text-slate-300 border border-slate-700">
                         {selectedMachine.vendor}
                       </span>
                     )}
                   </div>
-                  <p className="text-slate-300 text-xs truncate max-w-[260px]" title={selectedMachine.lokasi}>
+                  <p className="text-slate-400 text-xs truncate max-w-[260px]" title={selectedMachine.lokasi}>
                     {selectedMachine.lokasi || '-'}
                   </p>
-                  <p className="text-[11px] text-teal-200/80">
-                    Sektor: <strong>{cleanSektorName(selectedMachine.sektorBCA) !== '-' ? cleanSektorName(selectedMachine.sektorBCA) : (selectedMachine.sektorBCA || '-')}</strong>
+                  <p className="text-[11px] text-slate-400">
+                    Sektor: <strong className="text-slate-200">{cleanSektorName(selectedMachine.sektorBCA) !== '-' ? cleanSektorName(selectedMachine.sektorBCA) : (selectedMachine.sektorBCA || '-')}</strong>
                   </p>
                 </div>
 
                 <button
                   type="button"
                   onClick={() => setSelectedWsid(null)}
-                  className="p-1.5 bg-white/10 hover:bg-white/20 rounded-xl text-white transition-colors cursor-pointer"
+                  className="p-1.5 bg-slate-800 hover:bg-slate-700 rounded-md text-slate-300 hover:text-white transition-colors cursor-pointer"
                   title="Tutup Panel"
                 >
-                  <X size={16} />
+                  <X size={15} />
                 </button>
               </div>
 
               {/* Segmented Tab Inside Inspector */}
-              <div className="p-3 bg-slate-50/80 border-b border-slate-200/80 flex items-center gap-1.5">
+              <div className="p-2.5 bg-slate-50 border-b border-[#E5EAF2] flex items-center gap-1.5">
                 <button
                   type="button"
                   onClick={() => setInspectorTab('SLA')}
-                  className={`flex-1 py-1.5 px-3 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center justify-center gap-1.5 ${
+                  className={`flex-1 py-1.5 px-3 rounded-md text-xs font-semibold transition-colors cursor-pointer flex items-center justify-center gap-1.5 ${
                     inspectorTab === 'SLA'
-                      ? 'bg-white text-slate-800 shadow-2xs border border-slate-200/80'
+                      ? 'bg-white text-blue-700 shadow-2xs border border-[#E5EAF2]'
                       : 'text-slate-500 hover:text-slate-800'
                   }`}
                 >
-                  <ShieldCheck size={14} className={inspectorTab === 'SLA' ? 'text-[#319795]' : 'text-slate-400'} />
+                  <ShieldCheck size={13} className={inspectorTab === 'SLA' ? 'text-blue-600' : 'text-slate-400'} />
                   <span>Kesehatan SLA</span>
                 </button>
                 <button
                   type="button"
                   onClick={() => setInspectorTab('KATEGORI')}
-                  className={`flex-1 py-1.5 px-3 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center justify-center gap-1.5 ${
+                  className={`flex-1 py-1.5 px-3 rounded-md text-xs font-semibold transition-colors cursor-pointer flex items-center justify-center gap-1.5 ${
                     inspectorTab === 'KATEGORI'
-                      ? 'bg-white text-slate-800 shadow-2xs border border-slate-200/80'
+                      ? 'bg-white text-blue-700 shadow-2xs border border-[#E5EAF2]'
                       : 'text-slate-500 hover:text-slate-800'
                   }`}
                 >
-                  <Activity size={14} className={inspectorTab === 'KATEGORI' ? 'text-[#319795]' : 'text-slate-400'} />
+                  <Activity size={13} className={inspectorTab === 'KATEGORI' ? 'text-blue-600' : 'text-slate-400'} />
                   <span>5 Kategori Problem</span>
                 </button>
               </div>
@@ -1192,11 +1192,11 @@ export default function AllWsidPage() {
                       return (
                         <div
                           key={cat}
-                          className="bg-white border border-slate-200/90 rounded-2xl p-3 shadow-2xs hover:border-[#319795]/50 transition-colors"
+                          className="bg-white border border-[#E5EAF2] rounded-lg p-2.5 shadow-2xs hover:border-blue-400 transition-colors"
                         >
-                          <div className="flex items-center justify-between pb-2 border-b border-slate-100">
+                          <div className="flex items-center justify-between pb-1.5 border-b border-slate-100">
                             <div>
-                              <div className="font-bold text-slate-800 text-xs">
+                              <div className="font-semibold text-slate-900 text-xs">
                                 {meta.label}
                               </div>
                               <div className="text-[10px] text-slate-400">{meta.desc}</div>
@@ -1210,28 +1210,28 @@ export default function AllWsidPage() {
                             </span>
                           </div>
 
-                          <div className="flex justify-between items-center text-xs pt-2">
+                          <div className="flex justify-between items-center text-xs pt-1.5">
                             <div className="text-center flex-1">
                               <div className="text-slate-400 text-[10px]">FREQ</div>
-                              <div className="font-bold text-slate-700 font-mono">
+                              <div className="font-bold text-slate-700 font-mono text-xs">
                                 {typeof frxDur.frx === 'number'
                                   ? frxDur.frx.toFixed(2)
                                   : frxDur.frx}
                               </div>
                             </div>
-                            <div className="w-px h-6 bg-slate-100" />
+                            <div className="w-px h-5 bg-slate-100" />
                             <div className="text-center flex-1">
                               <div className="text-slate-400 text-[10px]">DURASI</div>
-                              <div className="font-bold text-slate-700 font-mono">
+                              <div className="font-bold text-slate-700 font-mono text-xs">
                                 {typeof frxDur.dur === 'number'
                                   ? frxDur.dur.toFixed(2)
                                   : frxDur.dur}
                               </div>
                             </div>
-                            <div className="w-px h-6 bg-slate-100" />
+                            <div className="w-px h-5 bg-slate-100" />
                             <div className="text-center flex-1">
                               <div className="text-slate-400 text-[10px]">BOBOT</div>
-                              <div className="font-bold text-[#319795] font-mono">
+                              <div className="font-bold text-blue-600 font-mono text-xs">
                                 {pct.toFixed(2)}%
                               </div>
                             </div>
@@ -1243,14 +1243,14 @@ export default function AllWsidPage() {
                 )}
 
                 {/* Shortcut to Deep Analytics */}
-                <div className="pt-2 border-t border-slate-100">
+                <div className="pt-2 border-t border-[#E5EAF2]">
                   <button
                     type="button"
                     onClick={() => navigate(`/wsid/${selectedMachine.wsid}`)}
-                    className="w-full py-2.5 px-4 bg-gradient-to-r from-[#319795] to-[#4FD1C5] hover:opacity-95 text-white font-bold rounded-xl transition-all flex items-center justify-center gap-2 text-xs shadow-xs cursor-pointer active:scale-98"
+                    className="w-full py-2 px-3.5 bg-blue-600 hover:bg-blue-700 active:bg-blue-800 text-white font-medium rounded-lg transition-colors flex items-center justify-center gap-1.5 text-xs shadow-xs cursor-pointer"
                   >
                     <span>Buka Analisis Bulanan Lengkap</span>
-                    <ExternalLink size={14} />
+                    <ExternalLink size={13} />
                   </button>
                 </div>
               </div>

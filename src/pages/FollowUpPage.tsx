@@ -754,29 +754,22 @@ export default function FollowUpPage() {
   };
 
   return (
-    <div className="space-y-6 pb-12">
+    <div className="space-y-5 pb-12 animate-fade-in">
       {/* Page Header */}
-      <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+      <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
         <div>
-          <div className="flex items-center gap-2.5">
-            <div className="p-2 bg-gradient-to-tr from-amber-500 to-red-500 rounded-xl text-white shadow-md shadow-amber-500/20">
-              <ClipboardCheck size={24} />
-            </div>
-            <div>
-              <h1 className="text-2xl font-black text-slate-800 tracking-tight">Need to Follow Up</h1>
-              <p className="text-xs text-slate-500">
-                Pusat penanganan mesin BCA aktif bermasalah (ATM/CRM), tindak lanjut PIC/Vendor, dan evaluasi Before vs After.
-              </p>
-            </div>
-          </div>
+          <h1 className="text-xl font-bold text-slate-900 tracking-tight">Need to Follow Up</h1>
+          <p className="text-xs text-slate-500 mt-0.5">
+            Pusat penanganan mesin BCA aktif bermasalah (ATM/CRM), tindak lanjut PIC/Vendor, dan evaluasi Before vs After.
+          </p>
         </div>
 
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-2">
           <button
             onClick={handleExportExcel}
-            className="inline-flex items-center gap-2 px-4 py-2 bg-emerald-600 text-white rounded-xl text-xs font-semibold hover:bg-emerald-700 shadow-sm transition-all cursor-pointer"
+            className="inline-flex items-center gap-2 px-3.5 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-xs font-medium transition-colors shadow-2xs cursor-pointer"
           >
-            <Download size={15} />
+            <Download size={14} />
             <span>Export Laporan Follow Up</span>
           </button>
         </div>
@@ -785,111 +778,111 @@ export default function FollowUpPage() {
       {/* KPI Stats Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         {/* Card 1: Critical */}
-        <div className="glass-card p-5 border-l-4 border-red-500 relative overflow-hidden">
+        <div className="bg-white rounded-lg p-4 border border-[#E5EAF2] shadow-2xs">
           <div className="flex justify-between items-start">
             <div>
-              <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Prioritas Kritis</p>
-              <h3 className="text-2xl font-black text-red-600 mt-1">{criticalCount}</h3>
-              <p className="text-[11px] text-slate-500 mt-0.5">
+              <p className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider">Prioritas Kritis</p>
+              <h3 className="text-2xl font-bold text-rose-600 mt-1">{criticalCount}</h3>
+              <p className="text-[11px] text-slate-500 mt-1">
                 {selectedPeriode === 'ALL' 
                   ? 'Rata-rata < 99.00% / 98.00% atau Kronis > 2 Bulan' 
                   : `Kritis pada ${formatBulanTahun(selectedPeriode)} atau Kronis > 2 Bulan`}
               </p>
             </div>
-            <div className="p-2.5 bg-red-100/80 text-red-600 rounded-xl">
-              <ShieldAlert size={22} />
+            <div className="p-2 bg-rose-50 text-rose-600 rounded-lg border border-rose-100">
+              <ShieldAlert size={18} />
             </div>
           </div>
         </div>
 
         {/* Card 2: Warning */}
-        <div className="glass-card p-5 border-l-4 border-amber-500 relative overflow-hidden">
+        <div className="bg-white rounded-lg p-4 border border-[#E5EAF2] shadow-2xs">
           <div className="flex justify-between items-start">
             <div>
-              <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Prioritas Warning</p>
-              <h3 className="text-2xl font-black text-amber-600 mt-1">{warningCount}</h3>
-              <p className="text-[11px] text-slate-500 mt-0.5">
+              <p className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider">Prioritas Warning</p>
+              <h3 className="text-2xl font-bold text-amber-600 mt-1">{warningCount}</h3>
+              <p className="text-[11px] text-slate-500 mt-1">
                 {selectedPeriode === 'ALL'
                   ? 'Rata-rata di Bawah SLA, Waspada 2 Bulan, / Spike'
                   : `Di Bawah SLA pada ${formatBulanTahun(selectedPeriode)} / Lonjakan`}
               </p>
             </div>
-            <div className="p-2.5 bg-amber-100/80 text-amber-600 rounded-xl">
-              <AlertTriangle size={22} />
+            <div className="p-2 bg-amber-50 text-amber-600 rounded-lg border border-amber-100">
+              <AlertTriangle size={18} />
             </div>
           </div>
         </div>
 
         {/* Card 3: Active Tickets */}
-        <div className="glass-card p-5 border-l-4 border-blue-500 relative overflow-hidden">
+        <div className="bg-white rounded-lg p-4 border border-[#E5EAF2] shadow-2xs">
           <div className="flex justify-between items-start">
             <div>
-              <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Tiket Aktif & Pantau</p>
-              <h3 className="text-2xl font-black text-blue-600 mt-1">{inProgressCount}</h3>
-              <p className="text-[11px] text-slate-500 mt-0.5">Status OPEN / IN PROGRESS / PANTAU</p>
+              <p className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider">Tiket Aktif & Pantau</p>
+              <h3 className="text-2xl font-bold text-blue-600 mt-1">{inProgressCount}</h3>
+              <p className="text-[11px] text-slate-500 mt-1">Status OPEN / IN PROGRESS / PANTAU</p>
             </div>
-            <div className="p-2.5 bg-blue-100/80 text-blue-600 rounded-xl">
-              <Clock size={22} />
+            <div className="p-2 bg-blue-50 text-blue-600 rounded-lg border border-blue-100">
+              <Clock size={18} />
             </div>
           </div>
         </div>
 
         {/* Card 4: Target SLA Tercapai (Aman) */}
-        <div className="glass-card p-5 border-l-4 border-emerald-500 relative overflow-hidden">
+        <div className="bg-white rounded-lg p-4 border border-[#E5EAF2] shadow-2xs">
           <div className="flex justify-between items-start">
             <div>
-              <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Target SLA Tercapai</p>
-              <h3 className="text-2xl font-black text-emerald-600 mt-1">{safeCount}</h3>
-              <p className="text-[11px] text-slate-500 mt-0.5">BCA Aktif: ATM &ge; 99.00% • CRM &ge; 98.50% (Status Aman)</p>
+              <p className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider">Target SLA Tercapai</p>
+              <h3 className="text-2xl font-bold text-emerald-600 mt-1">{safeCount}</h3>
+              <p className="text-[11px] text-slate-500 mt-1">BCA Aktif: ATM &ge; 99.00% • CRM &ge; 98.50%</p>
             </div>
-            <div className="p-2.5 bg-emerald-100/80 text-emerald-600 rounded-xl">
-              <CheckCircle2 size={22} />
+            <div className="p-2 bg-emerald-50 text-emerald-600 rounded-lg border border-emerald-100">
+              <CheckCircle2 size={18} />
             </div>
           </div>
         </div>
       </div>
 
       {/* Tabs Navigation */}
-      <div className="flex border-b border-slate-200">
+      <div className="flex border-b border-[#E5EAF2] gap-1">
         <button
           onClick={() => setActiveTab('RECOMMENDATIONS')}
-          className={`px-5 py-3 text-xs font-bold transition-all border-b-2 cursor-pointer flex items-center gap-2 ${
+          className={`px-4 py-2.5 text-xs font-semibold transition-all border-b-2 cursor-pointer flex items-center gap-2 ${
             activeTab === 'RECOMMENDATIONS'
-              ? 'border-blue-600 text-blue-600 bg-blue-50/50'
+              ? 'border-blue-600 text-blue-600 bg-blue-50/40 rounded-t'
               : 'border-transparent text-slate-500 hover:text-slate-800'
           }`}
         >
-          <Sparkles size={16} />
+          <Sparkles size={14} />
           <span>Rekomendasi Butuh Follow Up</span>
-          <span className="px-2 py-0.5 rounded-full text-[10px] bg-red-100 text-red-700 font-bold">
+          <span className="px-1.5 py-0.5 rounded text-[10px] bg-rose-50 text-rose-700 font-semibold border border-rose-200">
             {recommendations.length}
           </span>
         </button>
 
         <button
           onClick={() => setActiveTab('ACTIVE_TICKETS')}
-          className={`px-5 py-3 text-xs font-bold transition-all border-b-2 cursor-pointer flex items-center gap-2 ${
+          className={`px-4 py-2.5 text-xs font-semibold transition-all border-b-2 cursor-pointer flex items-center gap-2 ${
             activeTab === 'ACTIVE_TICKETS'
-              ? 'border-blue-600 text-blue-600 bg-blue-50/50'
+              ? 'border-blue-600 text-blue-600 bg-blue-50/40 rounded-t'
               : 'border-transparent text-slate-500 hover:text-slate-800'
           }`}
         >
-          <Clock size={16} />
+          <Clock size={14} />
           <span>Monitoring Tindak Lanjut (Active)</span>
-          <span className="px-2 py-0.5 rounded-full text-[10px] bg-blue-100 text-blue-700 font-bold">
+          <span className="px-1.5 py-0.5 rounded text-[10px] bg-blue-50 text-blue-700 font-semibold border border-blue-200">
             {(followUpTickets || []).length}
           </span>
         </button>
 
         <button
           onClick={() => setActiveTab('EVALUATION')}
-          className={`px-5 py-3 text-xs font-bold transition-all border-b-2 cursor-pointer flex items-center gap-2 ${
+          className={`px-4 py-2.5 text-xs font-semibold transition-all border-b-2 cursor-pointer flex items-center gap-2 ${
             activeTab === 'EVALUATION'
-              ? 'border-blue-600 text-blue-600 bg-blue-50/50'
+              ? 'border-blue-600 text-blue-600 bg-blue-50/40 rounded-t'
               : 'border-transparent text-slate-500 hover:text-slate-800'
           }`}
         >
-          <TrendingUp size={16} />
+          <TrendingUp size={14} />
           <span>Evaluasi Perkembangan (Before vs After)</span>
         </button>
       </div>
@@ -898,20 +891,20 @@ export default function FollowUpPage() {
       {activeTab === 'RECOMMENDATIONS' && (
         <div className="space-y-4">
           {/* Filter Bar */}
-          <div className="flex flex-wrap items-center justify-between gap-3 p-4 bg-white border border-slate-200 rounded-2xl shadow-xs">
-            <div className="flex flex-wrap items-center gap-2.5">
-              <div className="flex items-center gap-1.5 text-xs text-slate-500 font-semibold">
-                <Filter size={15} />
+          <div className="flex flex-wrap items-center justify-between gap-3 p-3.5 bg-white border border-[#E5EAF2] rounded-lg shadow-2xs">
+            <div className="flex flex-wrap items-center gap-2">
+              <div className="flex items-center gap-1.5 text-xs text-slate-500 font-medium">
+                <Filter size={14} />
                 <span>Filter:</span>
               </div>
 
               {/* Periode Filter */}
-              <div className="flex items-center gap-1.5 bg-slate-50 border border-slate-200 rounded-lg px-2.5 py-1.5">
+              <div className="flex items-center gap-1.5 bg-slate-50 border border-[#E5EAF2] rounded-lg px-2.5 py-1.5">
                 <Calendar size={13} className="text-slate-400" />
                 <select
                   value={selectedPeriode}
                   onChange={e => setSelectedPeriode(e.target.value)}
-                  className="text-xs bg-transparent text-slate-700 font-semibold focus:outline-none cursor-pointer"
+                  className="text-xs bg-transparent text-slate-700 font-medium focus:outline-none cursor-pointer"
                 >
                   <option value="ALL">Semua Bulan (Agregat)</option>
                   {availablePeriodes.map(p => (
@@ -924,7 +917,7 @@ export default function FollowUpPage() {
               <select
                 value={selectedJenisMesin}
                 onChange={e => setSelectedJenisMesin(e.target.value as any)}
-                className="text-xs bg-white border border-slate-200 rounded-lg px-3 py-1.5 text-slate-700 font-medium focus:ring-2 focus:ring-blue-500 focus:outline-none cursor-pointer"
+                className="text-xs bg-white border border-[#E5EAF2] rounded-lg px-2.5 py-1.5 text-slate-700 font-medium focus:ring-1 focus:ring-blue-500 focus:outline-none cursor-pointer"
               >
                 <option value="ALL">Semua Mesin</option>
                 <option value="ATM">ATM Saja</option>
@@ -932,7 +925,7 @@ export default function FollowUpPage() {
               </select>
 
               {/* Fokus Klien Badge */}
-              <div className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-50 border border-blue-200 rounded-lg text-xs font-semibold text-blue-700">
+              <div className="flex items-center gap-1.5 px-2.5 py-1.5 bg-blue-50 border border-blue-200 rounded-lg text-xs font-medium text-blue-700">
                 <span className="w-1.5 h-1.5 rounded-full bg-blue-600"></span>
                 <span>Fokus: Mesin BCA Aktif</span>
               </div>
@@ -943,24 +936,24 @@ export default function FollowUpPage() {
                   <button
                     key={p}
                     onClick={() => setPriorityFilter(p)}
-                    className={`px-3 py-1 rounded-md transition-all cursor-pointer ${
-                      priorityFilter === p ? 'bg-white shadow-xs text-slate-900 font-bold' : 'text-slate-600 hover:text-slate-900'
+                    className={`px-2.5 py-1 rounded transition-all cursor-pointer text-xs ${
+                      priorityFilter === p ? 'bg-white shadow-2xs text-slate-900 font-semibold' : 'text-slate-600 hover:text-slate-900'
                     }`}
                   >
-                    {p === 'ALL' ? 'Semua Status' : p === 'CRITICAL' ? '🔴 Kritis' : '🟡 Warning'}
+                    {p === 'ALL' ? 'Semua Status' : p === 'CRITICAL' ? 'Kritis' : 'Warning'}
                   </button>
                 ))}
               </div>
 
               {/* Service Point Filter */}
-              <div className="flex items-center gap-1.5 bg-white border border-slate-200 rounded-lg px-2.5 py-1.5 shadow-2xs">
-                <span className="text-[10px] text-slate-400 font-bold uppercase">SP:</span>
+              <div className="flex items-center gap-1.5 bg-white border border-[#E5EAF2] rounded-lg px-2.5 py-1.5 shadow-2xs">
+                <span className="text-[10px] text-slate-400 font-semibold uppercase">SP:</span>
                 <select
                   value={selectedServicePoint}
                   onChange={e => handleServicePointChange(e.target.value)}
                   className="text-xs bg-transparent text-slate-700 font-medium focus:outline-none cursor-pointer"
                 >
-                  <option value="ALL">Semua Service Point ({availableServicePoints.length})</option>
+                  <option value="ALL">Semua SP ({availableServicePoints.length})</option>
                   {availableServicePoints.map(sp => (
                     <option key={sp} value={sp}>{sp}</option>
                   ))}
@@ -968,8 +961,8 @@ export default function FollowUpPage() {
               </div>
 
               {/* Sektor Filter */}
-              <div className="flex items-center gap-1.5 bg-white border border-slate-200 rounded-lg px-2.5 py-1.5 shadow-2xs">
-                <span className="text-[10px] text-slate-400 font-bold uppercase">Sektor:</span>
+              <div className="flex items-center gap-1.5 bg-white border border-[#E5EAF2] rounded-lg px-2.5 py-1.5 shadow-2xs">
+                <span className="text-[10px] text-slate-400 font-semibold uppercase">Sektor:</span>
                 <select
                   value={selectedSektor}
                   onChange={e => setSelectedSektor(e.target.value)}
@@ -983,8 +976,8 @@ export default function FollowUpPage() {
               </div>
 
               {/* Vendor Filter */}
-              <div className="flex items-center gap-1.5 bg-white border border-slate-200 rounded-lg px-2.5 py-1.5 shadow-2xs">
-                <span className="text-[10px] text-slate-400 font-bold uppercase">Vendor:</span>
+              <div className="flex items-center gap-1.5 bg-white border border-[#E5EAF2] rounded-lg px-2.5 py-1.5 shadow-2xs">
+                <span className="text-[10px] text-slate-400 font-semibold uppercase">Vendor:</span>
                 <select
                   value={selectedVendor}
                   onChange={e => setSelectedVendor(e.target.value)}
@@ -1001,7 +994,7 @@ export default function FollowUpPage() {
               <select
                 value={selectedCategory}
                 onChange={e => handleCategoryChange(e.target.value)}
-                className="text-xs bg-white border border-slate-200 rounded-lg px-3 py-1.5 text-slate-700 font-medium focus:ring-2 focus:ring-blue-500 focus:outline-none cursor-pointer"
+                className="text-xs bg-white border border-[#E5EAF2] rounded-lg px-2.5 py-1.5 text-slate-700 font-medium focus:ring-1 focus:ring-blue-500 focus:outline-none cursor-pointer"
               >
                 <option value="ALL">Semua Kategori Problem & Kronis</option>
                 <optgroup label="Mesin Kronis">
@@ -1031,37 +1024,37 @@ export default function FollowUpPage() {
                     handleCategoryChange('ALL');
                     setSearchQuery('');
                   }}
-                  className="inline-flex items-center gap-1 text-[11px] text-slate-500 hover:text-red-600 font-semibold px-2 py-1 rounded-lg hover:bg-red-50 border border-slate-200 transition-colors cursor-pointer"
+                  className="inline-flex items-center gap-1 text-[11px] text-slate-500 hover:text-rose-600 font-medium px-2 py-1 rounded-lg hover:bg-rose-50 border border-[#E5EAF2] transition-colors cursor-pointer"
                   title="Reset semua filter rekomendasi"
                 >
                   <X size={12} />
-                  <span>Reset Filter</span>
+                  <span>Reset</span>
                 </button>
               )}
             </div>
 
             {/* Search Input */}
-            <div className="relative min-w-[220px]">
-              <Search size={14} className="absolute left-3 top-2.5 text-slate-400" />
+            <div className="relative min-w-[200px]">
+              <Search size={14} className="absolute left-3 top-2 text-slate-400" />
               <input
                 type="text"
                 value={searchQuery}
                 onChange={e => setSearchQuery(e.target.value)}
-                placeholder="Cari WSID / Lokasi / Vendor / SP..."
-                className="w-full text-xs pl-9 pr-3 py-1.5 bg-slate-50 border border-slate-200 rounded-lg focus:bg-white focus:ring-2 focus:ring-blue-500 focus:outline-none"
+                placeholder="Cari WSID / Lokasi / Vendor..."
+                className="w-full text-xs pl-8 pr-3 py-1.5 bg-slate-50 border border-[#E5EAF2] rounded-lg focus:bg-white focus:ring-1 focus:ring-blue-500 focus:outline-none"
               />
             </div>
           </div>
 
           {/* Active Category Banner from Dashboard Navigation or Dropdown */}
           {selectedCategory !== 'ALL' && (
-            <div className="flex flex-wrap items-center justify-between gap-2 bg-blue-50 border border-blue-200 text-blue-900 px-4 py-3 rounded-2xl text-xs shadow-2xs">
+            <div className="flex flex-wrap items-center justify-between gap-2 bg-blue-50 border border-blue-200 text-blue-900 px-3.5 py-2.5 rounded-lg text-xs shadow-2xs">
               <div className="flex items-center gap-2 flex-wrap">
-                <span className="p-1 rounded-md bg-blue-600 text-white">
-                  <Filter size={13} />
+                <span className="p-1 rounded bg-blue-600 text-white">
+                  <Filter size={12} />
                 </span>
-                <span className="font-bold">Filter Kategori Terpilih dari Dashboard:</span>
-                <span className="px-2.5 py-0.5 rounded-full bg-blue-600 text-white font-bold text-[11px]">
+                <span className="font-semibold">Filter Kategori:</span>
+                <span className="px-2 py-0.5 rounded bg-blue-600 text-white font-medium text-[11px]">
                   {selectedCategoryLabel || selectedCategory}
                 </span>
                 <span className="text-blue-700 font-medium">
@@ -1070,40 +1063,40 @@ export default function FollowUpPage() {
               </div>
               <button
                 onClick={() => handleCategoryChange('ALL')}
-                className="inline-flex items-center gap-1.5 px-3 py-1 bg-white hover:bg-slate-100 text-slate-700 font-bold rounded-lg border border-slate-200 shadow-2xs transition-all cursor-pointer text-xs"
+                className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-white hover:bg-slate-50 text-slate-700 font-medium rounded-lg border border-[#E5EAF2] shadow-2xs transition-colors cursor-pointer text-xs"
               >
-                <X size={13} />
-                <span>Hapus Filter (Tampilkan Semua)</span>
+                <X size={12} />
+                <span>Hapus Filter</span>
               </button>
             </div>
           )}
 
           {/* Table */}
-          <div className="bg-white border border-slate-200 rounded-2xl shadow-xs overflow-hidden">
+          <div className="bg-white border border-[#E5EAF2] rounded-lg shadow-2xs overflow-hidden">
             <div className="overflow-x-auto">
               <table className="w-full text-left text-xs border-collapse">
                 <thead>
-                  <tr className="bg-slate-900 text-white font-semibold uppercase text-[11px] tracking-wider">
-                    <th className="py-3 px-4">Prioritas</th>
-                    <th className="py-3 px-4">WSID & Mesin</th>
-                    <th className="py-3 px-4">Lokasi & Service Point</th>
-                    <th className="py-3 px-4">Vendor</th>
-                    <th className="py-3 px-4 text-center">
+                  <tr className="bg-[#F8FAFC] text-slate-600 font-semibold uppercase text-[11px] tracking-wider border-b border-[#E5EAF2]">
+                    <th className="py-2.5 px-4">Prioritas</th>
+                    <th className="py-2.5 px-4">WSID & Mesin</th>
+                    <th className="py-2.5 px-4">Lokasi & Service Point</th>
+                    <th className="py-2.5 px-4">Vendor</th>
+                    <th className="py-2.5 px-4 text-center">
                       {selectedPeriode === 'ALL' ? (
-                        <span>Rata-rata Uptime (Seluruh Bulan)</span>
+                        <span>Rata-rata Uptime</span>
                       ) : (
                         <span>Uptime {formatBulanTahun(selectedPeriode)}</span>
                       )}
                     </th>
-                    <th className="py-3 px-4">Problem Dominan</th>
-                    <th className="py-3 px-4">Pola & Alasan</th>
-                    <th className="py-3 px-4 text-center">Aksi</th>
+                    <th className="py-2.5 px-4">Problem Dominan</th>
+                    <th className="py-2.5 px-4">Pola & Alasan</th>
+                    <th className="py-2.5 px-4 text-center">Aksi</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-slate-100 font-medium text-slate-700">
+                <tbody className="divide-y divide-[#E5EAF2] text-slate-700">
                   {filteredRecommendations.length === 0 ? (
                     <tr>
-                      <td colSpan={8} className="py-12 text-center text-slate-400">
+                      <td colSpan={8} className="py-10 text-center text-slate-400">
                         Tidak ada mesin yang memerlukan follow up sesuai filter yang dipilih.
                       </td>
                     </tr>
@@ -1114,49 +1107,48 @@ export default function FollowUpPage() {
                       );
 
                       return (
-                        <tr key={rec.wsid} className="hover:bg-slate-50 transition-colors">
-                          <td className="py-3 px-4">
+                        <tr key={rec.wsid} className="hover:bg-slate-50/70 transition-colors">
+                          <td className="py-2.5 px-4">
                             {rec.priority === 'CRITICAL' ? (
-                              <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-bold bg-red-100 text-red-700">
-                                <span className="w-1.5 h-1.5 rounded-full bg-red-600 animate-ping"></span>
+                              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-semibold bg-rose-50 text-rose-700 border border-rose-200">
                                 CRITICAL
                               </span>
                             ) : (
-                              <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-bold bg-amber-100 text-amber-700">
+                              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-semibold bg-amber-50 text-amber-700 border border-amber-200">
                                 WARNING
                               </span>
                             )}
                           </td>
-                          <td className="py-3 px-4 font-bold text-slate-900">
+                          <td className="py-2.5 px-4 font-semibold text-slate-900">
                             <div>{rec.wsid}</div>
-                            <span className="text-[10px] font-medium text-slate-500 uppercase">{rec.jenisMesin}</span>
+                            <span className="text-[10px] font-normal text-slate-500 uppercase">{rec.jenisMesin}</span>
                           </td>
-                          <td className="py-3 px-4">
-                            <div className="font-semibold text-slate-800 max-w-[220px] truncate">{rec.lokasi}</div>
+                          <td className="py-2.5 px-4">
+                            <div className="font-medium text-slate-800 max-w-[220px] truncate">{rec.lokasi}</div>
                             <div className="text-[11px] text-slate-500 flex items-center gap-1 flex-wrap">
-                              <span className="font-medium text-slate-700">{getServicePointName(rec.sektor)}</span>
-                              <span className="text-slate-400">•</span>
+                              <span className="font-normal text-slate-700">{getServicePointName(rec.sektor)}</span>
+                              <span className="text-slate-300">•</span>
                               <span className="text-slate-500">{rec.sektor}</span>
                             </div>
                           </td>
-                          <td className="py-3 px-4 font-semibold text-slate-700">
+                          <td className="py-2.5 px-4 font-medium text-slate-700">
                             {rec.vendor}
                           </td>
-                          <td className="py-3 px-4 text-center">
-                            <span className={`inline-block px-2.5 py-1 rounded-lg font-bold text-xs ${
-                              rec.priority === 'CRITICAL' ? 'bg-red-50 text-red-600 border border-red-200' : 'bg-amber-50 text-amber-600 border border-amber-200'
+                          <td className="py-2.5 px-4 text-center">
+                            <span className={`inline-block px-2 py-0.5 rounded font-semibold text-xs ${
+                              rec.priority === 'CRITICAL' ? 'bg-rose-50 text-rose-600 border border-rose-200' : 'bg-amber-50 text-amber-600 border border-amber-200'
                             }`}>
                               {rec.latestUptime.toFixed(2)}%
                             </span>
-                            <div className="text-[10px] text-slate-400 mt-0.5 font-normal">
+                            <div className="text-[10px] text-slate-400 mt-0.5">
                               {selectedPeriode === 'ALL' ? 'Rata-rata' : formatBulanTahun(selectedPeriode)}
                             </div>
                           </td>
-                          <td className="py-3 px-4">
-                            <div className="font-semibold text-slate-800">{rec.dominantProblem}</div>
+                          <td className="py-2.5 px-4">
+                            <div className="font-medium text-slate-800">{rec.dominantProblem}</div>
                           </td>
-                          <td className="py-3 px-4">
-                            <div className={`text-[11px] font-semibold ${rec.isChronic ? 'text-purple-700' : 'text-slate-800'}`}>
+                          <td className="py-2.5 px-4">
+                            <div className={`text-[11px] font-medium ${rec.isChronic ? 'text-purple-700' : 'text-slate-800'}`}>
                               {rec.priorityReason}
                             </div>
                             {rec.reasons && rec.reasons.length > 1 && (
@@ -1170,18 +1162,18 @@ export default function FollowUpPage() {
                               </div>
                             )}
                           </td>
-                          <td className="py-3 px-4 text-center">
+                          <td className="py-2.5 px-4 text-center">
                             {hasActiveTicket ? (
-                              <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-blue-600 bg-blue-50 px-2.5 py-1 rounded-lg border border-blue-200">
+                              <span className="inline-flex items-center gap-1 text-[11px] font-medium text-blue-700 bg-blue-50 px-2.5 py-1 rounded-lg border border-blue-200">
                                 <Clock size={12} />
                                 In Progress
                               </span>
                             ) : (
                               <button
                                 onClick={() => handleCreateFromRecommendation(rec)}
-                                className="inline-flex items-center gap-1 px-3 py-1.5 bg-slate-900 hover:bg-slate-800 text-white rounded-lg text-xs font-semibold shadow-xs transition-all cursor-pointer"
+                                className="inline-flex items-center gap-1 px-3 py-1 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-xs font-medium shadow-2xs transition-colors cursor-pointer"
                               >
-                                <Plus size={14} />
+                                <Plus size={13} />
                                 <span>Tindak Lanjuti</span>
                               </button>
                             )}
@@ -1201,17 +1193,16 @@ export default function FollowUpPage() {
       {activeTab === 'ACTIVE_TICKETS' && (
         <div className="space-y-4">
           {/* Status Filter */}
-          <div className="flex flex-wrap items-center justify-between gap-3 p-4 bg-white border border-slate-200 rounded-2xl shadow-xs">
+          <div className="flex flex-wrap items-center justify-between gap-3 p-3.5 bg-white border border-[#E5EAF2] rounded-lg shadow-2xs">
             <div className="flex items-center gap-2">
               <span className="text-xs text-slate-500 font-medium">Status Tiket:</span>
-              {/* Status Filter */}
               <div className="flex flex-wrap rounded-lg bg-slate-100 p-0.5 text-xs font-medium">
                 {(['ALL', 'OPEN', 'IN_PROGRESS', 'PANTAU', 'CLOSED'] as const).map(st => (
                   <button
                     key={st}
                     onClick={() => setStatusFilter(st)}
-                    className={`px-3 py-1 rounded-md transition-all cursor-pointer ${
-                      statusFilter === st ? 'bg-white shadow-xs text-slate-900 font-bold' : 'text-slate-600 hover:text-slate-900'
+                    className={`px-2.5 py-1 rounded transition-all cursor-pointer text-xs ${
+                      statusFilter === st ? 'bg-white shadow-2xs text-slate-900 font-semibold' : 'text-slate-600 hover:text-slate-900'
                     }`}
                   >
                     {st === 'ALL' ? 'Semua' : st}
@@ -1241,33 +1232,33 @@ export default function FollowUpPage() {
                 setModalError(null);
                 setIsModalOpen(true);
               }}
-              className="inline-flex items-center gap-1.5 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold shadow-sm transition-all cursor-pointer"
+              className="inline-flex items-center gap-1.5 px-3.5 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-xs font-medium shadow-2xs transition-colors cursor-pointer"
             >
-              <Plus size={16} />
+              <Plus size={14} />
               <span>+ Buat Tiket Baru</span>
             </button>
           </div>
 
           {/* Table */}
-          <div className="bg-white border border-slate-200 rounded-2xl shadow-xs overflow-hidden">
+          <div className="bg-white border border-[#E5EAF2] rounded-lg shadow-2xs overflow-hidden">
             <div className="overflow-x-auto">
               <table className="w-full text-left text-xs border-collapse">
                 <thead>
-                  <tr className="bg-slate-900 text-white font-semibold uppercase text-[11px] tracking-wider">
-                    <th className="py-3 px-4">ID Tiket</th>
-                    <th className="py-3 px-4">WSID & Lokasi</th>
-                    <th className="py-3 px-4">Baseline Problem</th>
-                    <th className="py-3 px-4">Akar Masalah & Tindakan</th>
-                    <th className="py-3 px-4">PIC / Vendor</th>
-                    <th className="py-3 px-4">Jadwal Selesai</th>
-                    <th className="py-3 px-4 text-center">Status</th>
-                    <th className="py-3 px-4 text-center">Aksi</th>
+                  <tr className="bg-[#F8FAFC] text-slate-600 font-semibold uppercase text-[11px] tracking-wider border-b border-[#E5EAF2]">
+                    <th className="py-2.5 px-4">ID Tiket</th>
+                    <th className="py-2.5 px-4">WSID & Lokasi</th>
+                    <th className="py-2.5 px-4">Baseline Problem</th>
+                    <th className="py-2.5 px-4">Akar Masalah & Tindakan</th>
+                    <th className="py-2.5 px-4">PIC / Vendor</th>
+                    <th className="py-2.5 px-4">Jadwal Selesai</th>
+                    <th className="py-2.5 px-4 text-center">Status</th>
+                    <th className="py-2.5 px-4 text-center">Aksi</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-slate-100 font-medium text-slate-700">
+                <tbody className="divide-y divide-[#E5EAF2] text-slate-700">
                   {filteredTickets.length === 0 ? (
                     <tr>
-                      <td colSpan={8} className="py-12 text-center text-slate-400">
+                      <td colSpan={8} className="py-10 text-center text-slate-400">
                         Belum ada tiket follow up yang tercatat. Klik tombol <strong>"+ Buat Tiket Baru"</strong> atau pilih dari tab <strong>Rekomendasi</strong>.
                       </td>
                     </tr>
@@ -1275,28 +1266,28 @@ export default function FollowUpPage() {
                     filteredTickets.map(ticket => {
                       const isPantau = ticket.status === 'PANTAU' || (ticket.status as string) === 'RESOLVED';
                       const statusColor = 
-                        ticket.status === 'OPEN' ? 'bg-amber-100 text-amber-700 border-amber-300' :
-                        ticket.status === 'IN_PROGRESS' ? 'bg-blue-100 text-blue-700 border-blue-300' :
-                        isPantau ? 'bg-cyan-100 text-cyan-800 border-cyan-300' :
-                        'bg-emerald-100 text-emerald-700 border-emerald-300';
+                        ticket.status === 'OPEN' ? 'bg-amber-50 text-amber-700 border-amber-200' :
+                        ticket.status === 'IN_PROGRESS' ? 'bg-blue-50 text-blue-700 border-blue-200' :
+                        isPantau ? 'bg-cyan-50 text-cyan-800 border-cyan-200' :
+                        'bg-emerald-50 text-emerald-700 border-emerald-200';
 
                       return (
-                        <tr key={ticket.id} className="hover:bg-slate-50 transition-colors">
-                          <td className="py-3 px-4 font-mono font-bold text-slate-900">
+                        <tr key={ticket.id} className="hover:bg-slate-50/70 transition-colors">
+                          <td className="py-2.5 px-4 font-mono font-medium text-slate-900">
                             {ticket.id}
                           </td>
-                          <td className="py-3 px-4">
-                            <div className="font-bold text-slate-900">{ticket.wsid}</div>
+                          <td className="py-2.5 px-4">
+                            <div className="font-semibold text-slate-900">{ticket.wsid}</div>
                             <div className="text-[11px] text-slate-500 max-w-[200px] truncate">{ticket.lokasi}</div>
                           </td>
-                          <td className="py-3 px-4">
-                            <div className="font-semibold text-slate-800">{ticket.kategoriProblem}</div>
+                          <td className="py-2.5 px-4">
+                            <div className="font-medium text-slate-800">{ticket.kategoriProblem}</div>
                             <div className="text-[11px] text-slate-500">
                               Periode {ticket.periodeProblem} (Uptime {ticket.uptimeBaseline}%)
                             </div>
                           </td>
-                          <td className="py-3 px-4">
-                            <div className="font-semibold text-slate-800 max-w-[250px] truncate">{ticket.akarMasalah}</div>
+                          <td className="py-2.5 px-4">
+                            <div className="font-medium text-slate-800 max-w-[250px] truncate">{ticket.akarMasalah}</div>
                             {ticket.detailAkarMasalah && (
                               <div className="text-[11px] text-slate-500 max-w-[250px] truncate italic">
                                 {ticket.detailAkarMasalah}
@@ -1307,7 +1298,7 @@ export default function FollowUpPage() {
                               <button
                                 type="button"
                                 onClick={() => setSelectedHistoryTicket(ticket)}
-                                className="inline-flex items-center gap-1 text-[10px] text-blue-700 bg-blue-50 hover:bg-blue-100 border border-blue-200 px-2 py-0.5 rounded-full font-bold transition-all cursor-pointer"
+                                className="inline-flex items-center gap-1 text-[10px] text-blue-700 bg-blue-50 hover:bg-blue-100 border border-blue-200 px-2 py-0.5 rounded font-medium transition-colors cursor-pointer"
                                 title="Lihat seluruh riwayat penanganan mesin ini"
                               >
                                 <History size={11} className="text-blue-600" />
@@ -1315,11 +1306,11 @@ export default function FollowUpPage() {
                               </button>
                             </div>
                           </td>
-                          <td className="py-3 px-4 font-semibold text-slate-700">
+                          <td className="py-2.5 px-4 font-medium text-slate-700">
                             {ticket.pic}
                           </td>
-                          <td className="py-3 px-4">
-                            <div className="inline-flex items-center gap-1 text-[11px] font-bold text-slate-900">
+                          <td className="py-2.5 px-4">
+                            <div className="inline-flex items-center gap-1 text-[11px] font-medium text-slate-900">
                               <Calendar size={12} className="text-blue-600" />
                               <span>Target: {ticket.targetSelesai || '-'}</span>
                             </div>
@@ -1327,33 +1318,33 @@ export default function FollowUpPage() {
                               Update: {ticket.tanggalUpdate || (ticket.updatedAt ? ticket.updatedAt.slice(0, 10) : '-')}
                             </div>
                           </td>
-                          <td className="py-3 px-4 text-center">
-                            <span className={`inline-block px-2.5 py-1 rounded-full text-[10px] font-extrabold border ${statusColor}`}>
+                          <td className="py-2.5 px-4 text-center">
+                            <span className={`inline-block px-2 py-0.5 rounded text-[10px] font-semibold border ${statusColor}`}>
                               {isPantau ? 'PANTAU' : ticket.status}
                             </span>
                           </td>
-                          <td className="py-3 px-4 text-center">
+                          <td className="py-2.5 px-4 text-center">
                             <div className="flex items-center justify-center gap-1.5">
                               <button
                                 onClick={() => setSelectedHistoryTicket(ticket)}
-                                className="p-1.5 text-slate-500 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors cursor-pointer"
+                                className="p-1.5 text-slate-500 hover:text-blue-600 hover:bg-blue-50 rounded transition-colors cursor-pointer"
                                 title="Lihat Riwayat Penanganan WSID ini"
                               >
-                                <History size={15} />
+                                <History size={14} />
                               </button>
                               <button
                                 onClick={() => handleEditTicket(ticket)}
-                                className="p-1.5 text-slate-600 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors cursor-pointer"
+                                className="p-1.5 text-slate-600 hover:text-blue-600 hover:bg-blue-50 rounded transition-colors cursor-pointer"
                                 title="Update / Tambah Tindakan"
                               >
-                                <Edit3 size={15} />
+                                <Edit3 size={14} />
                               </button>
                               <button
                                 onClick={() => handleDeleteTicket(ticket.id)}
-                                className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors cursor-pointer"
+                                className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded transition-colors cursor-pointer"
                                 title="Hapus Tiket"
                               >
-                                <Trash2 size={15} />
+                                <Trash2 size={14} />
                               </button>
                             </div>
                           </td>
@@ -1371,35 +1362,35 @@ export default function FollowUpPage() {
       {/* TAB 3: EVALUASI PERKEMBANGAN (BEFORE VS AFTER) */}
       {activeTab === 'EVALUATION' && (
         <div className="space-y-4">
-          <div className="p-4 bg-blue-50/80 border border-blue-200 rounded-2xl text-xs text-blue-800">
-            <div className="flex items-center gap-2 font-bold mb-1">
-              <TrendingUp size={16} className="text-blue-600" />
+          <div className="p-3.5 bg-blue-50/70 border border-blue-200 rounded-lg text-xs text-blue-900">
+            <div className="flex items-center gap-1.5 font-semibold mb-1">
+              <TrendingUp size={15} className="text-blue-600" />
               <span>Evaluasi Otomatis Performa Sebelum vs Sesudah Tindakan</span>
             </div>
-            <p>
+            <p className="text-slate-600">
               Sistem secara otomatis membandingkan Uptime mesin saat tiket didaftarkan (Baseline) terhadap data Uptime bulan-bulan berikutnya yang sudah di-upload ke database.
             </p>
           </div>
 
-          <div className="bg-white border border-slate-200 rounded-2xl shadow-xs overflow-hidden">
+          <div className="bg-white border border-[#E5EAF2] rounded-lg shadow-2xs overflow-hidden">
             <div className="overflow-x-auto">
               <table className="w-full text-left text-xs border-collapse">
                 <thead>
-                  <tr className="bg-slate-900 text-white font-semibold uppercase text-[11px] tracking-wider">
-                    <th className="py-3 px-4">ID & WSID</th>
-                    <th className="py-3 px-4">Lokasi & PIC</th>
-                    <th className="py-3 px-4 text-center">Bulan Baseline (Before)</th>
-                    <th className="py-3 px-4 text-center">Bulan Terkini (After)</th>
-                    <th className="py-3 px-4 text-center">Selisih (+/- Δ%)</th>
-                    <th className="py-3 px-4 text-center">Hasil Evaluasi</th>
-                    <th className="py-3 px-4">Rekomendasi Lanjutan</th>
-                    <th className="py-3 px-4 text-center">Aksi</th>
+                  <tr className="bg-[#F8FAFC] text-slate-600 font-semibold uppercase text-[11px] tracking-wider border-b border-[#E5EAF2]">
+                    <th className="py-2.5 px-4">ID & WSID</th>
+                    <th className="py-2.5 px-4">Lokasi & PIC</th>
+                    <th className="py-2.5 px-4 text-center">Bulan Baseline (Before)</th>
+                    <th className="py-2.5 px-4 text-center">Bulan Terkini (After)</th>
+                    <th className="py-2.5 px-4 text-center">Selisih (+/- Δ%)</th>
+                    <th className="py-2.5 px-4 text-center">Hasil Evaluasi</th>
+                    <th className="py-2.5 px-4">Rekomendasi Lanjutan</th>
+                    <th className="py-2.5 px-4 text-center">Aksi</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-slate-100 font-medium text-slate-700">
+                <tbody className="divide-y divide-[#E5EAF2] text-slate-700">
                   {evaluations.length === 0 ? (
                     <tr>
-                      <td colSpan={8} className="py-12 text-center text-slate-400">
+                      <td colSpan={8} className="py-10 text-center text-slate-400">
                         Belum ada tiket follow up yang tercatat untuk dievaluasi.
                       </td>
                     </tr>
@@ -1409,65 +1400,65 @@ export default function FollowUpPage() {
                       const isDown = evaluation.deltaUptime < 0;
 
                       return (
-                        <tr key={ticket.id} className="hover:bg-slate-50 transition-colors">
-                          <td className="py-3 px-4">
-                            <div className="font-bold text-slate-900">{ticket.wsid}</div>
+                        <tr key={ticket.id} className="hover:bg-slate-50/70 transition-colors">
+                          <td className="py-2.5 px-4">
+                            <div className="font-semibold text-slate-900">{ticket.wsid}</div>
                             <span className="font-mono text-[10px] text-slate-400">{ticket.id}</span>
                           </td>
-                          <td className="py-3 px-4">
-                            <div className="font-semibold text-slate-800 max-w-[200px] truncate">{ticket.lokasi}</div>
+                          <td className="py-2.5 px-4">
+                            <div className="font-medium text-slate-800 max-w-[200px] truncate">{ticket.lokasi}</div>
                             <div className="text-[11px] text-slate-500">
                               PIC: {ticket.pic && ticket.pic !== '-' ? ticket.pic : 'Tim Support Internal'}
                               {ticket.petugas && <span className="text-[10px] text-slate-400"> ({ticket.petugas})</span>}
                             </div>
                           </td>
-                          <td className="py-3 px-4 text-center">
-                            <div className="font-bold text-slate-800">{evaluation.baselineUptime.toFixed(2)}%</div>
+                          <td className="py-2.5 px-4 text-center">
+                            <div className="font-semibold text-slate-800">{evaluation.baselineUptime.toFixed(2)}%</div>
                             <div className="text-[10px] text-slate-400">{evaluation.baselinePeriode}</div>
                           </td>
-                          <td className="py-3 px-4 text-center">
+                          <td className="py-2.5 px-4 text-center">
                             {evaluation.evaluationStatus === 'PENDING_DATA' ? (
                               <span className="text-slate-400 italic text-[11px]">Menunggu Bulan Baru</span>
                             ) : (
                               <div>
-                                <div className="font-bold text-slate-900">{evaluation.latestUptime.toFixed(2)}%</div>
+                                <div className="font-semibold text-slate-900">{evaluation.latestUptime.toFixed(2)}%</div>
                                 <div className="text-[10px] text-slate-400">{evaluation.latestPeriode}</div>
                               </div>
                             )}
                           </td>
-                          <td className="py-3 px-4 text-center">
+                          <td className="py-2.5 px-4 text-center">
                             {evaluation.evaluationStatus === 'PENDING_DATA' ? (
                               <span className="text-slate-400">-</span>
                             ) : (
-                              <span className={`inline-flex items-center gap-1 font-extrabold text-xs px-2 py-0.5 rounded ${
-                                isUp ? 'text-emerald-700 bg-emerald-50' : isDown ? 'text-red-700 bg-red-50' : 'text-slate-600 bg-slate-100'
+                              <span className={`inline-flex items-center gap-1 font-semibold text-xs px-2 py-0.5 rounded ${
+                                isUp ? 'text-emerald-700 bg-emerald-50' : isDown ? 'text-rose-700 bg-rose-50' : 'text-slate-600 bg-slate-100'
                               }`}>
-                                {isUp && <TrendingUp size={13} />}
-                                {isDown && <TrendingDown size={13} />}
+                                {isUp && <TrendingUp size={12} />}
+                                {isDown && <TrendingDown size={12} />}
                                 {evaluation.deltaUptime > 0 ? `+${evaluation.deltaUptime.toFixed(2)}%` : `${evaluation.deltaUptime.toFixed(2)}%`}
                               </span>
                             )}
                           </td>
-                          <td className="py-3 px-4 text-center">
-                            <span className={`inline-block px-2.5 py-1 rounded-full text-[10px] font-extrabold ${
-                              evaluation.statusColor === 'green' ? 'bg-emerald-100 text-emerald-800 border border-emerald-300' :
-                              evaluation.statusColor === 'yellow' ? 'bg-amber-100 text-amber-800 border border-amber-300' :
-                              evaluation.statusColor === 'red' ? 'bg-red-100 text-red-800 border border-red-300' :
-                              evaluation.statusColor === 'blue' ? 'bg-blue-100 text-blue-800 border border-blue-300' :
-                              'bg-slate-100 text-slate-600 border border-slate-300'
+                          <td className="py-2.5 px-4 text-center">
+                            <span className={`inline-block px-2 py-0.5 rounded text-[10px] font-semibold ${
+                              evaluation.statusColor === 'green' ? 'bg-emerald-50 text-emerald-800 border border-emerald-200' :
+                              evaluation.statusColor === 'yellow' ? 'bg-amber-50 text-amber-800 border border-amber-200' :
+                              evaluation.statusColor === 'red' ? 'bg-rose-50 text-rose-800 border border-rose-200' :
+                              evaluation.statusColor === 'blue' ? 'bg-blue-50 text-blue-800 border border-blue-200' :
+                              'bg-slate-100 text-slate-600 border border-slate-200'
                             }`}>
                               {evaluation.statusLabel}
                             </span>
                           </td>
-                          <td className="py-3 px-4">
+                          <td className="py-2.5 px-4">
                             <p className="text-[11px] text-slate-600 max-w-[260px] leading-relaxed">
                               {evaluation.recommendationNote}
                             </p>
                           </td>
-                          <td className="py-3 px-4 text-center">
+                          <td className="py-2.5 px-4 text-center">
                             <button
                               onClick={() => handleEditTicket(ticket)}
-                              className="px-2.5 py-1 bg-white hover:bg-slate-100 text-slate-700 border border-slate-200 rounded-lg text-xs font-semibold shadow-2xs transition-all cursor-pointer"
+                              className="px-2.5 py-1 bg-white hover:bg-slate-50 text-slate-700 border border-[#E5EAF2] rounded-lg text-xs font-medium shadow-2xs transition-colors cursor-pointer"
                             >
                               Update
                             </button>

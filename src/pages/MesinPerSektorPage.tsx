@@ -156,24 +156,24 @@ export default function MesinPerSektorPage() {
   };
 
   return (
-    <div className="space-y-6 animate-fade-in">
-      <div className="flex flex-col md:flex-row md:items-end justify-between gap-4">
+    <div className="space-y-5 animate-fade-in pb-12">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div>
-          <h2 className="text-2xl font-bold text-slate-800">
+          <h2 className="text-xl font-bold text-slate-900">
             Distribusi Mesin per Sektor
           </h2>
-          <p className="text-slate-500 text-sm mt-1">
+          <p className="text-slate-500 text-xs mt-0.5">
             Downtime yang ditampilkan pada Dashboard ini, berdasarkan perhitungan jumlah mesin per sektor.
           </p>
         </div>
         
-        <div className="flex items-center gap-3">
-          <div className="flex items-center gap-2 bg-white px-3 py-1.5 rounded-xl border border-slate-200 shadow-sm">
-            <MapPin size={18} className="text-slate-400" />
+        <div className="flex items-center gap-2.5 self-start sm:self-auto flex-wrap">
+          <div className="flex items-center gap-1.5 bg-white px-2.5 py-1.5 rounded-md border border-[#E5EAF2] text-xs shadow-2xs">
+            <MapPin size={13} className="text-slate-400" />
             <select
               value={selectedSPFilter}
               onChange={(e) => setSelectedSPFilter(e.target.value)}
-              className="bg-transparent focus:outline-none text-sm text-slate-700 cursor-pointer"
+              className="bg-transparent focus:outline-none text-xs text-slate-700 font-medium cursor-pointer"
             >
               <option value="ALL">Semua Service Point</option>
               {uniqueServicePoints.map((sp) => (
@@ -184,45 +184,46 @@ export default function MesinPerSektorPage() {
 
           <button 
             onClick={handleExport}
-            className="flex items-center gap-2 px-4 py-2 bg-emerald-50 text-emerald-600 hover:bg-emerald-100 font-semibold rounded-xl transition-colors text-sm border border-emerald-200 shadow-sm"
+            className="flex items-center gap-1.5 px-3.5 py-1.5 bg-blue-600 hover:bg-blue-700 active:bg-blue-800 text-white font-medium rounded-lg transition-colors text-xs shadow-xs cursor-pointer"
           >
-            <Download size={16} />
+            <Download size={14} />
             <span>Export Excel</span>
           </button>
         </div>
       </div>
-      <div className="glass-card rounded-2xl overflow-hidden shadow-sm border border-slate-200">
+
+      <div className="bg-white rounded-lg overflow-hidden shadow-2xs border border-[#E5EAF2]">
         <div className="overflow-x-auto">
-          <table className="w-full text-sm text-left">
-            <thead className="bg-slate-50/80 text-slate-600 font-semibold border-b border-slate-200 select-none">
+          <table className="w-full text-xs text-left">
+            <thead className="bg-[#F8FAFC] text-slate-600 font-semibold border-b border-[#E5EAF2] select-none">
               <tr>
-                <th className="px-6 py-4 cursor-pointer hover:bg-slate-100" onClick={() => handleSort('sektor')}>
+                <th className="px-4 py-2.5 cursor-pointer hover:bg-slate-100" onClick={() => handleSort('sektor')}>
                   Sektor {renderSortIcon('sektor')}
                 </th>
-                <th className="px-6 py-4 cursor-pointer hover:bg-slate-100" onClick={() => handleSort('servicePoint')}>
+                <th className="px-4 py-2.5 cursor-pointer hover:bg-slate-100" onClick={() => handleSort('servicePoint')}>
                   Service Point {renderSortIcon('servicePoint')}
                 </th>
-                <th className="px-6 py-4 text-center cursor-pointer group" onClick={() => handleSort('bcaAktif')}>
+                <th className="px-4 py-2.5 text-center cursor-pointer group" onClick={() => handleSort('bcaAktif')}>
                   Jumlah Mesin Aktif BCA {renderSortIcon('bcaAktif')}
                 </th>
-                <th className="px-6 py-4 text-center cursor-pointer group" onClick={() => handleSort('nonBcaAktif')}>
+                <th className="px-4 py-2.5 text-center cursor-pointer group" onClick={() => handleSort('nonBcaAktif')}>
                   Jumlah Mesin Aktif Non BCA {renderSortIcon('nonBcaAktif')}
                 </th>
-                <th className="px-6 py-4 text-center cursor-pointer group" onClick={() => handleSort('totalAktif')}>
+                <th className="px-4 py-2.5 text-center cursor-pointer group" onClick={() => handleSort('totalAktif')}>
                   Total Mesin Aktif {renderSortIcon('totalAktif')}
                 </th>
-                <th className="px-6 py-4 text-center cursor-pointer group" onClick={() => handleSort('rataRataDowntime')}>
+                <th className="px-4 py-2.5 text-center cursor-pointer group" onClick={() => handleSort('rataRataDowntime')}>
                   Rata-rata Downtime Total (%) {renderSortIcon('rataRataDowntime')}
                 </th>
-                <th className="px-6 py-4 text-center cursor-pointer group" onClick={() => handleSort('rataRataUptime')}>
+                <th className="px-4 py-2.5 text-center cursor-pointer group" onClick={() => handleSort('rataRataUptime')}>
                   Rata-rata Uptime (%) {renderSortIcon('rataRataUptime')}
                 </th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-slate-100">
+            <tbody className="divide-y divide-[#E5EAF2]">
               {dataSektor.length === 0 ? (
                 <tr>
-                  <td colSpan={8} className="px-6 py-12 text-center text-slate-500">
+                  <td colSpan={8} className="px-4 py-8 text-center text-slate-400">
                     Tidak ada data yang tersedia untuk filter saat ini.
                   </td>
                 </tr>
@@ -234,69 +235,67 @@ export default function MesinPerSektorPage() {
                     <React.Fragment key={row.sektor}>
                       <tr 
                         onClick={() => toggleExpand(row.sektor)}
-                        className={`cursor-pointer transition-colors ${isExpanded ? 'bg-indigo-50/30' : 'hover:bg-slate-50/50'}`}
+                        className={`cursor-pointer transition-colors ${isExpanded ? 'bg-blue-50/40' : 'hover:bg-slate-50/80'}`}
                       >
-                        <td className="px-6 py-4 font-semibold text-slate-800">
-                          <div className="flex items-center gap-2">
-                            {isExpanded ? <ChevronUp size={16} className="text-indigo-500" /> : <ChevronDown size={16} className="text-slate-400" />}
+                        <td className="px-4 py-2.5 font-semibold text-slate-800">
+                          <div className="flex items-center gap-1.5">
+                            {isExpanded ? <ChevronUp size={14} className="text-blue-600" /> : <ChevronDown size={14} className="text-slate-400" />}
                             {row.sektor}
                           </div>
                         </td>
-                        <td className="px-6 py-4 text-slate-600 font-medium">
+                        <td className="px-4 py-2.5 text-slate-600 font-medium">
                           {row.servicePoint}
                         </td>
-                        <td className="px-6 py-4 text-center font-medium text-blue-600">{row.bcaAktif.toLocaleString()}</td>
-                        <td className="px-6 py-4 text-center font-medium text-orange-500">{row.nonBcaAktif.toLocaleString()}</td>
-                        <td className="px-6 py-4 text-center font-bold text-slate-700">{row.totalAktif.toLocaleString()}</td>
-                        <td className="px-6 py-4 text-center font-semibold text-rose-600">{row.rataRataDowntime.toFixed(2)}%</td>
-                        <td className="px-6 py-4 text-center font-semibold text-emerald-600">{row.rataRataUptime.toFixed(2)}%</td>
+                        <td className="px-4 py-2.5 text-center font-medium text-blue-700">{row.bcaAktif.toLocaleString()}</td>
+                        <td className="px-4 py-2.5 text-center font-medium text-slate-600">{row.nonBcaAktif.toLocaleString()}</td>
+                        <td className="px-4 py-2.5 text-center font-bold text-slate-800">{row.totalAktif.toLocaleString()}</td>
+                        <td className="px-4 py-2.5 text-center font-semibold text-rose-600">{row.rataRataDowntime.toFixed(2)}%</td>
+                        <td className="px-4 py-2.5 text-center font-semibold text-emerald-600">{row.rataRataUptime.toFixed(2)}%</td>
                       </tr>
                       {isExpanded && (
                         <tr>
-                          <td colSpan={8} className="p-0 bg-slate-50 border-b-2 border-indigo-100">
-                            <div className="p-6">
-                              <div className="mb-4 inline-block bg-white border border-indigo-100 px-4 py-2 rounded-xl shadow-sm">
-                                <span className="text-slate-500 text-xs uppercase tracking-wider font-semibold">Kategori Problem Tertinggi</span>
-                                <div className="mt-1 flex items-baseline gap-2">
-                                  <span className="text-lg font-bold text-indigo-700">{row.highestProblem.categoryName}</span>
-                                  <span className="text-sm font-semibold text-rose-600">({row.highestProblem.value.toFixed(2)}%)</span>
-                                </div>
+                          <td colSpan={8} className="p-0 bg-slate-50/60 border-b border-[#E5EAF2]">
+                            <div className="p-4 space-y-3">
+                              <div className="inline-flex items-center gap-2 bg-white border border-[#E5EAF2] px-3 py-1.5 rounded-md shadow-2xs">
+                                <span className="text-slate-500 text-[11px] uppercase tracking-wider font-semibold">Problem Tertinggi:</span>
+                                <span className="text-xs font-bold text-slate-800">{row.highestProblem.categoryName}</span>
+                                <span className="text-xs font-bold text-rose-600">({row.highestProblem.value.toFixed(2)}%)</span>
                               </div>
 
-                              <div className={`grid grid-cols-1 ${selectedWsid ? 'lg:grid-cols-2' : ''} gap-6`}>
-                                <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
-                                  <div className="bg-blue-50/50 px-4 py-3 border-b border-slate-200 flex justify-between items-center">
-                                    <h4 className="font-bold text-blue-800">Daftar Mesin (BCA)</h4>
-                                    <span className="text-xs font-semibold bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full">{row.machinesBCA.length} Mesin</span>
+                              <div className={`grid grid-cols-1 ${selectedWsid ? 'lg:grid-cols-2' : ''} gap-4`}>
+                                <div className="bg-white rounded-lg shadow-2xs border border-[#E5EAF2] overflow-hidden">
+                                  <div className="bg-slate-50 px-3.5 py-2 border-b border-[#E5EAF2] flex justify-between items-center">
+                                    <h4 className="font-semibold text-slate-800 text-xs">Daftar Mesin (BCA)</h4>
+                                    <span className="text-[10px] font-semibold bg-blue-50 text-blue-700 border border-blue-200/60 px-2 py-0.2 rounded-full">{row.machinesBCA.length} Mesin</span>
                                   </div>
-                                  <div className="max-h-[300px] overflow-y-auto">
+                                  <div className="max-h-[260px] overflow-y-auto">
                                     <table className="w-full text-xs text-left">
-                                      <thead className="bg-slate-50 sticky top-0 border-b border-slate-200 text-slate-500">
+                                      <thead className="bg-[#F8FAFC] sticky top-0 border-b border-[#E5EAF2] text-slate-500 text-[11px]">
                                         <tr>
-                                          <th className="px-4 py-2">WSID</th>
-                                          <th className="px-4 py-2">Lokasi</th>
-                                          <th className="px-4 py-2">Vendor</th>
-                                          <th className="px-4 py-2 text-right">Nilai (%)</th>
+                                          <th className="px-3 py-1.5">WSID</th>
+                                          <th className="px-3 py-1.5">Lokasi</th>
+                                          <th className="px-3 py-1.5">Vendor</th>
+                                          <th className="px-3 py-1.5 text-right">Nilai (%)</th>
                                         </tr>
                                       </thead>
                                       <tbody className="divide-y divide-slate-100">
                                         {row.machinesBCA.length === 0 ? (
-                                          <tr><td colSpan={4} className="px-4 py-6 text-center text-slate-400">Tidak ada mesin BCA</td></tr>
+                                          <tr><td colSpan={4} className="px-3 py-4 text-center text-slate-400">Tidak ada mesin BCA</td></tr>
                                         ) : (
                                           row.machinesBCA.sort((a, b) => getValueForCategory((b as any).aggregatedData, row.highestProblem.categoryKey) - getValueForCategory((a as any).aggregatedData, row.highestProblem.categoryKey)).map(m => (
                                             <tr 
                                               key={m.wsid} 
-                                              className={`cursor-pointer transition-colors ${selectedWsid === m.wsid ? 'bg-blue-50/80 border-l-4 border-blue-500' : 'hover:bg-slate-50'}`}
+                                              className={`cursor-pointer transition-colors ${selectedWsid === m.wsid ? 'bg-blue-50/70 border-l-2 border-blue-600' : 'hover:bg-slate-50'}`}
                                               onClick={() => setSelectedWsid(m.wsid === selectedWsid ? null : m.wsid)}
                                             >
-                                              <td className="px-4 py-2 font-semibold text-slate-700">{m.wsid}</td>
-                                              <td className="px-4 py-2 text-slate-500 truncate max-w-sm" title={m.lokasi}>{m.lokasi}</td>
-                                              <td className="px-4 py-2 whitespace-nowrap">
-                                                <span className="px-2 py-0.5 bg-slate-100 text-slate-700 rounded text-[11px] font-semibold border border-slate-200">
+                                              <td className="px-3 py-1.5 font-semibold text-slate-800 font-mono">{m.wsid}</td>
+                                              <td className="px-3 py-1.5 text-slate-500 truncate max-w-sm" title={m.lokasi}>{m.lokasi}</td>
+                                              <td className="px-3 py-1.5 whitespace-nowrap">
+                                                <span className="px-1.5 py-0.2 bg-slate-100 text-slate-700 rounded text-[10px] font-medium border border-slate-200">
                                                   {m.vendor || '-'}
                                                 </span>
                                               </td>
-                                              <td className="px-4 py-2 text-right font-medium text-rose-600">
+                                              <td className="px-3 py-1.5 text-right font-medium text-rose-600">
                                                 {getValueForCategory((m as any).aggregatedData, row.highestProblem.categoryKey).toFixed(2)}%
                                               </td>
                                             </tr>
@@ -314,42 +313,42 @@ export default function MesinPerSektorPage() {
                                   const machineFrxDur = getFrxDurForCategory(machineAgg, machineHighest.categoryKey);
                                   
                                   return (
-                                    <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden flex flex-col">
-                                      <div className="bg-indigo-50/50 px-4 py-3 border-b border-slate-200 flex justify-between items-center">
+                                    <div className="bg-white rounded-lg shadow-2xs border border-[#E5EAF2] overflow-hidden flex flex-col">
+                                      <div className="bg-slate-50 px-3.5 py-2 border-b border-[#E5EAF2] flex justify-between items-center">
                                         <div className="flex items-center gap-2">
-                                          <h4 className="font-bold text-indigo-800">Detail Mesin: {selectedWsid}</h4>
+                                          <h4 className="font-semibold text-slate-800 text-xs">Detail Mesin: {selectedWsid}</h4>
                                           {selectedMachine.vendor && selectedMachine.vendor !== '-' && (
-                                            <span className="px-2 py-0.5 bg-indigo-100 text-indigo-700 rounded text-xs font-semibold">
+                                            <span className="px-1.5 py-0.2 bg-slate-200 text-slate-700 rounded text-[10px] font-medium">
                                               Vendor: {selectedMachine.vendor}
                                             </span>
                                           )}
                                         </div>
                                       </div>
-                                      <div className="p-6 flex-1 flex flex-col justify-center items-center text-center">
-                                        <h5 className="text-slate-500 text-sm font-semibold uppercase tracking-wider mb-2">Problem Tertinggi</h5>
-                                        <div className="text-2xl font-bold text-indigo-700 mb-6">{machineHighest.categoryName}</div>
+                                      <div className="p-4 flex-1 flex flex-col justify-center items-center text-center">
+                                        <h5 className="text-slate-500 text-xs font-semibold uppercase tracking-wider mb-1">Problem Tertinggi</h5>
+                                        <div className="text-xl font-bold text-slate-900 mb-4">{machineHighest.categoryName}</div>
                                         
-                                        <div className="grid grid-cols-3 gap-4 w-full max-w-sm">
-                                          <div className="bg-slate-50 rounded-lg p-3 border border-slate-100">
-                                            <div className="text-xs text-slate-500 font-semibold mb-1">FREQ</div>
-                                            <div className="text-lg font-bold text-slate-700">{machineFrxDur.frx}</div>
+                                        <div className="grid grid-cols-3 gap-2.5 w-full max-w-xs">
+                                          <div className="bg-slate-50 rounded-md p-2.5 border border-[#E5EAF2]">
+                                            <div className="text-[10px] text-slate-500 font-medium mb-0.5">FREQ</div>
+                                            <div className="text-base font-bold text-slate-800 font-mono">{machineFrxDur.frx}</div>
                                           </div>
-                                          <div className="bg-slate-50 rounded-lg p-3 border border-slate-100">
-                                            <div className="text-xs text-slate-500 font-semibold mb-1">DUR</div>
-                                            <div className="text-lg font-bold text-slate-700">{machineFrxDur.dur}</div>
+                                          <div className="bg-slate-50 rounded-md p-2.5 border border-[#E5EAF2]">
+                                            <div className="text-[10px] text-slate-500 font-medium mb-0.5">DUR</div>
+                                            <div className="text-base font-bold text-slate-800 font-mono">{machineFrxDur.dur}</div>
                                           </div>
-                                          <div className="bg-rose-50 rounded-lg p-3 border border-rose-100">
-                                            <div className="text-xs text-rose-500 font-semibold mb-1">%</div>
-                                            <div className="text-lg font-bold text-rose-600">{machineHighest.value.toFixed(2)}%</div>
+                                          <div className="bg-rose-50 rounded-md p-2.5 border border-rose-200">
+                                            <div className="text-[10px] text-rose-600 font-medium mb-0.5">%</div>
+                                            <div className="text-base font-bold text-rose-600 font-mono">{machineHighest.value.toFixed(2)}%</div>
                                           </div>
                                         </div>
                                         
                                         <button 
                                           onClick={() => navigate('/all-wsid', { state: { selectedWsid } })}
-                                          className="mt-8 w-full max-w-sm py-2.5 px-4 bg-indigo-600 hover:bg-indigo-700 text-white font-semibold rounded-xl transition-colors shadow-sm flex items-center justify-center gap-2"
+                                          className="mt-5 w-full max-w-xs py-2 px-3 bg-blue-600 hover:bg-blue-700 active:bg-blue-800 text-white font-medium rounded-lg text-xs transition-colors shadow-xs flex items-center justify-center gap-1.5 cursor-pointer"
                                         >
-                                          <Activity size={18} />
-                                          Detail Performance
+                                          <Activity size={14} />
+                                          <span>Detail Performance</span>
                                         </button>
                                       </div>
                                     </div>
