@@ -51,9 +51,13 @@ export function isBackendConfigured(): boolean {
 }
 
 /**
- * Melakukan HTTP GET request ke Backend API
+ * Melakukan HTTP GET request ke Backend API dengan proteksi timeout cerdas
  */
-export async function apiGet<T = any>(action: string, params: Record<string, any> = {}): Promise<T> {
+export async function apiGet<T = any>(
+  action: string,
+  params: Record<string, any> = {},
+  timeoutMs: number = 35000
+): Promise<T> {
   const baseUrl = getBackendApiUrl();
   if (!baseUrl) {
     throw new Error('URL Backend Google Apps Script belum dikonfigurasi.');
@@ -69,19 +73,32 @@ export async function apiGet<T = any>(action: string, params: Record<string, any
   const sep = baseUrl.includes('?') ? '&' : '?';
   const fullUrl = `${baseUrl}${sep}${queryParts.join('&')}`;
 
-  const res = await fetch(fullUrl, {
-    method: 'GET',
-    redirect: 'follow',
-    headers: {
-      Accept: 'application/json'
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+
+  try {
+    const res = await fetch(fullUrl, {
+      method: 'GET',
+      redirect: 'follow',
+      headers: {
+        Accept: 'application/json'
+      },
+      signal: controller.signal
+    });
+
+    if (!res.ok) {
+      throw new Error(`HTTP error ${res.status}: ${res.statusText}`);
     }
-  });
 
-  if (!res.ok) {
-    throw new Error(`HTTP error ${res.status}: ${res.statusText}`);
+    return await res.json();
+  } catch (err: any) {
+    if (err.name === 'AbortError') {
+      throw new Error(`Permintaan ke database melebihi batas waktu (${Math.round(timeoutMs / 1000)} detik). Server Google Apps Script sedang sibuk.`);
+    }
+    throw err;
+  } finally {
+    clearTimeout(timer);
   }
-
-  return await res.json();
 }
 
 /**
@@ -89,7 +106,11 @@ export async function apiGet<T = any>(action: string, params: Record<string, any
  * Menggunakan Content-Type: text/plain;charset=utf-8 untuk menghindari
  * browser CORS preflight (OPTIONS) saat memanggil langsung URL Apps Script.
  */
-export async function apiPost<T = any>(action: string, body: Record<string, any> = {}): Promise<T> {
+export async function apiPost<T = any>(
+  action: string,
+  body: Record<string, any> = {},
+  timeoutMs: number = 60000
+): Promise<T> {
   const baseUrl = getBackendApiUrl();
   if (!baseUrl) {
     throw new Error('URL Backend Google Apps Script belum dikonfigurasi.');
@@ -104,6 +125,9 @@ export async function apiPost<T = any>(action: string, body: Record<string, any>
   const maxRetries = 2;
 
   for (let attempt = 0; attempt <= maxRetries; attempt++) {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), timeoutMs);
+
     try {
       const res = await fetch(baseUrl, {
         method: 'POST',
@@ -111,7 +135,8 @@ export async function apiPost<T = any>(action: string, body: Record<string, any>
         headers: {
           'Content-Type': 'text/plain;charset=utf-8'
         },
-        body: payload
+        body: payload,
+        signal: controller.signal
       });
 
       if (!res.ok) {
@@ -121,10 +146,15 @@ export async function apiPost<T = any>(action: string, body: Record<string, any>
       return await res.json();
     } catch (err: any) {
       lastErr = err;
+      if (err.name === 'AbortError') {
+        lastErr = new Error(`POST request "${action}" melebihi batas waktu (${Math.round(timeoutMs / 1000)} detik).`);
+      }
       console.warn(`apiPost attempt ${attempt + 1} failed for action "${action}":`, err);
-      if (attempt < maxRetries) {
+      if (attempt < maxRetries && err.name !== 'AbortError') {
         await new Promise((resolve) => setTimeout(resolve, 1000 * (attempt + 1)));
       }
+    } finally {
+      clearTimeout(timer);
     }
   }
 

@@ -3678,9 +3678,15 @@
       var sName = allSheets[s].getName();
       if (sName.indexOf('ACT_') === 0) {
         var actSheet = allSheets[s];
-        if (actSheet.getLastRow() > 1) {
-          var actData = actSheet.getDataRange().getValues();
-          for (var a = 1; a < actData.length; a++) {
+        var lastActRow = actSheet.getLastRow();
+        if (lastActRow > 1) {
+          var actCols = Math.min(actSheet.getLastColumn(), 8);
+          // Batasi pembacaan maksimal 2500 tindakan terbaru agar tidak memicu memory limit Google Sheets
+          var maxActs = 2500;
+          var numActRows = Math.min(lastActRow - 1, maxActs);
+          var actStartRow = Math.max(2, lastActRow - numActRows + 1);
+          var actData = actSheet.getRange(actStartRow, 1, numActRows, actCols).getValues();
+          for (var a = 0; a < actData.length; a++) {
             var aRow = actData[a];
             var aLogId = String(aRow[0] || '').trim();
             var aWaktu = formatCellDateStr(aRow[1]);
@@ -4099,9 +4105,13 @@
         if (matchM) sMonth = parseInt(matchM[2], 10);
         var lastRow = sh.getLastRow();
         if (lastRow > 1) {
-          var vals = sh.getDataRange().getValues();
+          var lastCol = Math.min(sh.getLastColumn(), 22);
+          var maxScan = 3000;
+          var numRowsToScan = Math.min(lastRow - 1, maxScan);
+          var scanStartRow = Math.max(2, lastRow - numRowsToScan + 1);
+          var vals = sh.getRange(scanStartRow, 1, numRowsToScan, lastCol).getValues();
           // Iterasi dari bawah ke atas (data problem terbaru selalu diutamakan di baris atas)
-          for (var r = vals.length - 1; r >= 1; r--) {
+          for (var r = vals.length - 1; r >= 0; r--) {
             var row = vals[r];
             var incKey = String(row[0] || '').trim();
             var rowIncNum = String(row[1] || '-').trim();
@@ -4922,12 +4932,41 @@
         }
 
         if (sheet && sheet.getLastRow() > 1) {
-          var vals = sheet.getDataRange().getValues();
-          var maxLimit = (payload && payload.limit) ? parseInt(payload.limit, 10) : 5000;
-          // Ambil baris terbaru dari bawah ke atas agar data paling mutakhir yang dikirim
-          var startRowIdx = Math.max(1, vals.length - maxLimit);
+          var lastRow = sheet.getLastRow();
+          var lastCol = Math.min(sheet.getLastColumn(), 25);
+          var maxLimit = (payload && payload.limit) ? parseInt(payload.limit, 10) : 2500;
+          
+          var totalDataRows = lastRow - 1;
+          var rowsToFetch = Math.min(totalDataRows, maxLimit);
+          var startRow = Math.max(2, lastRow - rowsToFetch + 1);
 
-          for (var i = vals.length - 1; i >= startRowIdx; i--) {
+          // Baca dalam chunk yang aman (maksimal 1000 baris per getRange)
+          // Mencegah error "Data yang diminta melebihi ukuran maksimum yang diizinkan"
+          var vals = [];
+          var CHUNK_SIZE = 1000;
+          var curStart = startRow;
+          var curRemaining = rowsToFetch;
+
+          while (curRemaining > 0) {
+            var batchCount = Math.min(curRemaining, CHUNK_SIZE);
+            try {
+              var batchVals = sheet.getRange(curStart, 1, batchCount, lastCol).getValues();
+              for (var b = 0; b < batchVals.length; b++) {
+                vals.push(batchVals[b]);
+              }
+            } catch (rangeErr) {
+              var miniBatch = Math.min(batchCount, 500);
+              var miniVals = sheet.getRange(curStart, 1, miniBatch, lastCol).getValues();
+              for (var mb = 0; mb < miniVals.length; mb++) {
+                vals.push(miniVals[mb]);
+              }
+              batchCount = miniBatch;
+            }
+            curStart += batchCount;
+            curRemaining -= batchCount;
+          }
+
+          for (var i = vals.length - 1; i >= 0; i--) {
             var r = vals[i];
             var sPoint = String(r[4] || '-');
             var sektor = cleanSektorNameGS(r[5]);
@@ -5049,7 +5088,7 @@
         success: true,
         headers: headers,
         data: compactData,
-        rows: rows,
+        rows: [], // Gunakan compactData untuk efisiensi transfer JSON (<2MB)
         totalCount: compactData.length,
         availableMonths: availableMonths,
         lastUploadInfo: lastUploadInfo,

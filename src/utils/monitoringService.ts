@@ -794,7 +794,11 @@ export const getDailyIncidentsFromDbApi = async (payload?: {
 
   if (isBackendConfigured()) {
     try {
-      const res = await apiGet('getDailyIncidentsFromDb', payload || {});
+      const sanitizedPayload = {
+        limit: 2500,
+        ...payload
+      };
+      const res = await apiGet('getDailyIncidentsFromDb', sanitizedPayload);
       if (res && res.success !== undefined) {
         const unpacked = unpackCompactTabular(res);
         return {

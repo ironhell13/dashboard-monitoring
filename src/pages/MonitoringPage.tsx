@@ -1056,7 +1056,7 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
   const fetchDailyIncidentsFromDb = async (month: string = historyMonth) => {
     setIsLoadingDailyFromDb(true);
     try {
-      const res = await getDailyIncidentsFromDbApi({ monthStr: month });
+      const res = await getDailyIncidentsFromDbApi({ monthStr: month, limit: 2000 });
       if (res.success && res.rows && res.rows.length > 0) {
         setAllDailyIncidents(res.rows);
         saveActiveIncidentDataset(res.rows);
@@ -1128,13 +1128,38 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
         });
         setTimeout(() => setSyncStatusBanner(null), 4000);
       } else if (!res.success) {
-        setSyncStatusBanner({
-          type: 'error',
-          text: `Sinkronisasi database gagal: ${res.message || 'Koneksi ke Apps Script terputus'}`
-        });
+        // Fallback cerdas: Coba pulihkan data dari IndexedDB snapshot
+        const cached = await loadActiveIncidentDataset();
+        if (cached && cached.length > 0) {
+          setAllDailyIncidents(cached);
+          setSyncStatusBanner({
+            type: 'warning',
+            text: `Server database sedang memproses data besar. Menggunakan data offline lokal (${cached.length.toLocaleString()} insiden).`
+          });
+          setTimeout(() => setSyncStatusBanner(null), 6000);
+        } else {
+          setSyncStatusBanner({
+            type: 'error',
+            text: `Sinkronisasi database gagal: ${res.message || 'Koneksi ke Apps Script terputus'}`
+          });
+        }
       }
     } catch (err: any) {
       console.warn('Gagal memuat daily incidents dari DB:', err);
+      // Fallback cerdas saat timeout atau koneksi lambat
+      try {
+        const cached = await loadActiveIncidentDataset();
+        if (cached && cached.length > 0) {
+          setAllDailyIncidents(cached);
+          setSyncStatusBanner({
+            type: 'warning',
+            text: `Koneksi database lambat. Menggunakan data offline lokal (${cached.length.toLocaleString()} insiden).`
+          });
+          setTimeout(() => setSyncStatusBanner(null), 6000);
+          return;
+        }
+      } catch (ce) {}
+
       setSyncStatusBanner({
         type: 'error',
         text: `Koneksi database terganggu: ${err?.message || String(err)}`
