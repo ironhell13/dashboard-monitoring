@@ -216,6 +216,13 @@ export function extractMonthStr(dateStr?: string | null, fallback: string = '202
 }
 
 /**
+ * Normalisasi format bulan menjadi YYYY-MM (alias untuk extractMonthStr)
+ */
+export function normalizeMonthStr(dateStr?: string | null, fallback: string = '2026-10'): string {
+  return extractMonthStr(dateStr, fallback);
+}
+
+/**
  * Format SERVICE POINT - SEKTOR sesuai format: KODE_SERVICE_POINT - NAMA_SEKTOR
  * Contoh: "ACJK - ULUJAMI", "ACBT - PAKU HAJI", "ACBS - BEKASI"
  */

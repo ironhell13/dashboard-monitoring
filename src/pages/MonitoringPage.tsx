@@ -4051,6 +4051,7 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
     setUploadProgress(15);
     setUploadMessage(`Membaca dan memproses instan file ${file.name}...`);
     setUploadStats(null);
+    let isLocalDataActivated = false;
 
     try {
       const parsed = await parseDailyIncidentCsv(file, { masterData: rawMasterData });
@@ -4186,6 +4187,7 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
 
       const extractedOpen = extractOpenFromRows(mergedAllRows);
       setOpenIncidents(extractedOpen);
+      isLocalDataActivated = true;
 
       saveMonitoringSnapshot({
         openIncidents: extractedOpen,
@@ -4266,9 +4268,12 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
       fetchUploadLogs();
     } catch (err: any) {
       console.error(err);
+      const prefix = isLocalDataActivated
+        ? 'Data aktif di dashboard, namun sinkronisasi server terkendala: '
+        : 'Gagal memproses file CSV: ';
       setSyncStatusBanner({
         type: 'error',
-        text: 'Data aktif di dashboard, namun sinkronisasi server terkendala: ' + (err.message || String(err))
+        text: prefix + (err.message || String(err))
       });
     } finally {
       setIsUploadingCsv(false);

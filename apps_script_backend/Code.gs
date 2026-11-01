@@ -2966,10 +2966,15 @@
   }
 
   /**
-   * Normalisasi format bulan menjadi YYYY-MM dari format DD/MM/YYYY, YYYY-MM-DD, atau YYYY-MM
+   * Normalisasi format bulan menjadi YYYY-MM dari format DD/MM/YYYY, YYYY-MM-DD, YYYY-MM, atau objek Date
    */
   function normalizeMonthStr(val) {
     if (!val || val === '-') return '';
+    if (Object.prototype.toString.call(val) === '[object Date]' && !isNaN(val.getTime())) {
+      var dy = val.getFullYear();
+      var dm = ('0' + (val.getMonth() + 1)).slice(-2);
+      return dy + '-' + dm;
+    }
     var s = String(val).trim();
     if (s.indexOf('/') !== -1) {
       var p = s.split(' ')[0].split('/');
