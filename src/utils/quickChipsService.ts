@@ -13,6 +13,14 @@ export interface QuickChipItem {
   updatedAt?: string;
 }
 
+export interface SyncStatus {
+  isChecking: boolean;
+  isSynced: boolean;
+  lastSyncTime: number | null;
+  message?: string;
+  source?: 'Cloud' | 'Local' | 'Unknown';
+}
+
 export const QUICK_CHIP_CATEGORIES: {
   id: QuickChipCategory;
   name: string;
@@ -99,6 +107,7 @@ export const DEFAULT_QUICK_CHIPS: QuickChipItem[] = [
 
 const STORAGE_KEY = 'EMONS_QUICK_CHIPS_V1';
 const EVENT_NAME = 'emons_quick_chips_updated';
+const EVENT_SYNC_STATUS = 'emons_quick_chips_sync_status';
 
 /**
  * Membaca daftar chip dari localStorage, fallback ke DEFAULT_QUICK_CHIPS
@@ -122,19 +131,65 @@ export function loadQuickChips(): QuickChipItem[] {
 
 /**
  * Menyimpan daftar chip ke localStorage dan mentrigger event ke seluruh komponen
+ * serta sinkronisasi asinkron ke server Google Apps Script
  */
-export function saveQuickChips(chips: QuickChipItem[], syncToServer = true): void {
+export async function saveQuickChips(
+  chips: QuickChipItem[],
+  syncToServer = true
+): Promise<{ success: boolean; serverSynced: boolean; message?: string }> {
   try {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(chips));
     window.dispatchEvent(new CustomEvent(EVENT_NAME, { detail: chips }));
 
     if (syncToServer && isBackendConfigured()) {
-      apiPost('saveQuickChipsConfig', { chips }).catch((err) => {
-        console.warn('Gagal menyimpan quick chips ke backend:', err);
-      });
+      window.dispatchEvent(
+        new CustomEvent(EVENT_SYNC_STATUS, {
+          detail: { isChecking: true, isSynced: false, lastSyncTime: Date.now() }
+        })
+      );
+
+      try {
+        const res = await apiPost('saveQuickChipsConfig', { chips });
+        if (res && res.success) {
+          const statusDetail: SyncStatus = {
+            isChecking: false,
+            isSynced: true,
+            lastSyncTime: Date.now(),
+            source: 'Cloud',
+            message: 'Tersimpan & tersinkronisasi ke server Google cloud.'
+          };
+          window.dispatchEvent(new CustomEvent(EVENT_SYNC_STATUS, { detail: statusDetail }));
+          return { success: true, serverSynced: true, message: 'Tersimpan & tersinkron ke cloud server.' };
+        } else {
+          const errMsg = res?.message || 'Server belum mendukung sync otomatis (perlu deploy Code.gs versi baru).';
+          const statusDetail: SyncStatus = {
+            isChecking: false,
+            isSynced: false,
+            lastSyncTime: Date.now(),
+            source: 'Local',
+            message: errMsg
+          };
+          window.dispatchEvent(new CustomEvent(EVENT_SYNC_STATUS, { detail: statusDetail }));
+          return { success: true, serverSynced: false, message: errMsg };
+        }
+      } catch (postErr: any) {
+        const errMsg = postErr?.message || 'Gagal terhubung ke server cloud.';
+        const statusDetail: SyncStatus = {
+          isChecking: false,
+          isSynced: false,
+          lastSyncTime: Date.now(),
+          source: 'Local',
+          message: errMsg
+        };
+        window.dispatchEvent(new CustomEvent(EVENT_SYNC_STATUS, { detail: statusDetail }));
+        return { success: true, serverSynced: false, message: errMsg };
+      }
     }
-  } catch (e) {
+
+    return { success: true, serverSynced: false };
+  } catch (e: any) {
     console.error('Gagal menyimpan quick chips:', e);
+    return { success: false, serverSynced: false, message: e.message };
   }
 }
 
@@ -158,7 +213,10 @@ export function getQuickChipTexts(category: QuickChipCategory): string[] {
 /**
  * Menambahkan chip baru
  */
-export function addQuickChip(category: QuickChipCategory, text: string): QuickChipItem {
+export async function addQuickChip(
+  category: QuickChipCategory,
+  text: string
+): Promise<{ item: QuickChipItem; serverSynced: boolean; message?: string }> {
   const cleanText = text.trim();
   if (!cleanText) throw new Error('Teks pilihan cepat tidak boleh kosong.');
 
@@ -177,17 +235,20 @@ export function addQuickChip(category: QuickChipCategory, text: string): QuickCh
   };
 
   all.push(newItem);
-  saveQuickChips(all);
-  return newItem;
+  const saveResult = await saveQuickChips(all, true);
+  return { item: newItem, serverSynced: saveResult.serverSynced, message: saveResult.message };
 }
 
 /**
  * Memperbarui teks atau kategori chip
  */
-export function updateQuickChip(id: string, updates: Partial<QuickChipItem>): boolean {
+export async function updateQuickChip(
+  id: string,
+  updates: Partial<QuickChipItem>
+): Promise<{ success: boolean; serverSynced: boolean; message?: string }> {
   const all = loadQuickChips();
   const index = all.findIndex((c) => c.id === id);
-  if (index === -1) return false;
+  if (index === -1) return { success: false, serverSynced: false, message: 'Chip tidak ditemukan' };
 
   all[index] = {
     ...all[index],
@@ -197,36 +258,39 @@ export function updateQuickChip(id: string, updates: Partial<QuickChipItem>): bo
     isCustom: true
   };
 
-  saveQuickChips(all);
-  return true;
+  return saveQuickChips(all, true);
 }
 
 /**
  * Menghapus chip berdasarkan ID
  */
-export function deleteQuickChip(id: string): boolean {
+export async function deleteQuickChip(
+  id: string
+): Promise<{ success: boolean; serverSynced: boolean; message?: string }> {
   const all = loadQuickChips();
   const filtered = all.filter((c) => c.id !== id);
-  if (filtered.length === all.length) return false;
+  if (filtered.length === all.length) return { success: false, serverSynced: false, message: 'Chip tidak ditemukan' };
 
-  saveQuickChips(filtered);
-  return true;
+  return saveQuickChips(filtered, true);
 }
 
 /**
  * Mengubah urutan chip (UP atau DOWN)
  */
-export function reorderQuickChip(id: string, direction: 'UP' | 'DOWN'): boolean {
+export async function reorderQuickChip(
+  id: string,
+  direction: 'UP' | 'DOWN'
+): Promise<{ success: boolean; serverSynced: boolean }> {
   const all = loadQuickChips();
   const target = all.find((c) => c.id === id);
-  if (!target) return false;
+  if (!target) return { success: false, serverSynced: false };
 
   const categoryChips = all
     .filter((c) => c.category === target.category)
     .sort((a, b) => a.order - b.order);
 
   const idx = categoryChips.findIndex((c) => c.id === id);
-  if (idx === -1) return false;
+  if (idx === -1) return { success: false, serverSynced: false };
 
   if (direction === 'UP' && idx > 0) {
     const prev = categoryChips[idx - 1];
@@ -239,36 +303,122 @@ export function reorderQuickChip(id: string, direction: 'UP' | 'DOWN'): boolean 
     target.order = next.order;
     next.order = tempOrder;
   } else {
-    return false;
+    return { success: false, serverSynced: false };
   }
 
-  saveQuickChips(all);
-  return true;
+  return saveQuickChips(all, true);
 }
 
 /**
  * Mengembalikan seluruh chip ke default bawaan sistem
  */
-export function resetQuickChipsToDefault(): void {
-  saveQuickChips(DEFAULT_QUICK_CHIPS);
+export async function resetQuickChipsToDefault(): Promise<{ success: boolean; serverSynced: boolean; message?: string }> {
+  return saveQuickChips(DEFAULT_QUICK_CHIPS, true);
 }
 
 /**
- * Sinkronisasi awal dari backend Google Apps Script jika tersedia
+ * Sinkronisasi aktif dari backend Google Apps Script
  */
-export async function syncQuickChipsFromServer(): Promise<QuickChipItem[]> {
-  if (!isBackendConfigured()) return loadQuickChips();
+export async function syncQuickChipsFromServer(): Promise<{
+  success: boolean;
+  chips: QuickChipItem[];
+  serverConnected: boolean;
+  message?: string;
+}> {
+  if (!isBackendConfigured()) {
+    return {
+      success: true,
+      chips: loadQuickChips(),
+      serverConnected: false,
+      message: 'Backend API belum dikonfigurasi.'
+    };
+  }
+
+  window.dispatchEvent(
+    new CustomEvent(EVENT_SYNC_STATUS, {
+      detail: { isChecking: true, isSynced: false, lastSyncTime: Date.now() }
+    })
+  );
 
   try {
     const res = await apiGet('getQuickChipsConfig');
-    if (res && res.success && Array.isArray(res.chips) && res.chips.length > 0) {
-      saveQuickChips(res.chips, false);
-      return res.chips;
+    if (res && res.success) {
+      if (Array.isArray(res.chips) && res.chips.length > 0) {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(res.chips));
+        window.dispatchEvent(new CustomEvent(EVENT_NAME, { detail: res.chips }));
+
+        const statusDetail: SyncStatus = {
+          isChecking: false,
+          isSynced: true,
+          lastSyncTime: Date.now(),
+          source: 'Cloud',
+          message: 'Data pilihan cepat berhasil ditarik dari server cloud.'
+        };
+        window.dispatchEvent(new CustomEvent(EVENT_SYNC_STATUS, { detail: statusDetail }));
+
+        return {
+          success: true,
+          chips: res.chips,
+          serverConnected: true,
+          message: 'Berhasil menyinkronkan data dari cloud server!'
+        };
+      } else {
+        // Server belum memiliki konfigurasi kustom, kirim data lokal ke server
+        const currentLocal = loadQuickChips();
+        await apiPost('saveQuickChipsConfig', { chips: currentLocal }).catch(() => {});
+
+        const statusDetail: SyncStatus = {
+          isChecking: false,
+          isSynced: true,
+          lastSyncTime: Date.now(),
+          source: 'Cloud',
+          message: 'Data lokal dijadikan konfigurasi awal di server cloud.'
+        };
+        window.dispatchEvent(new CustomEvent(EVENT_SYNC_STATUS, { detail: statusDetail }));
+
+        return {
+          success: true,
+          chips: currentLocal,
+          serverConnected: true,
+          message: 'Data lokal dijadikan konfigurasi awal di server cloud.'
+        };
+      }
+    } else {
+      const errMsg = res?.message || 'Script Google Apps Script belum dideploy ke versi terbaru (Unknown action: getQuickChipsConfig).';
+      const statusDetail: SyncStatus = {
+        isChecking: false,
+        isSynced: false,
+        lastSyncTime: Date.now(),
+        source: 'Local',
+        message: errMsg
+      };
+      window.dispatchEvent(new CustomEvent(EVENT_SYNC_STATUS, { detail: statusDetail }));
+
+      return {
+        success: false,
+        chips: loadQuickChips(),
+        serverConnected: false,
+        message: errMsg
+      };
     }
-  } catch (err) {
-    console.warn('Gagal sync quick chips dari server:', err);
+  } catch (err: any) {
+    const errMsg = err?.message || 'Tidak dapat menghubungi server cloud Google Apps Script.';
+    const statusDetail: SyncStatus = {
+      isChecking: false,
+      isSynced: false,
+      lastSyncTime: Date.now(),
+      source: 'Local',
+      message: errMsg
+    };
+    window.dispatchEvent(new CustomEvent(EVENT_SYNC_STATUS, { detail: statusDetail }));
+
+    return {
+      success: false,
+      chips: loadQuickChips(),
+      serverConnected: false,
+      message: errMsg
+    };
   }
-  return loadQuickChips();
 }
 
 /**
@@ -279,8 +429,15 @@ export function useQuickChips(categoryFilter?: QuickChipCategory) {
     return categoryFilter ? getQuickChipsByCategory(categoryFilter) : loadQuickChips();
   });
 
+  const [syncStatus, setSyncStatus] = useState<SyncStatus>({
+    isChecking: false,
+    isSynced: false,
+    lastSyncTime: null,
+    source: 'Local'
+  });
+
   useEffect(() => {
-    const handler = (e: any) => {
+    const chipHandler = (e: any) => {
       const all: QuickChipItem[] = e.detail || loadQuickChips();
       if (categoryFilter) {
         setChips(all.filter((c) => c.category === categoryFilter).sort((a, b) => a.order - b.order));
@@ -289,28 +446,46 @@ export function useQuickChips(categoryFilter?: QuickChipCategory) {
       }
     };
 
-    window.addEventListener(EVENT_NAME, handler);
-    // Sinkronisasi background dari server saat mount
-    syncQuickChipsFromServer().then((updated) => {
-      if (categoryFilter) {
-        setChips(updated.filter((c) => c.category === categoryFilter).sort((a, b) => a.order - b.order));
-      } else {
-        setChips(updated);
+    const statusHandler = (e: any) => {
+      if (e.detail) {
+        setSyncStatus(e.detail);
       }
+    };
+
+    window.addEventListener(EVENT_NAME, chipHandler);
+    window.addEventListener(EVENT_SYNC_STATUS, statusHandler);
+
+    // Sinkronisasi background dari server saat komponen mount
+    syncQuickChipsFromServer().then((res) => {
+      if (categoryFilter) {
+        setChips(res.chips.filter((c) => c.category === categoryFilter).sort((a, b) => a.order - b.order));
+      } else {
+        setChips(res.chips);
+      }
+      setSyncStatus({
+        isChecking: false,
+        isSynced: res.serverConnected,
+        lastSyncTime: Date.now(),
+        source: res.serverConnected ? 'Cloud' : 'Local',
+        message: res.message
+      });
     });
 
     return () => {
-      window.removeEventListener(EVENT_NAME, handler);
+      window.removeEventListener(EVENT_NAME, chipHandler);
+      window.removeEventListener(EVENT_SYNC_STATUS, statusHandler);
     };
   }, [categoryFilter]);
 
   return {
     chips,
     chipTexts: chips.map((c) => c.text),
+    syncStatus,
     addChip: (category: QuickChipCategory, text: string) => addQuickChip(category, text),
     updateChip: (id: string, updates: Partial<QuickChipItem>) => updateQuickChip(id, updates),
     deleteChip: (id: string) => deleteQuickChip(id),
     reorderChip: (id: string, direction: 'UP' | 'DOWN') => reorderQuickChip(id, direction),
-    resetToDefault: () => resetQuickChipsToDefault()
+    resetToDefault: () => resetQuickChipsToDefault(),
+    refreshFromServer: () => syncQuickChipsFromServer()
   };
 }

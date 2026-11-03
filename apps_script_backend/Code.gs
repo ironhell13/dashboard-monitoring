@@ -5189,13 +5189,40 @@
 
   /**
    * Konfigurasi Pilihan Cepat (Quick Chips) Super Admin
+   * Mendukung penyimpanan ganda (Script Properties & Sheet DB_CONFIG) agar sinkron ke seluruh PC
    */
   function getQuickChipsConfig() {
     try {
       var props = PropertiesService.getScriptProperties();
       var val = props.getProperty('QUICK_CHIPS_CONFIG');
-      if (!val) return { success: true, chips: null };
-      return { success: true, chips: JSON.parse(val) };
+      if (val) {
+        try {
+          var parsed = JSON.parse(val);
+          if (Array.isArray(parsed) && parsed.length > 0) {
+            return { success: true, chips: parsed, source: 'ScriptProperties' };
+          }
+        } catch (pe) {}
+      }
+
+      // Fallback baca dari sheet DB_CONFIG di database spreadsheet
+      var ss = getIncidentDbSpreadsheet();
+      if (ss) {
+        var cfgSheet = ss.getSheetByName('DB_CONFIG');
+        if (cfgSheet && cfgSheet.getLastRow() >= 2) {
+          var data = cfgSheet.getRange(2, 1, cfgSheet.getLastRow() - 1, 2).getValues();
+          for (var i = 0; i < data.length; i++) {
+            if (String(data[i][0] || '').trim() === 'QUICK_CHIPS_CONFIG') {
+              var sVal = String(data[i][1] || '').trim();
+              if (sVal) {
+                var pChips = JSON.parse(sVal);
+                return { success: true, chips: pChips, source: 'Spreadsheet' };
+              }
+            }
+          }
+        }
+      }
+
+      return { success: true, chips: null, source: 'Empty' };
     } catch (e) {
       return { success: false, message: e.toString() };
     }
@@ -5205,8 +5232,43 @@
     try {
       var props = PropertiesService.getScriptProperties();
       var chips = payload && payload.chips ? payload.chips : [];
-      props.setProperty('QUICK_CHIPS_CONFIG', JSON.stringify(chips));
-      return { success: true, message: 'Konfigurasi Pilihan Cepat berhasil disimpan ke server.' };
+      var str = JSON.stringify(chips);
+      props.setProperty('QUICK_CHIPS_CONFIG', str);
+
+      // Simpan juga ke sheet DB_CONFIG di database spreadsheet agar redundan & aman lintas sesi
+      try {
+        var ss = getIncidentDbSpreadsheet();
+        if (ss) {
+          var cfgSheet = ss.getSheetByName('DB_CONFIG');
+          if (!cfgSheet) {
+            cfgSheet = ss.insertSheet('DB_CONFIG');
+            cfgSheet.getRange(1, 1, 1, 3).setValues([['Config_Key', 'Config_Value', 'Updated_At']]);
+            cfgSheet.setColumnWidth(1, 200);
+            cfgSheet.setColumnWidth(2, 500);
+          }
+          var lastR = cfgSheet.getLastRow();
+          var foundRow = 0;
+          if (lastR >= 2) {
+            var keys = cfgSheet.getRange(2, 1, lastR - 1, 1).getValues();
+            for (var k = 0; k < keys.length; k++) {
+              if (String(keys[k][0] || '').trim() === 'QUICK_CHIPS_CONFIG') {
+                foundRow = k + 2;
+                break;
+              }
+            }
+          }
+          var nowStr = formatDateWib(new Date());
+          if (foundRow > 0) {
+            cfgSheet.getRange(foundRow, 2, 1, 2).setValues([[str, nowStr]]);
+          } else {
+            cfgSheet.appendRow(['QUICK_CHIPS_CONFIG', str, nowStr]);
+          }
+        }
+      } catch (sheetErr) {
+        console.warn('Gagal simpan ke DB_CONFIG sheet:', sheetErr);
+      }
+
+      return { success: true, count: chips.length, message: 'Konfigurasi Pilihan Cepat berhasil disimpan ke server.' };
     } catch (e) {
       return { success: false, message: e.toString() };
     }
