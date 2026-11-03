@@ -1,6 +1,7 @@
 import type { MasterRow, ParsedUptimeFile } from './excelParser';
 import { normalizePeriode } from './comprehensiveExporter';
 import { apiGet, apiPost, isBackendConfigured } from './apiClient';
+import { getSupabase, isSupabaseConfigured } from './supabaseClient';
 import {
   saveCachedMasterData,
   loadCachedMasterData,
@@ -788,6 +789,65 @@ export interface FollowUpTicketItem {
 const LOCAL_STORAGE_MODERN_TICKET_KEY = 'DOWNTIME_BCA_DB_TIKET_FOLLOWUP';
 
 export const fetchFollowUpTicketsModern = async (): Promise<{ success: boolean; tickets: FollowUpTicketItem[]; error?: string }> => {
+  // 1. Prioritas Utama: Supabase PostgreSQL (Cloud Database Realtime)
+  if (isSupabaseConfigured()) {
+    try {
+      const client = getSupabase();
+      if (client) {
+        const { data, error } = await client
+          .from('follow_up_tickets')
+          .select('*')
+          .order('created_at', { ascending: false });
+
+        if (!error && data) {
+          const tickets: FollowUpTicketItem[] = data.map((row: any) => {
+            const extra = row.progress_notes && typeof row.progress_notes === 'object' && !Array.isArray(row.progress_notes)
+              ? row.progress_notes
+              : {};
+            const progresList = Array.isArray(row.progress_notes)
+              ? row.progress_notes
+              : (extra.progresList || []);
+
+            return {
+              ticketId: row.id,
+              wsid: row.wsid,
+              lokasi: row.lokasi || '',
+              sektor: row.sektor || '',
+              servicePoint: row.service_point || '',
+              vendor: extra.vendor || '',
+              problem: row.kategori_problem || '',
+              sumberProblem: extra.sumberProblem || 'OPEN_INCIDENT',
+              prioritas: extra.prioritas || 'NORMAL',
+              kategori: extra.kategori || 'VENDOR',
+              catatanRequest: row.deskripsi_arahan || '',
+              createdBy: row.created_by || '',
+              createdAt: row.created_at || new Date().toISOString(),
+              status: row.status || 'OPEN',
+              durasiMenitFinal: extra.durasiMenitFinal,
+              progresList,
+              reqCloseInfo: extra.reqCloseInfo,
+              validationInfo: row.closed_by ? {
+                validatedBy: row.closed_by,
+                validatedAt: row.closed_at,
+                status: (row.status === 'CLOSED' ? 'ACCEPTED' : 'REJECTED') as any,
+                catatan: row.validation_notes || ''
+              } : extra.validationInfo,
+              updatedAt: row.updated_at
+            };
+          });
+
+          try {
+            localStorage.setItem(LOCAL_STORAGE_MODERN_TICKET_KEY, JSON.stringify(tickets));
+          } catch (_) {}
+
+          return { success: true, tickets };
+        }
+      }
+    } catch (err: any) {
+      console.warn('Supabase fetchFollowUpTicketsModern failed, fallback local:', err);
+    }
+  }
+
   if (isGasEnvironment()) {
     return new Promise((resolve) => {
       (window as any).google.script.run
@@ -826,6 +886,68 @@ export const fetchFollowUpTicketsModern = async (): Promise<{ success: boolean; 
 };
 
 export const saveFollowUpTicketModern = async (ticket: FollowUpTicketItem): Promise<{ success: boolean; ticket?: FollowUpTicketItem; message?: string; error?: string }> => {
+  // 1. Prioritas Utama: Supabase PostgreSQL
+  if (isSupabaseConfigured()) {
+    try {
+      const client = getSupabase();
+      if (client) {
+        const nowIso = new Date().toISOString();
+        const toSave: FollowUpTicketItem = {
+          ...ticket,
+          ticketId: ticket.ticketId || `TKT-${Date.now()}`,
+          updatedAt: nowIso,
+          createdAt: ticket.createdAt || nowIso
+        };
+
+        const extra = {
+          vendor: toSave.vendor || '',
+          sumberProblem: toSave.sumberProblem || 'OPEN_INCIDENT',
+          prioritas: toSave.prioritas || 'NORMAL',
+          kategori: toSave.kategori || 'VENDOR',
+          durasiMenitFinal: toSave.durasiMenitFinal,
+          progresList: toSave.progresList || [],
+          reqCloseInfo: toSave.reqCloseInfo || null,
+          validationInfo: toSave.validationInfo || null
+        };
+
+        const row = {
+          id: toSave.ticketId,
+          wsid: String(toSave.wsid || '').trim().replace(/^0+/, '') || String(toSave.wsid || ''),
+          lokasi: toSave.lokasi || '',
+          sektor: toSave.sektor || '',
+          service_point: toSave.servicePoint || '',
+          kategori_problem: toSave.problem || '',
+          deskripsi_arahan: toSave.catatanRequest || '',
+          created_by: toSave.createdBy || 'Petugas',
+          created_at: toSave.createdAt,
+          status: toSave.status || 'OPEN',
+          progress_notes: extra,
+          closed_at: toSave.validationInfo?.validatedAt || (toSave.status === 'CLOSED' ? nowIso : null),
+          closed_by: toSave.validationInfo?.validatedBy || (toSave.status === 'CLOSED' ? toSave.createdBy : null),
+          validation_notes: toSave.validationInfo?.catatan || null,
+          updated_at: nowIso
+        };
+
+        const { error } = await client.from('follow_up_tickets').upsert(row, { onConflict: 'id' });
+        if (error) throw error;
+
+        // Backup lokal
+        try {
+          const raw = localStorage.getItem(LOCAL_STORAGE_MODERN_TICKET_KEY);
+          let tickets: FollowUpTicketItem[] = raw ? JSON.parse(raw) : [];
+          const idx = tickets.findIndex(t => t.ticketId === toSave.ticketId);
+          if (idx >= 0) tickets[idx] = toSave;
+          else tickets.unshift(toSave);
+          localStorage.setItem(LOCAL_STORAGE_MODERN_TICKET_KEY, JSON.stringify(tickets));
+        } catch (_) {}
+
+        return { success: true, ticket: toSave, message: 'Tiket berhasil disimpan ke Supabase.' };
+      }
+    } catch (err: any) {
+      console.warn('Supabase saveFollowUpTicketModern failed, fallback local:', err);
+    }
+  }
+
   if (isGasEnvironment()) {
     return new Promise((resolve) => {
       (window as any).google.script.run
@@ -871,6 +993,18 @@ export const saveFollowUpTicketModern = async (ticket: FollowUpTicketItem): Prom
 };
 
 export const deleteFollowUpTicketModern = async (ticketId: string): Promise<{ success: boolean; message?: string; error?: string }> => {
+  // 1. Supabase PostgreSQL
+  if (isSupabaseConfigured()) {
+    try {
+      const client = getSupabase();
+      if (client) {
+        await client.from('follow_up_tickets').delete().eq('id', ticketId);
+      }
+    } catch (err: any) {
+      console.warn('Supabase deleteFollowUpTicketModern failed:', err);
+    }
+  }
+
   if (isGasEnvironment()) {
     return new Promise((resolve) => {
       (window as any).google.script.run

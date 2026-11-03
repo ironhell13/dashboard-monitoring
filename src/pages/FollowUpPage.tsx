@@ -39,6 +39,7 @@ import {
 } from '../utils/spreadsheetService';
 import { cleanSektorName } from '../utils/dailyIncidentParser';
 import { useQuickChips } from '../utils/quickChipsService';
+import { subscribeFollowUpTicketsSupabase } from '../utils/supabaseService';
 
 interface FollowUpPageProps {
   userRole?: 'KAWIL' | 'KAOPS' | 'MONITORING';
@@ -258,6 +259,17 @@ export default function FollowUpPage({ userRole, isEmbedded = false }: FollowUpP
       setIsRefreshing(false);
     }
   };
+
+  // Realtime Supabase Subscription & Initial Load
+  useEffect(() => {
+    handleRefreshTickets();
+    const unsub = subscribeFollowUpTicketsSupabase(() => {
+      handleRefreshTickets();
+    });
+    return () => {
+      unsub();
+    };
+  }, []);
 
   // 1. Action: Buat Tiket Manual
   const handleOpenCreateModal = () => {
