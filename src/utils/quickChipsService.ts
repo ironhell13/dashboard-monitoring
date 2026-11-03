@@ -1,5 +1,7 @@
 import { useState, useEffect } from 'react';
 import { apiGet, apiPost, isBackendConfigured } from './apiClient';
+import { isSupabaseConfigured } from './supabaseClient';
+import { saveQuickChipsSupabase, fetchQuickChipsSupabase } from './supabaseService';
 
 export type QuickChipCategory = 'UPDATE' | 'PENANGANAN' | 'PROGRESS_TIKET' | 'INSTRUKSI_REQUEST';
 
@@ -131,7 +133,7 @@ export function loadQuickChips(): QuickChipItem[] {
 
 /**
  * Menyimpan daftar chip ke localStorage dan mentrigger event ke seluruh komponen
- * serta sinkronisasi asinkron ke server Google Apps Script
+ * serta sinkronisasi realtime ke Supabase Cloud
  */
 export async function saveQuickChips(
   chips: QuickChipItem[],
@@ -141,7 +143,8 @@ export async function saveQuickChips(
     localStorage.setItem(STORAGE_KEY, JSON.stringify(chips));
     window.dispatchEvent(new CustomEvent(EVENT_NAME, { detail: chips }));
 
-    if (syncToServer && isBackendConfigured()) {
+    // 1. Supabase Cloud (jika terkonfigurasi)
+    if (syncToServer && isSupabaseConfigured()) {
       window.dispatchEvent(
         new CustomEvent(EVENT_SYNC_STATUS, {
           detail: { isChecking: true, isSynced: false, lastSyncTime: Date.now() }
@@ -149,40 +152,20 @@ export async function saveQuickChips(
       );
 
       try {
-        const res = await apiPost('saveQuickChipsConfig', { chips });
-        if (res && res.success) {
+        const res = await saveQuickChipsSupabase(chips);
+        if (res.success) {
           const statusDetail: SyncStatus = {
             isChecking: false,
             isSynced: true,
             lastSyncTime: Date.now(),
             source: 'Cloud',
-            message: 'Tersimpan & tersinkronisasi ke server Google cloud.'
+            message: 'Tersimpan & tersinkronisasi realtime ke database Supabase Cloud.'
           };
           window.dispatchEvent(new CustomEvent(EVENT_SYNC_STATUS, { detail: statusDetail }));
-          return { success: true, serverSynced: true, message: 'Tersimpan & tersinkron ke cloud server.' };
-        } else {
-          const errMsg = res?.message || 'Server belum mendukung sync otomatis (perlu deploy Code.gs versi baru).';
-          const statusDetail: SyncStatus = {
-            isChecking: false,
-            isSynced: false,
-            lastSyncTime: Date.now(),
-            source: 'Local',
-            message: errMsg
-          };
-          window.dispatchEvent(new CustomEvent(EVENT_SYNC_STATUS, { detail: statusDetail }));
-          return { success: true, serverSynced: false, message: errMsg };
+          return { success: true, serverSynced: true, message: 'Tersimpan & tersinkron ke Supabase Cloud.' };
         }
-      } catch (postErr: any) {
-        const errMsg = postErr?.message || 'Gagal terhubung ke server cloud.';
-        const statusDetail: SyncStatus = {
-          isChecking: false,
-          isSynced: false,
-          lastSyncTime: Date.now(),
-          source: 'Local',
-          message: errMsg
-        };
-        window.dispatchEvent(new CustomEvent(EVENT_SYNC_STATUS, { detail: statusDetail }));
-        return { success: true, serverSynced: false, message: errMsg };
+      } catch (sbErr: any) {
+        console.warn('Supabase saveQuickChips failed:', sbErr);
       }
     }
 
@@ -317,7 +300,7 @@ export async function resetQuickChipsToDefault(): Promise<{ success: boolean; se
 }
 
 /**
- * Sinkronisasi aktif dari backend Google Apps Script
+ * Sinkronisasi aktif dari database Supabase Cloud
  */
 export async function syncQuickChipsFromServer(): Promise<{
   success: boolean;
@@ -325,25 +308,16 @@ export async function syncQuickChipsFromServer(): Promise<{
   serverConnected: boolean;
   message?: string;
 }> {
-  if (!isBackendConfigured()) {
-    return {
-      success: true,
-      chips: loadQuickChips(),
-      serverConnected: false,
-      message: 'Backend API belum dikonfigurasi.'
-    };
-  }
+  if (isSupabaseConfigured()) {
+    window.dispatchEvent(
+      new CustomEvent(EVENT_SYNC_STATUS, {
+        detail: { isChecking: true, isSynced: false, lastSyncTime: Date.now() }
+      })
+    );
 
-  window.dispatchEvent(
-    new CustomEvent(EVENT_SYNC_STATUS, {
-      detail: { isChecking: true, isSynced: false, lastSyncTime: Date.now() }
-    })
-  );
-
-  try {
-    const res = await apiGet('getQuickChipsConfig');
-    if (res && res.success) {
-      if (Array.isArray(res.chips) && res.chips.length > 0) {
+    try {
+      const res = await fetchQuickChipsSupabase();
+      if (res.success && res.chips && res.chips.length > 0) {
         localStorage.setItem(STORAGE_KEY, JSON.stringify(res.chips));
         window.dispatchEvent(new CustomEvent(EVENT_NAME, { detail: res.chips }));
 
@@ -352,7 +326,7 @@ export async function syncQuickChipsFromServer(): Promise<{
           isSynced: true,
           lastSyncTime: Date.now(),
           source: 'Cloud',
-          message: 'Data pilihan cepat berhasil ditarik dari server cloud.'
+          message: 'Pilihan cepat tersinkronisasi realtime dengan database Supabase Cloud.'
         };
         window.dispatchEvent(new CustomEvent(EVENT_SYNC_STATUS, { detail: statusDetail }));
 
@@ -360,65 +334,20 @@ export async function syncQuickChipsFromServer(): Promise<{
           success: true,
           chips: res.chips,
           serverConnected: true,
-          message: 'Berhasil menyinkronkan data dari cloud server!'
-        };
-      } else {
-        // Server belum memiliki konfigurasi kustom, kirim data lokal ke server
-        const currentLocal = loadQuickChips();
-        await apiPost('saveQuickChipsConfig', { chips: currentLocal }).catch(() => {});
-
-        const statusDetail: SyncStatus = {
-          isChecking: false,
-          isSynced: true,
-          lastSyncTime: Date.now(),
-          source: 'Cloud',
-          message: 'Data lokal dijadikan konfigurasi awal di server cloud.'
-        };
-        window.dispatchEvent(new CustomEvent(EVENT_SYNC_STATUS, { detail: statusDetail }));
-
-        return {
-          success: true,
-          chips: currentLocal,
-          serverConnected: true,
-          message: 'Data lokal dijadikan konfigurasi awal di server cloud.'
+          message: 'Berhasil menyinkronkan data dari Supabase!'
         };
       }
-    } else {
-      const errMsg = res?.message || 'Script Google Apps Script belum dideploy ke versi terbaru (Unknown action: getQuickChipsConfig).';
-      const statusDetail: SyncStatus = {
-        isChecking: false,
-        isSynced: false,
-        lastSyncTime: Date.now(),
-        source: 'Local',
-        message: errMsg
-      };
-      window.dispatchEvent(new CustomEvent(EVENT_SYNC_STATUS, { detail: statusDetail }));
-
-      return {
-        success: false,
-        chips: loadQuickChips(),
-        serverConnected: false,
-        message: errMsg
-      };
+    } catch (e: any) {
+      console.warn('Gagal sinkronisasi quick chips dari Supabase:', e);
     }
-  } catch (err: any) {
-    const errMsg = err?.message || 'Tidak dapat menghubungi server cloud Google Apps Script.';
-    const statusDetail: SyncStatus = {
-      isChecking: false,
-      isSynced: false,
-      lastSyncTime: Date.now(),
-      source: 'Local',
-      message: errMsg
-    };
-    window.dispatchEvent(new CustomEvent(EVENT_SYNC_STATUS, { detail: statusDetail }));
-
-    return {
-      success: false,
-      chips: loadQuickChips(),
-      serverConnected: false,
-      message: errMsg
-    };
   }
+
+  return {
+    success: true,
+    chips: loadQuickChips(),
+    serverConnected: isSupabaseConfigured(),
+    message: 'Memuat konfigurasi pilihan cepat lokal.'
+  };
 }
 
 /**

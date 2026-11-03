@@ -696,7 +696,7 @@ ${ticket.reqCloseInfo ? `*Catatan Penyelesaian:* ${ticket.reqCloseInfo.catatanPe
             onClick={handleRefreshTickets}
             disabled={isRefreshing}
             className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white hover:bg-slate-50 border border-[#E5EAF2] text-xs font-semibold text-slate-700 shadow-2xs transition-colors cursor-pointer"
-            title="Muat ulang tiket terbaru dari Google Spreadsheet"
+            title="Muat ulang tiket terbaru dari Supabase Cloud"
           >
             <RefreshCw size={13} className={`text-blue-600 ${isRefreshing ? 'animate-spin' : ''}`} />
             <span>{isRefreshing ? 'Memuat...' : 'Refresh'}</span>

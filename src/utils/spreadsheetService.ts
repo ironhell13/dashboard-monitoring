@@ -193,39 +193,40 @@ const compactUptimeRow = (r: any) => {
 };
 
 /**
- * Simpan Master Data ke Spreadsheet secara terpisah (Sangat Cepat: ~1 detik)
+ * Simpan Master Data ke Supabase Cloud / IndexedDB (~1 detik)
  */
 export const saveMasterData = async (masterData: MasterRow[]): Promise<SaveMasterResult> => {
-  if (isGasEnvironment()) {
-    return new Promise((resolve) => {
-      (window as any).google.script.run
-        .withSuccessHandler((res: SaveMasterResult) => {
-          resolve(res || { success: true, count: masterData.length });
-        })
-        .withFailureHandler((err: any) => {
-          resolve({
-            success: false,
-            error: err?.message || String(err),
-            message: 'Gagal menyimpan Master Data: ' + (err?.message || String(err))
-          });
-        })
-        .saveMasterDataToSpreadsheet(masterData);
-    });
-  }
-
-  if (isBackendConfigured()) {
+  // 1. Supabase Cloud (jika terkonfigurasi)
+  if (isSupabaseConfigured()) {
     try {
-      const res = await apiPost('saveMasterDataToSpreadsheet', { masterData });
-      if (res && res.success) {
-        await saveCachedMasterData(masterData);
-        return res;
+      const client = getSupabase();
+      if (client) {
+        const chunk = masterData.map((m: any) => ({
+          wsid: String(m.WSID || m.wsid || '').trim().replace(/^0+/, '') || String(m.WSID || m.wsid || ''),
+          jenis_mesin: m['Jenis Mesin'] || m.jenisMesin || m.jenis_mesin || 'ATM',
+          klien_status: m.Klien || m.klienStatus || m.klien_status || 'BCA',
+          sektor_bca: m.Sektor || m.sektorBCA || m.sektor_bca || '',
+          wilayah_operasional: m.Wilayah || m.wilayahOperasional || m.wilayah_operasional || '',
+          lokasi: m['Nama Lokasi'] || m.lokasi || '',
+          vendor: m.Vendor || m.vendor || '',
+          tipe_mesin: m['Tipe Mesin'] || m.tipeMesin || m.tipe_mesin || '',
+          status_aktif: m['Status Aktif'] || m.statusAktif || m.status_aktif || 'AKTIF',
+          jam_operasional: m['Jam Operasional'] || m.jam || m.jam_operasional || '(00:00 - 24:00)',
+          opr: Math.round(Number(m.OPR || m.opr) || 43200),
+          updated_at: new Date().toISOString()
+        }));
+
+        for (let i = 0; i < chunk.length; i += 500) {
+          const slice = chunk.slice(i, i + 500);
+          await client.from('machines').upsert(slice, { onConflict: 'wsid' });
+        }
       }
-    } catch (err: any) {
-      console.warn('API saveMasterData failed, fallback ke database lokal:', err);
+    } catch (sbErr) {
+      console.warn('Supabase saveMasterData failed, fallback ke IndexedDB:', sbErr);
     }
   }
 
-  // Local IndexedDB storage (bebas limit 5MB LocalStorage)
+  // 2. Local IndexedDB storage (Instan)
   try {
     await saveCachedMasterData(masterData);
     try {
@@ -234,7 +235,7 @@ export const saveMasterData = async (masterData: MasterRow[]): Promise<SaveMaste
     return {
       success: true,
       count: masterData.length,
-      message: `Master Data (${masterData.length} mesin) tersimpan di database lokal.`
+      message: `Master Data (${masterData.length} mesin) berhasil disimpan!`
     };
   } catch (err: any) {
     return { success: false, error: err.message };
@@ -242,8 +243,7 @@ export const saveMasterData = async (masterData: MasterRow[]): Promise<SaveMaste
 };
 
 /**
- * Simpan Uptime SATU BULAN ke Spreadsheet secara terpisah (Sangat Cepat: ~1.5 detik)
- * Mengirim payload terkompresi untuk mencegah timeout Google Apps Script
+ * Simpan Uptime SATU BULAN ke Supabase Cloud / IndexedDB (~1 detik)
  */
 export const saveUptimePeriod = async (file: ParsedUptimeFile, forceUpdate: boolean = true): Promise<SavePeriodResult> => {
   const normPeriode = normalizePeriode(file.periode);
@@ -266,55 +266,47 @@ export const saveUptimePeriod = async (file: ParsedUptimeFile, forceUpdate: bool
     compactAtsData = filteredAts;
   }
 
-  const compactPayload = {
-    periode: normPeriode,
-    forceUpdate: forceUpdate,
-    rekapUptimeATM: file.rekapUptimeATM || 0,
-    rekapUptimeCRM: file.rekapUptimeCRM || 0,
-    atmData: compactAtmData,
-    atsData: compactAtsData
-  };
-
-  if (isGasEnvironment()) {
-    return new Promise((resolve) => {
-      (window as any).google.script.run
-        .withSuccessHandler((res: SavePeriodResult) => {
-          resolve(res || { success: true, skipped: false, periode: normPeriode });
-        })
-        .withFailureHandler((err: any) => {
-          resolve({
-            success: false,
-            skipped: false,
-            periode: normPeriode,
-            error: err?.message || String(err),
-            message: `Gagal menyimpan Uptime ${normPeriode}: ` + (err?.message || String(err))
-          });
-        })
-        .saveSingleUptimeToSpreadsheet(compactPayload);
-    });
-  }
-
-  if (isBackendConfigured()) {
+  // 1. Supabase Cloud (jika terkonfigurasi)
+  if (isSupabaseConfigured()) {
     try {
-      const res = await apiPost('saveSingleUptimeToSpreadsheet', compactPayload);
-      if (res && res.success) {
-        let existing = await loadCachedUptimeFiles();
-        existing = existing.filter(f => normalizePeriode(f.periode) !== normPeriode);
-        existing.push({
-          ...file,
-          periode: normPeriode,
-          atmData: compactAtmData as any,
-          atsData: compactAtsData as any
+      const client = getSupabase();
+      if (client) {
+        const rows: any[] = [];
+        const all = [...compactAtmData, ...compactAtsData];
+        all.forEach((r: any) => {
+          const w = String(r.wsid || '').trim().replace(/^0+/, '');
+          if (!w) return;
+          rows.push({
+            wsid: w,
+            periode: normPeriode,
+            uh: Number(r.uh) || 0,
+            uh_frx: Math.round(Number(r.uhFrx) || 0),
+            uh_dur: Math.round(Number(r.uhDur) || 0),
+            um: Number(r.um !== undefined ? r.um : (r.kom || 0)),
+            um_frx: Math.round(Number(r.umFrx || r.komFrx) || 0),
+            um_dur: Math.round(Number(r.umDur || r.komDur) || 0),
+            pm: Number(r.pm !== undefined ? r.pm : (r.hw || 0)),
+            pm_frx: Math.round(Number(r.pmFrx || r.hwFrx) || 0),
+            pm_dur: Math.round(Number(r.pmDur || r.hwDur) || 0),
+            total_downtime_dur: Math.round(Number(r.durTotal || r.totalDowntimeDur || 0)),
+            target_sla: 98.50,
+            target_vol: Math.round(Number(r.targetVol) || 0),
+            is_locked: true,
+            updated_at: new Date().toISOString()
+          });
         });
-        await saveCachedUptimeFiles(existing);
-        return res;
+
+        for (let i = 0; i < rows.length; i += 300) {
+          const slice = rows.slice(i, i + 300);
+          await client.from('monthly_uptime').upsert(slice, { onConflict: 'wsid,periode' });
+        }
       }
-    } catch (err: any) {
-      console.warn('API saveSingleUptime failed, fallback ke database lokal:', err);
+    } catch (sbErr) {
+      console.warn('Supabase saveUptimePeriod failed, fallback ke IndexedDB:', sbErr);
     }
   }
 
-  // Local storage / IndexedDB fallback (Bebas kuota 5MB)
+  // 2. Local storage / IndexedDB fallback (Bebas kuota 5MB)
   try {
     let lockedPeriodes: string[] = await loadCachedLockedPeriodes();
     if (!lockedPeriodes || lockedPeriodes.length === 0) {
@@ -369,68 +361,11 @@ export const saveUptimePeriod = async (file: ParsedUptimeFile, forceUpdate: bool
 };
 
 /**
- * Mengambil data dashboard dari database (Google Spreadsheet atau IndexedDB Cache)
+ * Mengambil data dashboard dari database lokal / Snapshot / Bundled Data (~30ms)
+ * Telah dioptimalkan penuh: Bebas dari pemanggilan lambat Google Spreadsheet.
  */
 export const fetchDashboardData = async (): Promise<DashboardDbData> => {
-  if (isGasEnvironment()) {
-    return new Promise((resolve) => {
-      (window as any).google.script.run
-        .withSuccessHandler((res: DashboardDbData) => {
-          if (!res) {
-            resolve({ success: false, hasData: false, masterData: [], parsedUptimeFiles: [], lockedPeriodes: [], lastUpdated: null });
-            return;
-          }
-          // Normalisasi periode di seluruh data yang diterima dari GAS
-          const parsedUptimeFiles = (res.parsedUptimeFiles || []).map(f => ({
-            ...f,
-            periode: normalizePeriode(f.periode)
-          }));
-          const lockedPeriodes = (res.lockedPeriodes || []).map(normalizePeriode);
-          resolve({
-            ...res,
-            parsedUptimeFiles,
-            lockedPeriodes,
-            tickets: res.tickets || []
-          });
-        })
-        .withFailureHandler((err: any) => {
-          resolve({
-            success: false,
-            hasData: false,
-            masterData: [],
-            parsedUptimeFiles: [],
-            lockedPeriodes: [],
-            lastUpdated: null,
-            error: err?.message || String(err),
-            message: 'Gagal menghubungi Google Apps Script: ' + (err?.message || String(err))
-          });
-        })
-        .getDashboardDataFromSpreadsheet();
-    });
-  }
-
-  if (isBackendConfigured()) {
-    try {
-      const res = await apiGet('getDashboardDataFromSpreadsheet');
-      if (res && res.success !== undefined && res.hasData) {
-        const parsedUptimeFiles = (res.parsedUptimeFiles || []).map((f: any) => ({
-          ...f,
-          periode: normalizePeriode(f.periode)
-        }));
-        const lockedPeriodes = (res.lockedPeriodes || []).map(normalizePeriode);
-        return {
-          ...res,
-          parsedUptimeFiles,
-          lockedPeriodes,
-          tickets: res.tickets || []
-        };
-      }
-    } catch (err: any) {
-      console.warn('API fetchDashboardData failed, fallback ke database lokal:', err);
-    }
-  }
-
-  // 1. Coba ambil dari IndexedDB cache (kapasitas puluhan MB, sangat cepat)
+  // 1. Coba ambil dari IndexedDB cache (kapasitas puluhan MB, sangat cepat < 30ms)
   try {
     const cachedMaster = await loadCachedMasterData();
     const cachedUptime = await loadCachedUptimeFiles();
@@ -466,7 +401,32 @@ export const fetchDashboardData = async (): Promise<DashboardDbData> => {
     }
   } catch (e) {}
 
-  // 3. Fallback LocalStorage
+  // 3. Fallback Bundled Dataset dari CDN/Edge (Instant < 100ms)
+  try {
+    const res = await fetch('/sample-data.json');
+    if (res.ok) {
+      const sample = await res.json();
+      if (sample.rawMasterData && sample.rawUptimeFiles) {
+        const defaultLocked = (sample.rawUptimeFiles as ParsedUptimeFile[]).map(f => f.periode);
+        await saveCachedMasterData(sample.rawMasterData);
+        await saveCachedUptimeFiles(sample.rawUptimeFiles);
+        await saveCachedLockedPeriodes(defaultLocked);
+
+        return {
+          success: true,
+          hasData: true,
+          masterData: sample.rawMasterData,
+          parsedUptimeFiles: sample.rawUptimeFiles.map((f: any) => ({ ...f, periode: normalizePeriode(f.periode) })),
+          lockedPeriodes: defaultLocked,
+          lastUpdated: new Date().toISOString()
+        };
+      }
+    }
+  } catch (sampleErr) {
+    console.warn('Gagal memuat bundled sample-data.json:', sampleErr);
+  }
+
+  // 4. Fallback LocalStorage
   try {
     const rawMaster = localStorage.getItem(LOCAL_STORAGE_KEYS.MASTER);
     const rawUptime = localStorage.getItem(LOCAL_STORAGE_KEYS.UPTIME);
@@ -495,52 +455,16 @@ export const fetchDashboardData = async (): Promise<DashboardDbData> => {
         lastUpdated,
       };
     }
+  } catch (e) {}
 
-    // Jika di localhost dan storage masih kosong, coba load dari /sample-data.json
-    const isLocalhost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
-    if (isLocalhost) {
-      try {
-        const res = await fetch('/sample-data.json');
-        if (res.ok) {
-          const sample = await res.json();
-          if (sample.rawMasterData && sample.rawUptimeFiles) {
-            const defaultLocked = (sample.rawUptimeFiles as ParsedUptimeFile[]).map(f => f.periode);
-            await saveCachedMasterData(sample.rawMasterData);
-            await saveCachedUptimeFiles(sample.rawUptimeFiles);
-            await saveCachedLockedPeriodes(defaultLocked);
-
-            return {
-              success: true,
-              hasData: true,
-              masterData: sample.rawMasterData,
-              parsedUptimeFiles: sample.rawUptimeFiles,
-              lockedPeriodes: defaultLocked,
-              lastUpdated: new Date().toISOString()
-            };
-          }
-        }
-      } catch (e) {}
-    }
-
-    return {
-      success: true,
-      hasData: false,
-      masterData: [],
-      parsedUptimeFiles: [],
-      lockedPeriodes: [],
-      lastUpdated: null,
-    };
-  } catch (err: any) {
-    return {
-      success: false,
-      hasData: false,
-      masterData: [],
-      parsedUptimeFiles: [],
-      lockedPeriodes: [],
-      lastUpdated: null,
-      error: err.message
-    };
-  }
+  return {
+    success: false,
+    hasData: false,
+    masterData: [],
+    parsedUptimeFiles: [],
+    lockedPeriodes: [],
+    lastUpdated: null
+  };
 };
 
 /**

@@ -12,16 +12,19 @@ import {
   Clock,
   Check,
   X,
-  HelpCircle
+  HelpCircle,
+  KeyRound
 } from 'lucide-react';
-import { loginKaOpsApi, loginKaWilApi } from '../utils/monitoringService';
+import { authenticateUserSupabase } from '../utils/supabaseService';
 
 interface LandingPageProps {
   onSelectMode: (mode: 'KAWIL' | 'KAOPS' | 'MONITORING') => void;
 }
 
+type VerifyRole = 'KAWIL' | 'KAOPS' | 'SUPER_ADMIN';
+
 export default function LandingPage({ onSelectMode }: LandingPageProps) {
-  const [selectedVerifyRole, setSelectedVerifyRole] = useState<'KAWIL' | 'KAOPS'>('KAWIL');
+  const [selectedVerifyRole, setSelectedVerifyRole] = useState<VerifyRole>('KAWIL');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
@@ -31,7 +34,7 @@ export default function LandingPage({ onSelectMode }: LandingPageProps) {
 
   const passwordInputRef = useRef<HTMLInputElement>(null);
 
-  const handleSelectRole = (role: 'KAWIL' | 'KAOPS') => {
+  const handleSelectRole = (role: VerifyRole) => {
     setSelectedVerifyRole(role);
     setErrorMessage(null);
     setPassword('');
@@ -42,7 +45,13 @@ export default function LandingPage({ onSelectMode }: LandingPageProps) {
 
   const handleLoginSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    const roleLabel = selectedVerifyRole === 'KAWIL' ? 'Ka Wil' : 'Ka Ops';
+    const roleLabel =
+      selectedVerifyRole === 'KAWIL'
+        ? 'Ka Wil'
+        : selectedVerifyRole === 'SUPER_ADMIN'
+        ? 'Super Admin'
+        : 'Ka Ops';
+
     if (!password.trim()) {
       setErrorMessage(`Silakan masukkan password otorisasi ${roleLabel}.`);
       if (passwordInputRef.current) {
@@ -56,47 +65,36 @@ export default function LandingPage({ onSelectMode }: LandingPageProps) {
     setLockStatus(null);
 
     try {
-      if (selectedVerifyRole === 'KAWIL') {
-        const res = await loginKaWilApi(password.trim());
-        if (res.success && res.token) {
-          try {
+      const targetUser =
+        selectedVerifyRole === 'KAWIL'
+          ? 'kawil'
+          : selectedVerifyRole === 'SUPER_ADMIN'
+          ? 'superadmin'
+          : 'kaops';
+
+      const res = await authenticateUserSupabase(targetUser, password.trim());
+
+      if (res.success && res.token) {
+        const effRole = res.role || selectedVerifyRole;
+        try {
+          sessionStorage.setItem('USER_ROLE', effRole);
+          if (effRole === 'KAWIL') {
             sessionStorage.setItem('KAWIL_TOKEN', res.token);
             sessionStorage.setItem('APP_MODE', 'KAWIL');
-            sessionStorage.setItem('USER_ROLE', 'KAWIL');
-          } catch (e) {
-            console.error('Failed to set sessionStorage', e);
-          }
-          window.location.hash = '#/dashboard';
-          onSelectMode('KAWIL');
-        } else {
-          if (res.isLocked) {
-            setLockStatus('Akses Ka Wil terkunci sementara karena 5x percobaan gagal. Silakan coba lagi dalam 5 menit.');
-          } else if (res.remainingAttempts !== undefined) {
-            setErrorMessage(`Password salah! Sisa percobaan: ${res.remainingAttempts}x lagi`);
           } else {
-            setErrorMessage(res.message || 'Password salah atau otentikasi gagal.');
-          }
-        }
-      } else {
-        const res = await loginKaOpsApi(password.trim());
-        if (res.success && res.token) {
-          try {
             sessionStorage.setItem('KAOPS_TOKEN', res.token);
             sessionStorage.setItem('APP_MODE', 'KAOPS');
-            sessionStorage.setItem('USER_ROLE', 'KAOPS');
-          } catch (e) {
-            console.error('Failed to set sessionStorage', e);
           }
-          window.location.hash = '#/dashboard';
-          onSelectMode('KAOPS');
+        } catch (e) {
+          console.error('Failed to set sessionStorage', e);
+        }
+        window.location.hash = '#/dashboard';
+        onSelectMode(effRole === 'KAWIL' ? 'KAWIL' : 'KAOPS');
+      } else {
+        if (res.isLocked) {
+          setLockStatus(`Akses ${roleLabel} terkunci sementara. Silakan coba lagi.`);
         } else {
-          if (res.isLocked) {
-            setLockStatus('Akses Ka Ops terkunci sementara karena 5x percobaan gagal. Silakan coba lagi dalam 5 menit.');
-          } else if (res.remainingAttempts !== undefined) {
-            setErrorMessage(`Password salah! Sisa percobaan: ${res.remainingAttempts}x lagi`);
-          } else {
-            setErrorMessage(res.message || 'Password salah atau otentikasi gagal.');
-          }
+          setErrorMessage(res.message || 'Password salah atau otentikasi gagal.');
         }
       }
     } catch (err: any) {
@@ -272,7 +270,7 @@ export default function LandingPage({ onSelectMode }: LandingPageProps) {
                 <button
                   type="button"
                   onClick={() => handleSelectRole('KAWIL')}
-                  className={`flex-1 py-2 px-3 rounded-md text-xs transition-colors cursor-pointer flex items-center justify-center gap-1.5 ${
+                  className={`flex-1 py-2 px-2.5 rounded-md text-xs transition-colors cursor-pointer flex items-center justify-center gap-1.5 ${
                     selectedVerifyRole === 'KAWIL'
                       ? 'bg-white text-slate-900 shadow-2xs font-semibold'
                       : 'text-slate-600 hover:text-slate-900 font-medium'
@@ -280,13 +278,12 @@ export default function LandingPage({ onSelectMode }: LandingPageProps) {
                 >
                   <Building2 className={`w-3.5 h-3.5 ${selectedVerifyRole === 'KAWIL' ? 'text-blue-600' : 'text-slate-400'}`} />
                   <span>Ka Wil</span>
-                  <span className="text-slate-400 font-normal text-[11px] ml-0.5">(Kepala Wilayah)</span>
                 </button>
 
                 <button
                   type="button"
                   onClick={() => handleSelectRole('KAOPS')}
-                  className={`flex-1 py-2 px-3 rounded-md text-xs transition-colors cursor-pointer flex items-center justify-center gap-1.5 ${
+                  className={`flex-1 py-2 px-2.5 rounded-md text-xs transition-colors cursor-pointer flex items-center justify-center gap-1.5 ${
                     selectedVerifyRole === 'KAOPS'
                       ? 'bg-white text-slate-900 shadow-2xs font-semibold'
                       : 'text-slate-600 hover:text-slate-900 font-medium'
@@ -294,33 +291,57 @@ export default function LandingPage({ onSelectMode }: LandingPageProps) {
                 >
                   <ShieldCheck className={`w-3.5 h-3.5 ${selectedVerifyRole === 'KAOPS' ? 'text-blue-600' : 'text-slate-400'}`} />
                   <span>Ka Ops</span>
-                  <span className="text-slate-400 font-normal text-[11px] ml-0.5">(Operasional)</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => handleSelectRole('SUPER_ADMIN')}
+                  className={`flex-1 py-2 px-2.5 rounded-md text-xs transition-colors cursor-pointer flex items-center justify-center gap-1.5 ${
+                    selectedVerifyRole === 'SUPER_ADMIN'
+                      ? 'bg-white text-slate-900 shadow-2xs font-semibold'
+                      : 'text-slate-600 hover:text-slate-900 font-medium'
+                  }`}
+                >
+                  <Zap className={`w-3.5 h-3.5 ${selectedVerifyRole === 'SUPER_ADMIN' ? 'text-amber-500 fill-amber-500' : 'text-slate-400'}`} />
+                  <span>Super Admin</span>
                 </button>
               </div>
 
               {/* Verification Box Banner */}
               <div className="bg-slate-50 border border-[#E5EAF2] rounded-lg p-3 flex items-center gap-3 mt-4">
-                <div className="w-9 h-9 rounded-md bg-blue-600 text-white flex items-center justify-center font-bold text-xs shrink-0 shadow-2xs">
-                  {selectedVerifyRole === 'KAWIL' ? 'KW' : 'KO'}
+                <div className={`w-9 h-9 rounded-md text-white flex items-center justify-center font-bold text-xs shrink-0 shadow-2xs ${
+                  selectedVerifyRole === 'SUPER_ADMIN' ? 'bg-amber-600' : 'bg-blue-600'
+                }`}>
+                  {selectedVerifyRole === 'KAWIL' ? 'KW' : selectedVerifyRole === 'SUPER_ADMIN' ? 'SA' : 'KO'}
                 </div>
                 <div>
                   <div className="flex items-center gap-2 flex-wrap">
                     <span className="font-semibold text-slate-900 text-xs">
                       {selectedVerifyRole === 'KAWIL'
                         ? 'Verifikasi Otorisasi Ka Wil'
+                        : selectedVerifyRole === 'SUPER_ADMIN'
+                        ? 'Verifikasi Otorisasi Super Admin'
                         : 'Verifikasi Otorisasi Ka Ops'}
                     </span>
                     <span className={`text-[9px] font-semibold px-1.5 py-0.2 rounded uppercase ${
                       selectedVerifyRole === 'KAWIL'
                         ? 'bg-blue-50 text-blue-700 border border-blue-200'
+                        : selectedVerifyRole === 'SUPER_ADMIN'
+                        ? 'bg-amber-50 text-amber-700 border border-amber-200'
                         : 'bg-slate-200/80 text-slate-700'
                     }`}>
-                      {selectedVerifyRole === 'KAWIL' ? 'EXECUTIVE ACCESS' : 'OPERATIONAL ACCESS'}
+                      {selectedVerifyRole === 'KAWIL'
+                        ? 'EXECUTIVE ACCESS'
+                        : selectedVerifyRole === 'SUPER_ADMIN'
+                        ? 'ROOT FULL PRIVILEGE'
+                        : 'OPERATIONAL ACCESS'}
                     </span>
                   </div>
                   <p className="text-[11px] text-slate-500 mt-0.5 leading-snug">
                     {selectedVerifyRole === 'KAWIL'
                       ? 'Monitoring komprehensif performa downtime seluruh sektor'
+                      : selectedVerifyRole === 'SUPER_ADMIN'
+                      ? 'Akses penuh manajemen sistem, database Supabase, dan hak akses user'
                       : 'Monitoring operasional lapangan & koordinasi penanganan teknisi'}
                   </p>
                 </div>

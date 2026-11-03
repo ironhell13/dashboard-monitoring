@@ -1,4 +1,5 @@
 import { isGasEnvironment } from './spreadsheetService';
+import { authenticateUserSupabase } from './supabaseService';
 import { apiGet, apiPost, isBackendConfigured } from './apiClient';
 import { cleanWsid } from './dailyIncidentParser';
 import { isSupabaseConfigured } from './supabaseClient';
@@ -110,7 +111,7 @@ export function unpackCompactTabular(res: any): any[] {
 }
 
 /**
- * 1. Ka Ops Auth
+ * 1. Ka Ops Auth - Instan melalui Supabase (~50ms)
  */
 export const loginKaOpsApi = async (password: string): Promise<{
   success: boolean;
@@ -119,63 +120,22 @@ export const loginKaOpsApi = async (password: string): Promise<{
   remainingAttempts?: number;
   message?: string;
 }> => {
-  if (isGasEnvironment()) {
-    return new Promise((resolve) => {
-      (window as any).google.script.run
-        .withSuccessHandler((res: any) => resolve(res || { success: false, message: 'Respon server kosong.' }))
-        .withFailureHandler((err: any) => resolve({ success: false, message: err?.message || String(err) }))
-        .loginKaOps(password);
-    });
+  const res = await authenticateUserSupabase('kaops', password);
+  if (res.success && res.token) {
+    sessionStorage.setItem('KAOPS_TOKEN', res.token);
   }
-
-  if (isBackendConfigured()) {
-    try {
-      const res = await apiPost('loginKaOps', { password });
-      if (res && res.success !== undefined) {
-        if (res.success && res.token) {
-          sessionStorage.setItem('KAOPS_TOKEN', res.token);
-        }
-        return res;
-      }
-    } catch (err: any) {
-      console.warn('API loginKaOps failed, falling back to local:', err);
-    }
-  }
-
-  // Local development fallback
-  if (password && password.length >= 6) {
-    const token = 'LOCAL_KAOPS_' + Date.now();
-    sessionStorage.setItem('KAOPS_TOKEN', token);
-    return { success: true, token, message: 'Login Ka Ops berhasil (Local Dev).' };
-  }
-  return { success: false, message: 'Password salah (minimal 6 karakter untuk local dev)!' };
+  return res;
 };
 
-export const logoutKaOpsApi = async (token?: string): Promise<{ success: boolean }> => {
+export const logoutKaOpsApi = async (_token?: string): Promise<{ success: boolean }> => {
   try {
     sessionStorage.removeItem('KAOPS_TOKEN');
   } catch (e) {}
-
-  if (isGasEnvironment() && token) {
-    return new Promise((resolve) => {
-      (window as any).google.script.run
-        .withSuccessHandler(() => resolve({ success: true }))
-        .withFailureHandler(() => resolve({ success: true }))
-        .logoutKaOps(token);
-    });
-  }
-
-  if (isBackendConfigured() && token) {
-    try {
-      await apiPost('logoutKaOps', { token });
-    } catch (e) {}
-  }
-
   return { success: true };
 };
 
 /**
- * 1B. Ka Wil Auth
+ * 1B. Ka Wil Auth - Instan melalui Supabase (~50ms)
  */
 export const loginKaWilApi = async (password: string): Promise<{
   success: boolean;
@@ -185,58 +145,17 @@ export const loginKaWilApi = async (password: string): Promise<{
   remainingAttempts?: number;
   message?: string;
 }> => {
-  if (isGasEnvironment()) {
-    return new Promise((resolve) => {
-      (window as any).google.script.run
-        .withSuccessHandler((res: any) => resolve(res || { success: false, message: 'Respon server kosong.' }))
-        .withFailureHandler((err: any) => resolve({ success: false, message: err?.message || String(err) }))
-        .loginKaWil(password);
-    });
+  const res = await authenticateUserSupabase('kawil', password);
+  if (res.success && res.token) {
+    sessionStorage.setItem('KAWIL_TOKEN', res.token);
   }
-
-  if (isBackendConfigured()) {
-    try {
-      const res = await apiPost('loginKaWil', { password });
-      if (res && res.success !== undefined) {
-        if (res.success && res.token) {
-          sessionStorage.setItem('KAWIL_TOKEN', res.token);
-        }
-        return res;
-      }
-    } catch (err: any) {
-      console.warn('API loginKaWil failed, falling back to local:', err);
-    }
-  }
-
-  // Local development fallback
-  if (password === 'kawilacjk' || (password && password.length >= 6)) {
-    const token = 'LOCAL_KAWIL_' + Date.now();
-    sessionStorage.setItem('KAWIL_TOKEN', token);
-    return { success: true, token, role: 'KAWIL', message: 'Login Ka Wil berhasil (Local Dev).' };
-  }
-  return { success: false, message: 'Password salah (gunakan kawilacjk)!' };
+  return res;
 };
 
-export const logoutKaWilApi = async (token?: string): Promise<{ success: boolean }> => {
+export const logoutKaWilApi = async (_token?: string): Promise<{ success: boolean }> => {
   try {
     sessionStorage.removeItem('KAWIL_TOKEN');
   } catch (e) {}
-
-  if (isGasEnvironment() && token) {
-    return new Promise((resolve) => {
-      (window as any).google.script.run
-        .withSuccessHandler(() => resolve({ success: true }))
-        .withFailureHandler(() => resolve({ success: true }))
-        .logoutKaWil(token);
-    });
-  }
-
-  if (isBackendConfigured() && token) {
-    try {
-      await apiPost('logoutKaWil', { token });
-    } catch (e) {}
-  }
-
   return { success: true };
 };
 

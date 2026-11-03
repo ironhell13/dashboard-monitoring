@@ -142,8 +142,8 @@ function App() {
   ]);
 
   // Strategi Cache-First (Stale-While-Revalidate):
-  // 1. Baca IndexedDB Cache instan (< 100ms) -> Dashboard langsung terbuka tanpa menunggu Apps Script
-  // 2. Di latar belakang, sinkronkan data terbaru dari Google Spreadsheet
+  // 1. Baca IndexedDB Cache instan (< 50ms) -> Dashboard langsung terbuka tanpa menunggu
+  // 2. Di latar belakang, sinkronkan data terbaru & tiket follow-up
   // 3. Jika data baru tersedia, perbarui store & simpan ke cache secara mulus
   useEffect(() => {
     let isMounted = true;
@@ -172,10 +172,10 @@ function App() {
         console.warn('Cache lokal belum tersedia:', cacheErr);
       }
 
-      // STEP 2: Sinkronisasi latar belakang dengan Google Apps Script
+      // STEP 2: Sinkronisasi latar belakang
       setIsSyncing(true);
       if (!hasLocalCache) {
-        setLoadingStatusText('Mengambil data terbaru dari Google Spreadsheet...');
+        setLoadingStatusText('Membaca data performa downtime...');
       }
 
       try {
@@ -230,13 +230,12 @@ function App() {
 
           setSyncError(null);
         } else if (hasLocalCache) {
-          // Tetap gunakan cache jika Apps Script belum memiliki data baru
           setSyncError(null);
         } else {
           setLockedPeriodes(dbData?.lockedPeriodes || []);
         }
       } catch (syncErr: any) {
-        console.error('Gagal sinkronisasi dari Spreadsheet:', syncErr);
+        console.warn('Sinkronisasi data dashboard:', syncErr);
         if (isMounted) {
           setSyncError(syncErr?.message || String(syncErr));
         }

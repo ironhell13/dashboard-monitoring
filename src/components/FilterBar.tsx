@@ -178,7 +178,7 @@ export default function FilterBar() {
           disabled={activeSync}
           title={
             activeSync
-              ? 'Sedang menyinkronkan data dengan Google Spreadsheet...'
+              ? 'Sedang menyinkronkan data database...'
               : syncError
               ? `Terjadi kendala koneksi: ${syncError}. Klik untuk coba lagi.`
               : `Data tersinkronisasi. Terakhir: ${lastDbSync ? new Date(lastDbSync).toLocaleTimeString('id-ID') : 'Terkini'}. Klik untuk sinkron ulang.`

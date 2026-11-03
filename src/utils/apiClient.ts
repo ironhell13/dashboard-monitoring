@@ -3,7 +3,9 @@
  * Dilengkapi fallback cerdas, pencegahan CORS preflight, dan dukungan custom API URL.
  */
 
-export const DEFAULT_GAS_API_URL = 'https://script.google.com/macros/s/AKfycbxNfS0X4VcyuZ8fLR8MTPC0IbkliMKakBWKrIZJhejovMNFGG1KKHK1beeeCxusufpx/exec';
+// Sistem kini telah migrasi penuh ke Supabase PostgreSQL.
+// Default URL dinonaktifkan agar tidak melakukan pemanggilan lambat (5-7 detik) ke server Google Apps Script lama.
+export const DEFAULT_GAS_API_URL = '';
 
 const STORAGE_CUSTOM_URL_KEY = 'CUSTOM_GAS_API_URL';
 

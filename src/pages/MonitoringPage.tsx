@@ -92,7 +92,6 @@ import {
   type IncidentHistoryItem,
   type UploadLogItem
 } from '../utils/monitoringService';
-import { BackendConfigModal } from '../components/BackendConfigModal';
 import StickyTableWrapper from '../components/StickyTableWrapper';
 import { isBackendConfigured } from '../utils/apiClient';
 import {
@@ -4226,7 +4225,7 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
 
       setSyncStatusBanner({
         type: 'syncing',
-        text: `Data aktif di dashboard (${extractedOpen.length} Problem Open)! Menyinkronkan ke Google Spreadsheet...`
+        text: `Data aktif di dashboard (${extractedOpen.length} Problem Open)! Menyinkronkan ke database Supabase...`
       });
 
       setActiveTab('OPEN');
@@ -11200,7 +11199,7 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
             {/* Modal Footer */}
             <div className="p-4 sm:px-7 border-t border-slate-200 bg-slate-50 flex items-center justify-between">
               <span className="text-xs text-slate-500">
-                Menampilkan <strong>{displayedTickets.length}</strong> tiket &bull; Sinkronisasi otomatis ke Google Spreadsheet
+                Menampilkan <strong>{displayedTickets.length}</strong> tiket &bull; Sinkronisasi realtime ke Supabase Cloud
               </span>
               <button
                 type="button"
@@ -11737,16 +11736,6 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
           </button>
         </div>
       )}
-
-      {/* Modal Pengaturan Backend API */}
-      <BackendConfigModal
-        isOpen={isConfigModalOpen}
-        onClose={() => setIsConfigModalOpen(false)}
-        onSaved={() => {
-          setBackendActive(isBackendConfigured());
-          fetchOpenIncidents(true);
-        }}
-      />
 
       {/* ==================================================== */}
       {/* 8. FOOTER                                            */}

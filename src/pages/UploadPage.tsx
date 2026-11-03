@@ -18,6 +18,7 @@ import { matchData } from '../utils/dataMatcher';
 import { useDataStore } from '../store/useDataStore';
 import { saveMasterData, saveUptimePeriod, unlockPeriode, isGasEnvironment } from '../utils/spreadsheetService';
 import { isBackendConfigured } from '../utils/apiClient';
+import { isSupabaseConfigured } from '../utils/supabaseClient';
 import { saveDashboardSnapshot } from '../utils/dbCache';
 import { formatBulanTahun, normalizePeriode } from '../utils/comprehensiveExporter';
 
@@ -87,12 +88,12 @@ export default function UploadPage() {
     if (!hasExistingMaster && !hasExistingUptime) return;
     setIsProcessing(true);
     setError(null);
-    setStatusMessage("Menghubungkan ke Spreadsheet Backend...");
+    setStatusMessage("Menghubungkan ke database...");
     setProgress(10);
 
     try {
       if (hasExistingMaster && rawMasterData && rawMasterData.length > 0) {
-        setStatusMessage(`Menyimpan Master Data (${rawMasterData.length} mesin) ke Google Spreadsheet...`);
+        setStatusMessage(`Menyimpan Master Data (${rawMasterData.length} mesin) ke database...`);
         const mRes = await saveMasterData(rawMasterData);
         if (!mRes.success) throw new Error(mRes.message || mRes.error || "Gagal menyimpan Master Data");
         setProgress(45);
@@ -103,7 +104,7 @@ export default function UploadPage() {
         for (let i = 0; i < total; i++) {
           const file = rawUptimeFiles[i];
           const label = formatMonthPeriode(file.periode);
-          setStatusMessage(`Menyimpan Uptime ${label} (${i + 1}/${total}) ke Google Spreadsheet...`);
+          setStatusMessage(`Menyimpan Uptime ${label} (${i + 1}/${total}) ke database...`);
           const uRes = await saveUptimePeriod(file, true);
           if (!uRes.success) throw new Error(uRes.message || uRes.error || `Gagal menyimpan Uptime ${label}`);
           setProgress(45 + Math.floor(((i + 1) / total) * 50));
@@ -111,7 +112,7 @@ export default function UploadPage() {
       }
 
       setProgress(100);
-      setStatusMessage("✅ Berhasil! Seluruh Master Data & Uptime berhasil disimpan ke Spreadsheet Backend!");
+      setStatusMessage("✅ Berhasil! Seluruh Master Data & Uptime berhasil disimpan ke Cloud Database!");
       setTimeout(() => {
         setIsProcessing(false);
         setStatusMessage(null);
@@ -274,20 +275,20 @@ export default function UploadPage() {
           )}
 
           <div className="inline-flex items-center gap-1.5 px-2.5 h-8 bg-slate-50 border border-[#E5EAF2] rounded-md text-xs text-slate-600 font-medium">
-            <Database size={12} className={(isGasEnvironment() || isBackendConfigured()) ? "text-emerald-600" : "text-amber-600"} />
-            <span>{(isGasEnvironment() || isBackendConfigured()) ? "Tersambung ke Google Spreadsheet Backend" : "Database Mode Lokal (Tersimpan)"}</span>
+            <Database size={12} className={isSupabaseConfigured() ? "text-emerald-600" : "text-amber-600"} />
+            <span>{isSupabaseConfigured() ? "Tersambung ke Supabase Cloud (PostgreSQL)" : "Database Mode Lokal (Tersimpan)"}</span>
           </div>
         </div>
 
         <div className="text-center mb-5">
           <h1 className="text-xl font-bold text-slate-900 tracking-tight">Database & Upload Data</h1>
           <p className="text-xs text-slate-500 mt-0.5 max-w-xl mx-auto">
-            Data tersimpan permanen di Google Spreadsheet. Master Data dapat diupdate kapan saja, dan data uptime bulanan yang sudah masuk otomatis dikunci agar tidak tertimpa.
+            Data tersimpan permanen di database Supabase Cloud (PostgreSQL). Master Data dapat diupdate kapan saja, dan data uptime bulanan yang sudah masuk otomatis dikunci agar tidak tertimpa.
           </p>
         </div>
 
         {/* Sync Cache to Backend Banner */}
-        {hasExistingData && (isGasEnvironment() || isBackendConfigured()) && (
+        {hasExistingData && (
           <div className="mb-5 p-4 bg-blue-50/70 border border-blue-200 rounded-lg flex flex-col md:flex-row items-start md:items-center justify-between gap-4 shadow-2xs">
             <div className="flex items-start gap-3">
               <div className="p-2 bg-blue-600 rounded-lg text-white mt-0.5">
@@ -301,7 +302,7 @@ export default function UploadPage() {
                   </span>
                 </h4>
                 <p className="text-xs text-slate-600 mt-0.5 max-w-xl">
-                  Data yang Anda upload sebelumnya saat ini berada di memori browser. Klik tombol di samping untuk langsung menyimpan data ini ke Spreadsheet Backend tanpa perlu upload ulang file.
+                  Data yang Anda upload sebelumnya berada di memori browser. Klik tombol di samping untuk langsung menyimpan data ini ke Database Supabase Cloud.
                 </p>
               </div>
             </div>
@@ -314,12 +315,12 @@ export default function UploadPage() {
               {isProcessing ? (
                 <>
                   <Loader2 size={14} className="animate-spin" />
-                  <span>Menyimpan ke Spreadsheet...</span>
+                  <span>Menyimpan ke Database...</span>
                 </>
               ) : (
                 <>
                   <UploadCloud size={14} />
-                  <span>Kirim ke Spreadsheet Sekarang</span>
+                  <span>Kirim ke Cloud Supabase</span>
                 </>
               )}
             </button>

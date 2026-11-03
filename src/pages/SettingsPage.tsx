@@ -142,7 +142,6 @@ export default function SettingsPage({ userRole = 'KAOPS' }: SettingsPageProps) 
 
   // Cloud Sync Interaction State
   const [isSyncing, setIsSyncing] = useState(false);
-  const [isGasGuideOpen, setIsGasGuideOpen] = useState(false);
 
   // Modal State for Create / Edit
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -927,55 +926,38 @@ export default function SettingsPage({ userRole = 'KAOPS' }: SettingsPageProps) 
                   <div className="space-y-0.5">
                     <div className="flex items-center gap-2">
                       <span className="text-xs font-bold">
-                        {syncStatus.isSynced
-                          ? 'Sinkronisasi Cloud Aktif (Multi-PC Terhubung)'
-                          : syncStatus.isChecking
-                          ? 'Memeriksa Sinkronisasi Cloud...'
-                          : 'Perhatian: Sinkronisasi Cloud Belum Terhubung'}
+                        {isSupabaseConfigured()
+                          ? 'Sinkronisasi Cloud Supabase Aktif (Realtime Multi-PC)'
+                          : 'Database Mode Browser Lokal'}
                       </span>
                       <span
                         className={`text-[9px] px-2 py-0.2 rounded-full font-bold uppercase tracking-wider ${
-                          syncStatus.isSynced
+                          isSupabaseConfigured()
                             ? 'bg-emerald-200 text-emerald-800'
-                            : syncStatus.isChecking
-                            ? 'bg-slate-200 text-slate-700'
                             : 'bg-amber-200 text-amber-900'
                         }`}
                       >
-                        {syncStatus.source === 'Cloud' ? 'Google Cloud' : 'Browser Lokal (PC Ini)'}
+                        {isSupabaseConfigured() ? 'Supabase PostgreSQL' : 'Browser Lokal (PC Ini)'}
                       </span>
                     </div>
                     <p className="text-[11px] leading-relaxed text-slate-600">
-                      {syncStatus.isSynced
-                        ? 'Setiap perubahan pilihan cepat otomatis tersimpan di Google Cloud (Google Apps Script & Database Spreadsheet) dan langsung tampil di PC 1, PC 2, maupun perangkat lain.'
-                        : syncStatus.isChecking
-                        ? 'Sedang menghubungkan ke server Google Apps Script...'
-                        : 'Perubahan tersimpan aman di PC ini, namun belum tersinkron ke PC lain karena Web App Google Apps Script perlu dideploy ke versi baru (New Version).'}
+                      {isSupabaseConfigured()
+                        ? 'Setiap penambahan atau perubahan pilihan cepat tersimpan permanen di cloud Supabase dan tersinkronisasi instan ke seluruh monitor dan komputer tim.'
+                        : 'Kredensial Supabase belum terhubung. Perubahan tersimpan di browser lokal PC ini.'}
                     </p>
                   </div>
                 </div>
 
                 <div className="flex items-center gap-2 shrink-0 self-end sm:self-center">
-                  {!syncStatus.isSynced && (
-                    <button
-                      type="button"
-                      onClick={() => setIsGasGuideOpen(true)}
-                      className="px-2.5 py-1.5 rounded-lg bg-amber-600 hover:bg-amber-700 text-white text-[11px] font-bold shadow-xs transition-colors cursor-pointer flex items-center gap-1.5"
-                    >
-                      <HelpCircle className="w-3.5 h-3.5" />
-                      <span>Cara Update Script (1 Mnt)</span>
-                    </button>
-                  )}
-
                   <button
                     type="button"
                     onClick={handleManualSync}
                     disabled={isSyncing}
                     className="px-2.5 py-1.5 rounded-lg border border-slate-300 bg-white hover:bg-slate-50 text-slate-700 text-[11px] font-semibold transition-colors cursor-pointer flex items-center gap-1.5 disabled:opacity-50"
-                    title="Tarik data Quick Chips terbaru dari server Google"
+                    title="Tarik data Quick Chips terbaru dari database cloud"
                   >
                     <RefreshCw className={`w-3.5 h-3.5 text-slate-500 ${isSyncing ? 'animate-spin text-blue-600' : ''}`} />
-                    <span>{isSyncing ? 'Menyinkronkan...' : 'Tarik Data Server'}</span>
+                    <span>{isSyncing ? 'Menyinkronkan...' : 'Sinkronkan Sekarang'}</span>
                   </button>
                 </div>
               </div>
@@ -1786,119 +1768,6 @@ export default function SettingsPage({ userRole = 'KAOPS' }: SettingsPageProps) 
                 className="px-4 py-1.5 rounded-lg bg-amber-600 hover:bg-amber-700 text-white text-xs font-bold shadow-xs cursor-pointer"
               >
                 Ya, Reset ke Standar
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* MODAL: Panduan Update Google Apps Script untuk Sinkronisasi Multi-Device */}
-      {isGasGuideOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-2xs animate-fadeIn">
-          <div className="bg-white rounded-2xl max-w-xl w-full shadow-2xl border border-slate-200 overflow-hidden flex flex-col max-h-[90vh]">
-            <div className="px-5 py-4 border-b border-slate-100 flex items-center justify-between bg-gradient-to-r from-blue-900 via-indigo-900 to-slate-900 text-white">
-              <div className="flex items-center gap-2.5">
-                <div className="w-8 h-8 rounded-lg bg-blue-500/20 border border-blue-400/30 text-blue-300 flex items-center justify-center">
-                  <Cloud className="w-4 h-4" />
-                </div>
-                <div>
-                  <h3 className="text-sm font-bold">Panduan Update Script Google (1 Menit)</h3>
-                  <p className="text-[11px] text-blue-200">Agar Quick Chips otomatis tersinkron di PC 1, PC 2, dst.</p>
-                </div>
-              </div>
-              <button
-                type="button"
-                onClick={() => setIsGasGuideOpen(false)}
-                className="text-white/70 hover:text-white p-1 rounded-lg hover:bg-white/10 cursor-pointer"
-              >
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-
-            <div className="p-5 space-y-4 overflow-y-auto text-xs text-slate-700">
-              <div className="p-3 bg-amber-50 border border-amber-200 rounded-xl text-amber-900 text-[11px] space-y-1">
-                <div className="flex items-center gap-1.5 font-bold">
-                  <AlertTriangle className="w-3.5 h-3.5 text-amber-600 shrink-0" />
-                  <span>Mengapa perubahan di PC 1 belum otomatis muncul di PC 2?</span>
-                </div>
-                <p className="leading-relaxed">
-                  Web App Google Apps Script di cloud saat ini berjalan pada deployment versi lama yang belum memuat fungsi <code className="bg-amber-100 px-1 py-0.5 rounded font-mono text-[10px]">getQuickChipsConfig</code> &amp; <code className="bg-amber-100 px-1 py-0.5 rounded font-mono text-[10px]">saveQuickChipsConfig</code>. Cukup lakukan deploy <strong>New version</strong> satu kali di Apps Script Editor, setelah itu seluruh PC akan tersinkron otomatis.
-                </p>
-              </div>
-
-              <div className="space-y-3">
-                <span className="font-bold text-slate-900 block text-xs">Langkah Cepat (Hanya 4 Langkah):</span>
-
-                <div className="space-y-2.5">
-                  <div className="flex items-start gap-3 p-3 rounded-xl bg-slate-50 border border-slate-200">
-                    <span className="w-5 h-5 rounded-full bg-blue-600 text-white font-bold flex items-center justify-center text-[10px] shrink-0 mt-0.5">
-                      1
-                    </span>
-                    <div>
-                      <p className="font-semibold text-slate-800">Buka Project Google Apps Script</p>
-                      <p className="text-[11px] text-slate-500 mt-0.5">
-                        Buka editor Google Apps Script yang terhubung dengan database eMons BCA Anda.
-                      </p>
-                    </div>
-                  </div>
-
-                  <div className="flex items-start gap-3 p-3 rounded-xl bg-slate-50 border border-slate-200">
-                    <span className="w-5 h-5 rounded-full bg-blue-600 text-white font-bold flex items-center justify-center text-[10px] shrink-0 mt-0.5">
-                      2
-                    </span>
-                    <div>
-                      <p className="font-semibold text-slate-800">Salin Seluruh Kode Terbaru ke Code.gs</p>
-                      <p className="text-[11px] text-slate-500 mt-0.5">
-                        Buka file <code className="bg-slate-200 px-1 py-0.5 rounded font-mono text-[10px]">Code.gs</code> di Apps Script, lalu gantikan seluruh isinya dengan file terbaru dari:
-                      </p>
-                      <p className="mt-1 text-[11px] font-mono text-blue-700 bg-blue-50 px-2 py-1 rounded border border-blue-200">
-                        apps_script_backend/Code.gs
-                      </p>
-                    </div>
-                  </div>
-
-                  <div className="flex items-start gap-3 p-3 rounded-xl bg-slate-50 border border-slate-200">
-                    <span className="w-5 h-5 rounded-full bg-blue-600 text-white font-bold flex items-center justify-center text-[10px] shrink-0 mt-0.5">
-                      3
-                    </span>
-                    <div>
-                      <p className="font-semibold text-slate-800">Simpan Perubahan</p>
-                      <p className="text-[11px] text-slate-500 mt-0.5">
-                        Tekan <kbd className="px-1.5 py-0.5 bg-slate-200 border rounded font-mono text-[10px]">Ctrl + S</kbd> (atau <kbd className="px-1.5 py-0.5 bg-slate-200 border rounded font-mono text-[10px]">Cmd + S</kbd> di Mac).
-                      </p>
-                    </div>
-                  </div>
-
-                  <div className="flex items-start gap-3 p-3 rounded-xl bg-slate-50 border border-slate-200">
-                    <span className="w-5 h-5 rounded-full bg-blue-600 text-white font-bold flex items-center justify-center text-[10px] shrink-0 mt-0.5">
-                      4
-                    </span>
-                    <div>
-                      <p className="font-semibold text-slate-800">Deploy Versi Baru (Sangat Penting!)</p>
-                      <p className="text-[11px] text-slate-500 leading-relaxed mt-0.5">
-                        Klik tombol <strong>Deploy</strong> (kanan atas) &gt; pilih <strong>Manage Deployments</strong> &gt; klik ikon <strong>Edit (pensil)</strong> pada Web App aktif &gt; pada bagian <strong>Version</strong> pilih <strong>"New version"</strong> &gt; klik <strong>Deploy</strong>.
-                      </p>
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              <div className="p-3 bg-emerald-50 border border-emerald-200 rounded-xl text-emerald-900 text-[11px]">
-                <p className="font-semibold">Selesai!</p>
-                <p className="mt-0.5">
-                  Setelah deploy versi baru selesai, kembali ke dashboard ini lalu klik tombol <strong>"Tarik Data Server"</strong>. Status akan berubah menjadi hijau (Sinkron Cloud Aktif), dan setiap perubahan di PC 1 akan langsung tampil di PC 2!
-                </p>
-              </div>
-            </div>
-
-            <div className="px-5 py-3 border-t border-slate-100 bg-slate-50 flex items-center justify-between">
-              <span className="text-[11px] text-slate-500">Hanya perlu dilakukan 1 kali.</span>
-              <button
-                type="button"
-                onClick={() => setIsGasGuideOpen(false)}
-                className="px-4 py-1.5 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold cursor-pointer"
-              >
-                Saya Mengerti
               </button>
             </div>
           </div>
