@@ -26,8 +26,8 @@ interface LandingPageProps {
 type VerifyRole = 'KAWIL' | 'KAOPS' | 'SUPER_ADMIN';
 
 export default function LandingPage({ onSelectMode }: LandingPageProps) {
-  const [selectedVerifyRole, setSelectedVerifyRole] = useState<VerifyRole>('SUPER_ADMIN');
-  const [username, setUsername] = useState('superadmin');
+  const [selectedVerifyRole, setSelectedVerifyRole] = useState<VerifyRole>('KAWIL');
+  const [username, setUsername] = useState('kawil');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
@@ -265,47 +265,55 @@ export default function LandingPage({ onSelectMode }: LandingPageProps) {
                 </span>
               </div>
 
-              {/* Level Tabs Switcher */}
-              <div className="bg-slate-100 p-1 rounded-lg flex gap-1 mt-4">
-                <button
-                  type="button"
-                  onClick={() => handleSelectRole('KAWIL')}
-                  className={`flex-1 py-2 px-2.5 rounded-md text-xs transition-colors cursor-pointer flex items-center justify-center gap-1.5 ${
-                    selectedVerifyRole === 'KAWIL'
-                      ? 'bg-white text-slate-900 shadow-2xs font-semibold'
-                      : 'text-slate-600 hover:text-slate-900 font-medium'
-                  }`}
-                >
-                  <Building2 className={`w-3.5 h-3.5 ${selectedVerifyRole === 'KAWIL' ? 'text-blue-600' : 'text-slate-400'}`} />
-                  <span>Ka Wil</span>
-                </button>
+              {/* Level Tabs Switcher - Hanya Ka Wil & Ka Ops untuk Staff Biasa */}
+              {selectedVerifyRole === 'SUPER_ADMIN' ? (
+                <div className="bg-amber-500/10 border border-amber-300/80 rounded-lg p-2.5 flex items-center justify-between mt-4">
+                  <div className="flex items-center gap-2">
+                    <div className="w-6 h-6 rounded bg-amber-500 text-white flex items-center justify-center font-bold text-xs shadow-2xs">
+                      <Crown className="w-3.5 h-3.5" />
+                    </div>
+                    <div>
+                      <div className="text-xs font-bold text-amber-900 leading-tight">Portal Super Admin</div>
+                      <div className="text-[10px] text-amber-700">Akses khusus konfigurasi sistem & database</div>
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => handleSelectRole('KAWIL')}
+                    className="text-xs text-amber-800 hover:text-amber-950 font-medium cursor-pointer underline flex items-center gap-0.5"
+                  >
+                    <span>← Kembali</span>
+                  </button>
+                </div>
+              ) : (
+                <div className="bg-slate-100 p-1 rounded-lg flex gap-1 mt-4">
+                  <button
+                    type="button"
+                    onClick={() => handleSelectRole('KAWIL')}
+                    className={`flex-1 py-2 px-2.5 rounded-md text-xs transition-colors cursor-pointer flex items-center justify-center gap-1.5 ${
+                      selectedVerifyRole === 'KAWIL'
+                        ? 'bg-white text-slate-900 shadow-2xs font-semibold'
+                        : 'text-slate-600 hover:text-slate-900 font-medium'
+                    }`}
+                  >
+                    <Building2 className={`w-3.5 h-3.5 ${selectedVerifyRole === 'KAWIL' ? 'text-blue-600' : 'text-slate-400'}`} />
+                    <span>Ka Wil</span>
+                  </button>
 
-                <button
-                  type="button"
-                  onClick={() => handleSelectRole('KAOPS')}
-                  className={`flex-1 py-2 px-2.5 rounded-md text-xs transition-colors cursor-pointer flex items-center justify-center gap-1.5 ${
-                    selectedVerifyRole === 'KAOPS'
-                      ? 'bg-white text-slate-900 shadow-2xs font-semibold'
-                      : 'text-slate-600 hover:text-slate-900 font-medium'
-                  }`}
-                >
-                  <ShieldCheck className={`w-3.5 h-3.5 ${selectedVerifyRole === 'KAOPS' ? 'text-blue-600' : 'text-slate-400'}`} />
-                  <span>Ka Ops</span>
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() => handleSelectRole('SUPER_ADMIN')}
-                  className={`flex-1 py-2 px-2.5 rounded-md text-xs transition-colors cursor-pointer flex items-center justify-center gap-1.5 ${
-                    selectedVerifyRole === 'SUPER_ADMIN'
-                      ? 'bg-white text-slate-900 shadow-2xs font-semibold'
-                      : 'text-slate-600 hover:text-slate-900 font-medium'
-                  }`}
-                >
-                  <Zap className={`w-3.5 h-3.5 ${selectedVerifyRole === 'SUPER_ADMIN' ? 'text-amber-500 fill-amber-500' : 'text-slate-400'}`} />
-                  <span>Super Admin</span>
-                </button>
-              </div>
+                  <button
+                    type="button"
+                    onClick={() => handleSelectRole('KAOPS')}
+                    className={`flex-1 py-2 px-2.5 rounded-md text-xs transition-colors cursor-pointer flex items-center justify-center gap-1.5 ${
+                      selectedVerifyRole === 'KAOPS'
+                        ? 'bg-white text-slate-900 shadow-2xs font-semibold'
+                        : 'text-slate-600 hover:text-slate-900 font-medium'
+                    }`}
+                  >
+                    <ShieldCheck className={`w-3.5 h-3.5 ${selectedVerifyRole === 'KAOPS' ? 'text-blue-600' : 'text-slate-400'}`} />
+                    <span>Ka Ops</span>
+                  </button>
+                </div>
+              )}
 
               {/* Verification Box Banner */}
               <div className="bg-slate-50 border border-[#E5EAF2] rounded-lg p-3 flex items-center gap-3 mt-4">
@@ -373,7 +381,7 @@ export default function LandingPage({ onSelectMode }: LandingPageProps) {
                         type="text"
                         value={username}
                         onChange={(e) => setUsername(e.target.value)}
-                        placeholder="Contoh: superadmin, kaops, kawil"
+                        placeholder={selectedVerifyRole === 'SUPER_ADMIN' ? 'Username administrator...' : 'Masukkan username / ID...'}
                         className="w-full bg-white border border-[#CBD5E1] rounded-lg pl-9 pr-3 py-2 text-xs text-slate-900 placeholder:text-slate-400 focus:outline-none focus:border-blue-600 focus:ring-1 focus:ring-blue-600 transition-colors"
                       />
                     </div>
@@ -405,13 +413,7 @@ export default function LandingPage({ onSelectMode }: LandingPageProps) {
                         type={showPassword ? 'text' : 'password'}
                         value={password}
                         onChange={(e) => setPassword(e.target.value)}
-                        placeholder={
-                          selectedVerifyRole === 'SUPER_ADMIN'
-                            ? 'Password Super Admin (default: BcaAdmin2026!)'
-                            : selectedVerifyRole === 'KAWIL'
-                            ? 'Password Ka Wil (default: Kawil2026!)'
-                            : 'Password Ka Ops (default: Kaops2026!)'
-                        }
+                        placeholder="Masukkan password akun..."
                         className={`w-full bg-white border rounded-lg pl-9 pr-9 py-2 text-xs text-slate-900 placeholder:text-slate-400 focus:outline-none transition-colors ${
                           errorMessage
                             ? 'border-rose-300 bg-rose-50/20 focus:border-rose-500'
@@ -428,26 +430,6 @@ export default function LandingPage({ onSelectMode }: LandingPageProps) {
                       </button>
                     </div>
                   </div>
-
-                  {/* Helper Petunjuk Kredensial */}
-                  {selectedVerifyRole === 'SUPER_ADMIN' ? (
-                    <div className="p-2.5 rounded-lg bg-amber-50/90 border border-amber-200 text-amber-900 text-[11px] flex items-start gap-2">
-                      <Crown className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
-                      <div>
-                        <span className="font-bold">Kredensial Super Admin:</span> Username <code className="bg-amber-100 px-1 py-0.5 rounded font-mono font-bold">superadmin</code> | Password <code className="bg-amber-100 px-1 py-0.5 rounded font-mono font-bold">BcaAdmin2026!</code>
-                      </div>
-                    </div>
-                  ) : selectedVerifyRole === 'KAWIL' ? (
-                    <div className="p-2 rounded-lg bg-blue-50 border border-blue-200 text-blue-900 text-[11px] flex items-center gap-2">
-                      <Building2 className="w-3.5 h-3.5 text-blue-600 shrink-0" />
-                      <span>Username: <code className="font-mono font-bold">kawil</code> | Password default: <code className="font-mono font-bold">Kawil2026!</code></span>
-                    </div>
-                  ) : (
-                    <div className="p-2 rounded-lg bg-slate-100 border border-slate-200 text-slate-700 text-[11px] flex items-center gap-2">
-                      <ShieldCheck className="w-3.5 h-3.5 text-slate-600 shrink-0" />
-                      <span>Username: <code className="font-mono font-bold">kaops</code> | Password default: <code className="font-mono font-bold">Kaops2026!</code></span>
-                    </div>
-                  )}
 
                   {/* Error Notice */}
                   {errorMessage && (
@@ -489,6 +471,30 @@ export default function LandingPage({ onSelectMode }: LandingPageProps) {
                   </div>
                 </form>
               )}
+
+              {/* Discreet Super Admin Access Link at Bottom */}
+              <div className="mt-5 pt-3.5 border-t border-slate-100 flex items-center justify-between text-[11px] text-slate-400">
+                <span>Akses Khusus</span>
+                {selectedVerifyRole === 'SUPER_ADMIN' ? (
+                  <button
+                    type="button"
+                    onClick={() => handleSelectRole('KAWIL')}
+                    className="text-blue-600 hover:text-blue-700 font-medium transition-colors cursor-pointer flex items-center gap-1"
+                  >
+                    <span>← Kembali ke Login Pengguna</span>
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => handleSelectRole('SUPER_ADMIN')}
+                    className="text-slate-400 hover:text-slate-600 transition-colors flex items-center gap-1 cursor-pointer font-medium"
+                    title="Portal Otorisasi Khusus Super Admin"
+                  >
+                    <KeyRound className="w-3 h-3 text-slate-400" />
+                    <span>Portal Administrator</span>
+                  </button>
+                )}
+              </div>
             </div>
           </div>
 

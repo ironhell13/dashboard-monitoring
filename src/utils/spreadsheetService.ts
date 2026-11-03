@@ -420,6 +420,105 @@ export const fetchDashboardData = async (): Promise<DashboardDbData> => {
           lockedPeriodes: defaultLocked,
           lastUpdated: new Date().toISOString()
         };
+      } else if (sample.machines && Array.isArray(sample.machines) && sample.machines.length > 0) {
+        // Unpack machines dataset & monthly problem breakdown
+        const masterData: MasterRow[] = sample.machines.map((m: any) => ({
+          WSID: String(m.wsid || '').trim(),
+          'Jenis Mesin': m.jenisMesin || 'ATM',
+          Klien: m.klienStatus || 'BCA',
+          Sektor: m.sektorBCA || '-',
+          Wilayah: m.wilayahOperasional || 'ABACUS JAKARTA',
+          'Nama Lokasi': m.lokasi || '',
+          Vendor: m.vendor || '-',
+          'Tipe Mesin': m.tipeMesin || '',
+          Status: m.statusAktif || 'AKTIF',
+          Jam: m.jam || '',
+          OPR: m.opr || ''
+        }));
+
+        const periodes: string[] = (sample.availablePeriodes || ['2026-02', '2026-03', '2026-04', '2026-05', '2026-06', '2026-07', '2026-08']).map(normalizePeriode);
+
+        const parsedUptimeFiles: ParsedUptimeFile[] = periodes.map((periode: string) => {
+          const atmData: any[] = [];
+          const atsData: any[] = [];
+
+          for (const m of sample.machines) {
+            const md = (m.monthlyData || []).find((x: any) => normalizePeriode(x.periode) === periode);
+            if (!md) continue;
+
+            const row = {
+              WSID: String(m.wsid || '').trim(),
+              LOKASI: m.lokasi || '',
+              DESCKCU: m.wilayahOperasional || 'ABACUS JAKARTA',
+              KWW: m.wilayahOperasional || 'ABACUS JAKARTA',
+              VDR: m.vendor || '-',
+              SEKTOR: m.sektorBCA || '-',
+              Klien: m.klienStatus || 'BCA',
+              'Tipe Mesin': m.tipeMesin || '',
+              STATUS: m.statusAktif || 'AKTIF',
+              JAM: m.jam || '',
+              OPR: m.opr || '',
+              Total_pct: Number(md.total) || 0,
+              Total_frx: Number(md.frxTotal) || 0,
+              Total_dur: Number(md.durTotal) || 0,
+              UH_pct: Number(md.uh) || 0,
+              UH_frx: Number(md.uhFrx) || 0,
+              UH_dur: Number(md.uhDur) || 0,
+              KOM_pct: Number(md.kom) || 0,
+              KOM_frx: Number(md.komFrx) || 0,
+              KOM_dur: Number(md.komDur) || 0,
+              UP_pct: Number(md.up) || 0,
+              UP_frx: Number(md.upFrx) || 0,
+              UP_dur: Number(md.upDur) || 0,
+              'H/W_pct': Number(md.hw) || 0,
+              'H/W_frx': Number(md.hwFrx) || 0,
+              'H/W_dur': Number(md.hwDur) || 0,
+              LL_pct: Number(md.ll) || 0,
+              LL_frx: Number(md.llFrx) || 0,
+              LL_dur: Number(md.llDur) || 0,
+              hwDetail: md.hwDetail || {},
+              hwSubCategories: md.hwSubCategories || {}
+            };
+
+            const jm = String(m.jenisMesin || '').toUpperCase();
+            if (jm === 'CRM' || jm === 'CDM' || jm === 'ATS') {
+              atsData.push(row);
+            } else {
+              atmData.push(row);
+            }
+          }
+
+          const calcAvg = (rows: any[]) => {
+            if (rows.length === 0) return 100;
+            const sumTot = rows.reduce((acc, r) => acc + (r.Total_pct || 0), 0);
+            return Math.max(0, 100 - (sumTot / rows.length));
+          };
+
+          return {
+            periode,
+            atmData,
+            atsData,
+            rekapUptimeATM: Number(calcAvg(atmData).toFixed(2)),
+            rekapUptimeCRM: Number(calcAvg(atsData).toFixed(2))
+          };
+        });
+
+        try {
+          await saveCachedMasterData(masterData);
+          await saveCachedUptimeFiles(parsedUptimeFiles);
+          await saveCachedLockedPeriodes(periodes);
+        } catch (idbErr) {
+          console.warn('Gagal menyimpan cache IndexedDB:', idbErr);
+        }
+
+        return {
+          success: true,
+          hasData: true,
+          masterData,
+          parsedUptimeFiles,
+          lockedPeriodes: periodes,
+          lastUpdated: new Date().toISOString()
+        };
       }
     }
   } catch (sampleErr) {
