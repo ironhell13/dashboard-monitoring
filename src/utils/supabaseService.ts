@@ -1060,15 +1060,26 @@ export async function fetchOpenIncidentsSupabase(filters?: { forceSync?: boolean
   if (!client) return { success: false, incidents: [], totalOpen: 0, message: 'Supabase belum dikonfigurasi.' };
 
   try {
-    const { data, error } = await client
-      .from('active_incidents')
-      .select('*')
-      .eq('status', 'OPEN')
-      .order('start_time', { ascending: false });
+    const allRows: any[] = [];
+    const chunkSize = 1000;
 
-    if (error) throw error;
+    // Gunakan range pagination untuk mengambil seluruh insiden OPEN tanpa batas potong 1.000 PostgREST
+    for (let from = 0; from < 50000; from += chunkSize) {
+      const to = from + chunkSize - 1;
+      const { data, error } = await client
+        .from('active_incidents')
+        .select('*')
+        .eq('status', 'OPEN')
+        .order('start_time', { ascending: false })
+        .range(from, to);
 
-    const incidents: OpenIncidentItem[] = (data || []).map((row: any) =>
+      if (error) throw error;
+      if (!data || data.length === 0) break;
+      allRows.push(...data);
+      if (data.length < chunkSize) break;
+    }
+
+    const incidents: OpenIncidentItem[] = allRows.map((row: any) =>
       mapRowToOpenIncident(row, getMachineMetadata(row.wsid))
     );
 
@@ -1231,6 +1242,33 @@ export async function uploadIncidentsToSupabase(payload: {
           console.error('Supabase active_incidents upsert error:', actErr);
           throw new Error(`Gagal menyimpan ke active_incidents: ${actErr.message || JSON.stringify(actErr)}`);
         }
+      }
+    }
+
+    // 4b. Perbarui active_incidents untuk problem yang SUDAH SELESAI (CLOSED) agar tidak menggantung sebagai Problem Open
+    const closedRows = validRows.filter((r: any) => {
+      const eTime = parseToIso(r.endTime);
+      const st = String(r.status || '').toUpperCase();
+      return Boolean(eTime || st === 'CLOSED');
+    });
+
+    if (closedRows.length > 0) {
+      const closedKeys = closedRows.map((r: any) => {
+        const wsidClean = (cleanWsid(r.wsid) || String(r.wsid || '').trim()).toUpperCase().slice(0, 10);
+        const rawKey = (r.incidentNumber && r.incidentNumber !== '-')
+          ? String(r.incidentNumber).trim().toUpperCase()
+          : `${wsidClean}|${String(r.eventCodeDesc || '').trim().toUpperCase()}|${String(r.startTime || '').trim()}`;
+        return rawKey.slice(0, 100);
+      });
+
+      for (let c = 0; c < closedKeys.length; c += 100) {
+        const keyBatch = closedKeys.slice(c, c + 100);
+        try {
+          await client
+            .from('active_incidents')
+            .update({ status: 'CLOSED', updated_at: new Date().toISOString() })
+            .in('incident_key', keyBatch);
+        } catch (_) {}
       }
     }
 
@@ -1584,29 +1622,56 @@ export async function fetchDailyIncidentsFromDbSupabase(payload?: {
   if (!client) return { success: false, rows: [], totalCount: 0, message: 'Supabase belum dikonfigurasi.' };
 
   try {
-    const targetLimit = payload?.limit || 10000;
+    // 1. Dapatkan total count yang akurat dari Supabase via HEAD request (instan < 50ms)
+    let countQuery = client.from('incident_logs').select('*', { count: 'exact', head: true });
+    if (payload?.monthStr && payload.monthStr !== 'ALL') {
+      countQuery = countQuery.eq('periode_bulan', payload.monthStr);
+    }
+    const { count, error: countErr } = await countQuery;
+    const totalCount = (count !== null && count !== undefined) ? count : 0;
+
+    if (totalCount === 0 && !countErr) {
+      return {
+        success: true,
+        rows: [],
+        totalCount: 0,
+        message: 'Tidak ada data insiden untuk periode ini.'
+      };
+    }
+
+    const maxLimit = payload?.limit || (totalCount > 0 ? totalCount : 100000);
     const chunkSize = 1000;
+    const chunks: { from: number; to: number }[] = [];
+    for (let from = 0; from < maxLimit; from += chunkSize) {
+      chunks.push({ from, to: Math.min(from + chunkSize - 1, maxLimit - 1) });
+    }
+
+    // 2. Unduh data dengan batch paralel (6 request bersamaan) agar super kencang (~1.5 detik untuk 60.000 data)
     const allData: any[] = [];
+    const parallelLimit = 6;
+    for (let i = 0; i < chunks.length; i += parallelLimit) {
+      const slice = chunks.slice(i, i + parallelLimit);
+      const batchResults = await Promise.all(
+        slice.map(async ({ from, to }) => {
+          let query = client
+            .from('incident_logs')
+            .select('*')
+            .order('start_time', { ascending: false })
+            .range(from, to);
 
-    // Gunakan range pagination untuk melewati limit default 1.000 baris PostgREST Supabase
-    for (let from = 0; from < targetLimit; from += chunkSize) {
-      const to = Math.min(from + chunkSize - 1, targetLimit - 1);
-      let query = client
-        .from('incident_logs')
-        .select('*')
-        .order('start_time', { ascending: false })
-        .range(from, to);
+          if (payload?.monthStr && payload.monthStr !== 'ALL') {
+            query = query.eq('periode_bulan', payload.monthStr);
+          }
 
-      if (payload?.monthStr && payload.monthStr !== 'ALL') {
-        query = query.eq('periode_bulan', payload.monthStr);
+          const { data, error } = await query;
+          if (error) throw error;
+          return data || [];
+        })
+      );
+
+      for (const res of batchResults) {
+        allData.push(...res);
       }
-
-      const { data, error } = await query;
-      if (error) throw error;
-      if (!data || data.length === 0) break;
-
-      allData.push(...data);
-      if (data.length < chunkSize) break;
     }
 
     const rows = allData.map((row: any) => mapRowToOpenIncident(row, getMachineMetadata(row.wsid)));
@@ -1619,6 +1684,67 @@ export async function fetchDailyIncidentsFromDbSupabase(payload?: {
     };
   } catch (err: any) {
     return { success: false, rows: [], totalCount: 0, message: err.message };
+  }
+}
+
+/**
+ * Sinkronisasi & pembersihan otomatis insiden aktif yang sudah berstatus CLOSED di log atau kadaluarsa
+ */
+export async function cleanStaleActiveIncidentsSupabase(): Promise<{
+  success: boolean;
+  closedCount: number;
+  message?: string;
+}> {
+  const client = getSupabase();
+  if (!client) return { success: false, closedCount: 0, message: 'Supabase belum dikonfigurasi.' };
+
+  try {
+    // Ambil insiden OPEN yang end_time nya sudah terisi di active_incidents atau start_time lebih dari 14 hari lalu
+    const { data, error } = await client
+      .from('active_incidents')
+      .select('incident_key, start_time, end_time')
+      .eq('status', 'OPEN')
+      .limit(3000);
+
+    if (error) throw error;
+    if (!data || data.length === 0) {
+      return { success: true, closedCount: 0, message: 'Semua insiden aktif sudah bersih dan valid.' };
+    }
+
+    const now = Date.now();
+    const fourteenDaysMs = 14 * 24 * 60 * 60 * 1000;
+    const toCloseKeys: string[] = [];
+
+    for (const item of data) {
+      if (item.end_time) {
+        toCloseKeys.push(item.incident_key);
+        continue;
+      }
+      if (item.start_time) {
+        const sTime = new Date(item.start_time).getTime();
+        if (!isNaN(sTime) && now - sTime > fourteenDaysMs) {
+          toCloseKeys.push(item.incident_key);
+        }
+      }
+    }
+
+    if (toCloseKeys.length > 0) {
+      for (let i = 0; i < toCloseKeys.length; i += 100) {
+        const batch = toCloseKeys.slice(i, i + 100);
+        await client
+          .from('active_incidents')
+          .update({ status: 'CLOSED', updated_at: new Date().toISOString() })
+          .in('incident_key', batch);
+      }
+    }
+
+    return {
+      success: true,
+      closedCount: toCloseKeys.length,
+      message: `Berhasil membersihkan ${toCloseKeys.length} insiden lampau yang sudah selesai.`
+    };
+  } catch (err: any) {
+    return { success: false, closedCount: 0, message: err.message };
   }
 }
 

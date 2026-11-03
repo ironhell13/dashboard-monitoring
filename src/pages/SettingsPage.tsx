@@ -58,6 +58,7 @@ import {
   migrateAllDataToSupabase,
   migrateDailyDataToSupabase,
   uploadIncidentsToSupabase,
+  cleanStaleActiveIncidentsSupabase,
   type MigrationProgress
 } from '../utils/supabaseService';
 import { parseDailyIncidentCsv } from '../utils/dailyIncidentParser';
@@ -420,6 +421,31 @@ export default function SettingsPage({ userRole = 'KAOPS' }: SettingsPageProps) 
       setDailyMigrationProgress(null);
     } finally {
       setIsMigratingDaily(false);
+    }
+  };
+
+  const [isCleaningActive, setIsCleaningActive] = useState(false);
+  const handleCleanActiveIncidents = async () => {
+    if (!isSupabaseConfigured()) {
+      showToast('Koneksi Supabase belum terkonfigurasi. Simpan URL dan Anon Key terlebih dahulu.', 'error');
+      return;
+    }
+    if (!window.confirm('Tutup dan bersihkan problem open yang sudah selesai atau sudah lebih dari 14 hari lampau dari tabel active_incidents?')) {
+      return;
+    }
+
+    setIsCleaningActive(true);
+    try {
+      const res = await cleanStaleActiveIncidentsSupabase();
+      if (res.success) {
+        showToast(res.message || 'Pembersihan berhasil diselesaikan.', 'success');
+      } else {
+        showToast(res.message || 'Gagal membersihkan data.', 'error');
+      }
+    } catch (e: any) {
+      showToast(e.message || 'Error saat membersihkan.', 'error');
+    } finally {
+      setIsCleaningActive(false);
     }
   };
 
@@ -1553,6 +1579,17 @@ export default function SettingsPage({ userRole = 'KAOPS' }: SettingsPageProps) 
                     >
                       {isMigratingDaily ? <RefreshCw className="w-4 h-4 animate-spin" /> : <ArrowUp className="w-4 h-4 rotate-45" />}
                       <span>{isMigratingDaily ? 'Menyinkronkan Daily...' : 'Migrasikan Arsip Daily'}</span>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={handleCleanActiveIncidents}
+                      disabled={isCleaningActive || !isSupabaseConfigured()}
+                      className="px-3 py-2 rounded-lg border border-amber-300 bg-amber-50 hover:bg-amber-100 text-amber-800 text-xs font-bold shadow-xs cursor-pointer disabled:opacity-50 flex items-center gap-1.5 shrink-0"
+                      title="Tutup dan bersihkan problem open masa lampau yang tersangkut di database"
+                    >
+                      {isCleaningActive ? <RefreshCw className="w-4 h-4 animate-spin" /> : <ShieldCheck className="w-4 h-4 text-amber-700" />}
+                      <span>{isCleaningActive ? 'Membersihkan...' : 'Bersihkan Open Kadaluarsa'}</span>
                     </button>
                   </div>
                 </div>

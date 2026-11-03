@@ -1141,7 +1141,7 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
   }, [openIncidents]);
 
   // Tarik dataset lengkap insiden bulanan (100+ insiden) dari database spreadsheet
-  const fetchDailyIncidentsFromDb = async (month: string = historyMonth) => {
+  const fetchDailyIncidentsFromDb = async (month: string = 'ALL') => {
     setIsLoadingDailyFromDb(true);
     try {
       const res = await getDailyIncidentsFromDbApi({ monthStr: month });
@@ -1352,9 +1352,9 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
         } catch (e) {}
       }
 
-      // Hanya tarik otomatis dari database spreadsheet jika di cache lokal belum ada data sama sekali
+      // Hanya tarik otomatis dari database jika di cache lokal belum ada data sama sekali
       if (!hasDailyData) {
-        fetchDailyIncidentsFromDb(historyMonth);
+        fetchDailyIncidentsFromDb('ALL');
       }
     }
 
@@ -5194,7 +5194,7 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
                     setCountdownSeconds(15);
                     historyCacheRef.current = {};
                     await fetchOpenIncidents(true);
-                    await fetchDailyIncidentsFromDb(historyMonth);
+                    await fetchDailyIncidentsFromDb('ALL');
                   }}
                   className="flex items-center gap-1.5 text-[#555F71] hover:text-[#0D1C2E] text-[11px] bg-[#EFF4FF] hover:bg-[#dbe6ff] px-2.5 py-1 rounded-full cursor-pointer transition-all border border-transparent hover:border-[#BFD3FF]"
                   title="Klik untuk menyinkronkan data Problem Open & Database terbaru sekarang"
@@ -6779,7 +6779,7 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
                 {/* Sync Database Button */}
                 <button
                   type="button"
-                  onClick={() => fetchDailyIncidentsFromDb(historyMonth)}
+                  onClick={() => fetchDailyIncidentsFromDb('ALL')}
                   disabled={isLoadingDailyFromDb}
                   className="inline-flex items-center gap-1.5 h-9 px-3 rounded-xl bg-[#EFF4FF] hover:bg-[#E5EEFF] text-blue-600 text-xs font-semibold shadow-2xs transition-all cursor-pointer"
                   title="Sinkronkan data frekuensi dari database spreadsheet"
