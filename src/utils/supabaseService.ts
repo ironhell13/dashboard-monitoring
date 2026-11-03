@@ -1622,56 +1622,34 @@ export async function fetchDailyIncidentsFromDbSupabase(payload?: {
   if (!client) return { success: false, rows: [], totalCount: 0, message: 'Supabase belum dikonfigurasi.' };
 
   try {
-    // 1. Dapatkan total count yang akurat dari Supabase via HEAD request (instan < 50ms)
-    let countQuery = client.from('incident_logs').select('*', { count: 'exact', head: true });
-    if (payload?.monthStr && payload.monthStr !== 'ALL') {
-      countQuery = countQuery.eq('periode_bulan', payload.monthStr);
-    }
-    const { count, error: countErr } = await countQuery;
-    const totalCount = (count !== null && count !== undefined) ? count : 0;
-
-    if (totalCount === 0 && !countErr) {
-      return {
-        success: true,
-        rows: [],
-        totalCount: 0,
-        message: 'Tidak ada data insiden untuk periode ini.'
-      };
-    }
-
-    const maxLimit = payload?.limit || (totalCount > 0 ? totalCount : 100000);
+    const maxLimit = payload?.limit || 100000;
     const chunkSize = 1000;
-    const chunks: { from: number; to: number }[] = [];
-    for (let from = 0; from < maxLimit; from += chunkSize) {
-      chunks.push({ from, to: Math.min(from + chunkSize - 1, maxLimit - 1) });
-    }
-
-    // 2. Unduh data dengan batch paralel (6 request bersamaan) agar super kencang (~1.5 detik untuk 60.000 data)
     const allData: any[] = [];
-    const parallelLimit = 6;
-    for (let i = 0; i < chunks.length; i += parallelLimit) {
-      const slice = chunks.slice(i, i + parallelLimit);
-      const batchResults = await Promise.all(
-        slice.map(async ({ from, to }) => {
-          let query = client
-            .from('incident_logs')
-            .select('*')
-            .order('start_time', { ascending: false })
-            .range(from, to);
 
-          if (payload?.monthStr && payload.monthStr !== 'ALL') {
-            query = query.eq('periode_bulan', payload.monthStr);
-          }
+    // Tarik data secara chunked range pagination yang tangguh & reliable
+    for (let from = 0; from < maxLimit; from += chunkSize) {
+      const to = Math.min(from + chunkSize - 1, maxLimit - 1);
+      let query = client
+        .from('incident_logs')
+        .select('*')
+        .order('start_time', { ascending: false })
+        .range(from, to);
 
-          const { data, error } = await query;
-          if (error) throw error;
-          return data || [];
-        })
-      );
-
-      for (const res of batchResults) {
-        allData.push(...res);
+      if (payload?.monthStr && payload.monthStr !== 'ALL') {
+        query = query.eq('periode_bulan', payload.monthStr);
+      } else if (payload?.startMonth && payload?.endMonth) {
+        query = query.gte('periode_bulan', payload.startMonth).lte('periode_bulan', payload.endMonth);
       }
+
+      const { data, error } = await query;
+      if (error) {
+        console.error('fetchDailyIncidentsFromDbSupabase error at offset', from, error);
+        throw error;
+      }
+      if (!data || data.length === 0) break;
+
+      allData.push(...data);
+      if (data.length < chunkSize) break;
     }
 
     const rows = allData.map((row: any) => mapRowToOpenIncident(row, getMachineMetadata(row.wsid)));
@@ -1680,9 +1658,10 @@ export async function fetchDailyIncidentsFromDbSupabase(payload?: {
       success: true,
       rows,
       totalCount: rows.length,
-      message: 'Sukses memuat riwayat insiden harian dari Supabase'
+      message: `Sukses memuat ${rows.length.toLocaleString()} riwayat insiden harian dari Supabase`
     };
   } catch (err: any) {
+    console.error('fetchDailyIncidentsFromDbSupabase error:', err);
     return { success: false, rows: [], totalCount: 0, message: err.message };
   }
 }
