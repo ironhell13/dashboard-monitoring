@@ -5,6 +5,8 @@
 
 import { getSupabase, isSupabaseConfigured } from './supabaseClient';
 import type { QuickChipItem } from './quickChipsService';
+import { useDataStore } from '../store/useDataStore';
+import { loadCachedMasterData } from './dbCache';
 
 // ==============================================================================
 // 1. QUICK CHIPS (PILIHAN CEPAT) & REALTIME
@@ -543,8 +545,46 @@ export async function migrateAllDataToSupabase(
 
   onProgress?.({ step: 'Membaca data master dari sistem...', percent: 5 });
 
-  // 1. Ambil data dari window/sample-data.json
-  let machines: any[] = (window as any).__EMONS_MACHINES__ || [];
+  // 1. Ambil data mesin dari berbagai sumber (Store, IndexedDB, Seed file, atau Sample data)
+  let machines: any[] = [];
+
+  // Sumber A: Zustand Store (jika dashboard aktif)
+  try {
+    const storeMachines = useDataStore.getState().machines;
+    if (storeMachines && storeMachines.length > 0) {
+      machines = storeMachines;
+    }
+  } catch (e) {}
+
+  // Sumber B: Window global object
+  if (!machines || machines.length === 0) {
+    machines = (window as any).__EMONS_MACHINES__ || [];
+  }
+
+  // Sumber C: IndexedDB Cache
+  if (!machines || machines.length === 0) {
+    try {
+      const cached = await loadCachedMasterData();
+      if (cached && cached.length > 0) {
+        machines = cached;
+      }
+    } catch (e) {}
+  }
+
+  // Sumber D: Master Machines Seed File (/master-machines-seed.json di folder public)
+  if (!machines || machines.length === 0) {
+    try {
+      const res = await fetch('/master-machines-seed.json');
+      if (res.ok) {
+        const seed = await res.json();
+        machines = seed.machines || [];
+      }
+    } catch (e) {
+      console.warn('Gagal fetch /master-machines-seed.json:', e);
+    }
+  }
+
+  // Sumber E: Fallback sample-data.json
   if (!machines || machines.length === 0) {
     try {
       const res = await fetch('/sample-data.json');
@@ -558,7 +598,7 @@ export async function migrateAllDataToSupabase(
   }
 
   if (!machines || machines.length === 0) {
-    throw new Error('Data mesin tidak ditemukan di memori atau sample-data.json.');
+    throw new Error('Data mesin tidak ditemukan di memori, cache, atau seed file. Silakan buka halaman Overview / Upload terlebih dahulu.');
   }
 
   onProgress?.({
@@ -571,16 +611,16 @@ export async function migrateAllDataToSupabase(
   const mBatchSize = 200;
   for (let i = 0; i < machines.length; i += mBatchSize) {
     const chunk = machines.slice(i, i + mBatchSize).map((m: any) => ({
-      wsid: String(m.wsid || '').trim().replace(/^0+/, '') || String(m.wsid || ''),
-      jenis_mesin: m.jenisMesin || m.jenis_mesin || 'ATM',
-      klien_status: m.klienStatus || m.klien_status || 'BCA',
-      sektor_bca: m.sektorBCA || m.sektor_bca || '',
-      wilayah_operasional: m.wilayahOperasional || m.wilayah_operasional || '',
-      lokasi: m.lokasi || '',
-      vendor: m.vendor || '',
-      tipe_mesin: m.tipeMesin || m.tipe_mesin || '',
-      status_aktif: m.statusAktif || m.status_aktif || 'AKTIF',
-      jam_operasional: String(m.jam || m.jam_operasional || '(00:00 - 24:00)'),
+      wsid: String(m.wsid || m.WSID || '').trim().replace(/^0+/, '') || String(m.wsid || m.WSID || ''),
+      jenis_mesin: m.jenisMesin || m['Jenis Mesin'] || m.jenis_mesin || 'ATM',
+      klien_status: m.klienStatus || m.Klien || m.klien_status || 'BCA',
+      sektor_bca: m.sektorBCA || m.Sektor || m.sektor_bca || '',
+      wilayah_operasional: m.wilayahOperasional || m.Wilayah || m.wilayah_operasional || '',
+      lokasi: m.lokasi || m['Nama Lokasi'] || m.Alamat || '',
+      vendor: m.vendor || m.Vendor || '',
+      tipe_mesin: m.tipeMesin || m['Tipe Mesin'] || m.tipe_mesin || '',
+      status_aktif: m.statusAktif || m.Status || m.status_aktif || 'AKTIF',
+      jam_operasional: String(m.jam || m['Jam Operasi'] || m.jam_operasional || '(00:00 - 24:00)'),
       opr: Number(m.opr) || 43200,
       updated_at: new Date().toISOString()
     }));
