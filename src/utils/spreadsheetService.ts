@@ -21,6 +21,7 @@ export interface DashboardDbData {
   lastUpdated: string | null;
   tickets?: FollowUpTicket[];
   modernFollowUpTickets?: FollowUpTicketItem[];
+  prematchedMachines?: any[];
   error?: string;
   message?: string;
 }
@@ -549,6 +550,7 @@ export const fetchDashboardData = async (): Promise<DashboardDbData> => {
           hasData: true,
           masterData,
           parsedUptimeFiles,
+          prematchedMachines: sample.machines,
           lockedPeriodes: periodes,
           lastUpdated: new Date().toISOString()
         };

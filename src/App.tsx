@@ -90,11 +90,15 @@ function App() {
     uptimeFiles: any[],
     lockedPeriodes: string[],
     lastUpdated: string | null,
-    tickets?: any[]
+    tickets?: any[],
+    prematchedMachines?: any[]
   ) => {
-    if (!masterData || masterData.length === 0) return false;
+    if ((!masterData || masterData.length === 0) && (!prematchedMachines || prematchedMachines.length === 0)) return false;
 
-    const matchedMachines = matchData(masterData, uptimeFiles || []);
+    // Jika mesin sudah di-prematch (instan 0ms), lewati matchData yang berat
+    const matchedMachines = (prematchedMachines && prematchedMachines.length > 0)
+      ? prematchedMachines
+      : matchData(masterData, uptimeFiles || []);
     const periods = new Set<string>();
     const trendData: any[] = [];
 
@@ -116,11 +120,17 @@ function App() {
     trendData.sort((a, b) => a.periode.localeCompare(b.periode));
 
     setMachines(matchedMachines);
-    setAvailablePeriodes(sortedPeriods);
-    setGlobalTrendData(trendData);
-    setRawMasterData(masterData);
+    if (sortedPeriods.length > 0) {
+      setAvailablePeriodes(sortedPeriods);
+    }
+    if (trendData.length > 0) {
+      setGlobalTrendData(trendData);
+    }
+    setRawMasterData(masterData || []);
     setRawUptimeFiles(uptimeFiles || []);
-    setLockedPeriodes(lockedPeriodes || []);
+    if (lockedPeriodes && lockedPeriodes.length > 0) {
+      setLockedPeriodes(lockedPeriodes);
+    }
     setLastDbSync(lastUpdated || null);
     setDbSource(isGasEnvironment() ? 'gas' : 'local');
 
@@ -156,16 +166,17 @@ function App() {
       // STEP 1: Coba muat cache snapshot lokal (IndexedDB ~15ms)
       try {
         const cached = await loadDashboardSnapshot();
-        if (isMounted && cached && cached.masterData && cached.masterData.length > 0) {
+        if (isMounted && cached && ((cached.matchedMachines && cached.matchedMachines.length > 0) || (cached.masterData && cached.masterData.length > 0))) {
           applyDataset(
-            cached.masterData,
-            cached.parsedUptimeFiles,
-            cached.lockedPeriodes,
+            cached.masterData || [],
+            cached.parsedUptimeFiles || [],
+            cached.lockedPeriodes || [],
             cached.lastUpdated,
-            cached.followUpTickets
+            cached.followUpTickets,
+            cached.matchedMachines
           );
           hasFullData = true;
-          // Segera buka dashboard dari cache lokal
+          // Segera buka dashboard dari cache lokal instan (< 15ms)
           setIsDbLoaded(true);
         }
       } catch (cacheErr) {
@@ -208,22 +219,24 @@ function App() {
         if (!isMounted) return;
 
         let tickets = dbData.tickets || [];
-        if (dbData && dbData.hasData && dbData.masterData?.length > 0) {
+        if (dbData && dbData.hasData && ((dbData.prematchedMachines && dbData.prematchedMachines.length > 0) || (dbData.masterData && dbData.masterData.length > 0))) {
           applyDataset(
-            dbData.masterData,
+            dbData.masterData || [],
             dbData.parsedUptimeFiles || [],
             dbData.lockedPeriodes || [],
             dbData.lastUpdated,
-            tickets
+            tickets,
+            dbData.prematchedMachines
           );
 
           // Simpan snapshot ke IndexedDB untuk kunjungan berikutnya
           await saveDashboardSnapshot({
-            masterData: dbData.masterData,
+            masterData: dbData.masterData || [],
             parsedUptimeFiles: dbData.parsedUptimeFiles || [],
             lockedPeriodes: dbData.lockedPeriodes || [],
             followUpTickets: tickets,
             lastUpdated: dbData.lastUpdated,
+            matchedMachines: dbData.prematchedMachines,
             timestamp: Date.now()
           });
 

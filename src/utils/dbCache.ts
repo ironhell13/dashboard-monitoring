@@ -8,6 +8,7 @@ export interface CachedSnapshot {
   followUpTickets: FollowUpTicket[];
   lastUpdated: string | null;
   timestamp: number;
+  matchedMachines?: any[];
 }
 
 const DB_NAME = 'DOWNTIME_BCA_CACHE_DB';

@@ -17,19 +17,9 @@ const STORAGE_CUSTOM_URL_KEY = 'CUSTOM_GAS_API_URL';
  * 3. Default Production Google Apps Script Web App URL
  */
 export function getBackendApiUrl(): string {
-  try {
-    const custom = localStorage.getItem(STORAGE_CUSTOM_URL_KEY);
-    if (custom && custom.trim() !== '') {
-      return custom.trim();
-    }
-  } catch (e) {}
-
-  const envUrl = (import.meta as any).env?.VITE_GAS_API_URL;
-  if (envUrl && envUrl.trim() !== '') {
-    return envUrl.trim();
-  }
-
-  return DEFAULT_GAS_API_URL;
+  // Seluruh pemanggilan Google Apps Script lama dinonaktifkan permanen
+  // untuk mencegah timeout 35 detik dan freeze browser.
+  return '';
 }
 
 /**
@@ -47,9 +37,10 @@ export function setBackendApiUrl(url: string): void {
 
 /**
  * Memeriksa apakah backend API sudah terkonfigurasi
+ * Selalu false karena arsitektur sudah berpindah penuh ke Supabase Cloud
  */
 export function isBackendConfigured(): boolean {
-  return getBackendApiUrl() !== '';
+  return false;
 }
 
 /**
