@@ -87,6 +87,8 @@
         return pangkasBarisKosongBerlebih();
       case 'diagnoseDailyDb':
         return diagnoseDailyDb();
+      case 'getQuickChipsConfig':
+        return getQuickChipsConfig();
       case 'ping':
         return { success: true, timestamp: Date.now(), message: 'Pong - Google Apps Script Online' };
       default:
@@ -115,6 +117,8 @@
         return saveFollowUpTicketModern(body.ticket || body);
       case 'deleteFollowUpTicketModern':
         return deleteFollowUpTicketModern(body.ticketId || body.id);
+      case 'saveQuickChipsConfig':
+        return saveQuickChipsConfig(body);
       case 'saveMasterDataToSpreadsheet':
         return saveMasterDataToSpreadsheet(body.masterData || body);
       case 'saveSingleUptimeToSpreadsheet':
@@ -5180,6 +5184,31 @@
       };
     } catch (err) {
       return { success: false, rows: [], message: 'Gagal memuat insiden dari database: ' + err.toString() };
+    }
+  }
+
+  /**
+   * Konfigurasi Pilihan Cepat (Quick Chips) Super Admin
+   */
+  function getQuickChipsConfig() {
+    try {
+      var props = PropertiesService.getScriptProperties();
+      var val = props.getProperty('QUICK_CHIPS_CONFIG');
+      if (!val) return { success: true, chips: null };
+      return { success: true, chips: JSON.parse(val) };
+    } catch (e) {
+      return { success: false, message: e.toString() };
+    }
+  }
+
+  function saveQuickChipsConfig(payload) {
+    try {
+      var props = PropertiesService.getScriptProperties();
+      var chips = payload && payload.chips ? payload.chips : [];
+      props.setProperty('QUICK_CHIPS_CONFIG', JSON.stringify(chips));
+      return { success: true, message: 'Konfigurasi Pilihan Cepat berhasil disimpan ke server.' };
+    } catch (e) {
+      return { success: false, message: e.toString() };
     }
   }
 

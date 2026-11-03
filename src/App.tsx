@@ -12,6 +12,7 @@ import AllWsidPage from './pages/AllWsidPage';
 import WsidDetailPage from './pages/WsidDetailPage';
 import FollowUpPage from './pages/FollowUpPage';
 import CekDailyPage from './pages/CekDailyPage';
+import SettingsPage from './pages/SettingsPage';
 import { useDataStore } from './store/useDataStore';
 import { matchData } from './utils/dataMatcher';
 import { fetchDashboardData, fetchFollowUpTickets, fetchFollowUpTicketsModern, isGasEnvironment } from './utils/spreadsheetService';
@@ -320,6 +321,7 @@ function App() {
             <Route path="/service-point" element={<ServicePointPage />} />
             <Route path="/all-wsid" element={<AllWsidPage />} />
             <Route path="/wsid/:wsid" element={<WsidDetailPage />} />
+            <Route path="/settings" element={<SettingsPage userRole={currentRole} />} />
             <Route path="/total-uptime" element={<Navigate to="/dashboard" replace />} />
           </Route>
 

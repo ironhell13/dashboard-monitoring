@@ -9,6 +9,7 @@ import {
   Server,
   MapPin,
   UploadCloud,
+  Settings,
   Zap,
   LogOut,
   PanelLeftClose,
@@ -80,6 +81,7 @@ export default function Layout({ onLogout, userRole }: LayoutProps) {
       title: 'PENGATURAN',
       items: [
         { name: 'Upload Data', path: '/upload', icon: UploadCloud },
+        { name: 'Setting', path: '/settings', icon: Settings },
       ]
     }
   ];

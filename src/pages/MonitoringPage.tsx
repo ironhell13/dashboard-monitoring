@@ -122,6 +122,7 @@ import {
 } from '../utils/dbCache';
 import { useDataStore } from '../store/useDataStore';
 import FollowUpPage from './FollowUpPage';
+import { useQuickChips } from '../utils/quickChipsService';
 
 interface MonitoringPageProps {
   onLogout?: () => void;
@@ -797,6 +798,12 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
 
   // Ka Wil dan Ka Ops memiliki kapabilitas supervisi & tindak lanjut
   const isSupervisorRole = isKaOps || effectiveRole === 'KAWIL' || effectiveRole === 'KAOPS';
+
+  // Dynamic Quick Chips yang dikelola dari Menu Setting (Super Admin)
+  const { chipTexts: dynamicUpdateChips } = useQuickChips('UPDATE');
+  const { chipTexts: dynamicPenangananChips } = useQuickChips('PENANGANAN');
+  const activeUpdateChips = dynamicUpdateChips.length > 0 ? dynamicUpdateChips : UPDATE_PRESETS;
+  const activePenangananChips = dynamicPenangananChips.length > 0 ? dynamicPenangananChips : PENANGANAN_PRESETS;
 
   // =========================================================================
   // ALL STATE & REF HOOKS DECLARED AT THE VERY TOP (ZERO TDZ GUARANTEED)
@@ -9752,7 +9759,7 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
                   Pilihan Cepat ({actionCategory === 'PENANGANAN' ? 'Tindakan Penanganan' : 'Update Progres'}):
                 </span>
                 <div className="flex flex-wrap gap-1.5">
-                  {(actionCategory === 'PENANGANAN' ? PENANGANAN_PRESETS : UPDATE_PRESETS).map((preset) => (
+                  {(actionCategory === 'PENANGANAN' ? activePenangananChips : activeUpdateChips).map((preset) => (
                     <button
                       key={preset}
                       type="button"
@@ -10087,7 +10094,7 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
                   Pilihan Cepat ({bulkActionCategory === 'PENANGANAN' ? 'Tindakan Penanganan' : 'Update Progres'}):
                 </span>
                 <div className="flex flex-wrap gap-1.5">
-                  {(bulkActionCategory === 'PENANGANAN' ? PENANGANAN_PRESETS : UPDATE_PRESETS).map((preset) => (
+                  {(bulkActionCategory === 'PENANGANAN' ? activePenangananChips : activeUpdateChips).map((preset) => (
                     <button
                       key={preset}
                       type="button"
@@ -10273,7 +10280,7 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
                   <div className="space-y-1">
                     <span className="text-[10px] font-semibold text-[#555F71]">Pilihan Cepat:</span>
                     <div className="flex flex-wrap gap-1.5">
-                      {(modalPenangananCategory === 'PENANGANAN' ? PENANGANAN_PRESETS : UPDATE_PRESETS).map((preset) => (
+                      {(modalPenangananCategory === 'PENANGANAN' ? activePenangananChips : activeUpdateChips).map((preset) => (
                         <button
                           key={preset}
                           type="button"
