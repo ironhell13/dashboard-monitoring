@@ -13,7 +13,9 @@ import {
   Check,
   X,
   HelpCircle,
-  KeyRound
+  KeyRound,
+  User,
+  Crown
 } from 'lucide-react';
 import { authenticateUserSupabase } from '../utils/supabaseService';
 
@@ -24,7 +26,8 @@ interface LandingPageProps {
 type VerifyRole = 'KAWIL' | 'KAOPS' | 'SUPER_ADMIN';
 
 export default function LandingPage({ onSelectMode }: LandingPageProps) {
-  const [selectedVerifyRole, setSelectedVerifyRole] = useState<VerifyRole>('KAWIL');
+  const [selectedVerifyRole, setSelectedVerifyRole] = useState<VerifyRole>('SUPER_ADMIN');
+  const [username, setUsername] = useState('superadmin');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
@@ -38,6 +41,13 @@ export default function LandingPage({ onSelectMode }: LandingPageProps) {
     setSelectedVerifyRole(role);
     setErrorMessage(null);
     setPassword('');
+    if (role === 'SUPER_ADMIN') {
+      setUsername('superadmin');
+    } else if (role === 'KAWIL') {
+      setUsername('kawil');
+    } else {
+      setUsername('kaops');
+    }
     if (passwordInputRef.current) {
       passwordInputRef.current.focus();
     }
@@ -45,15 +55,12 @@ export default function LandingPage({ onSelectMode }: LandingPageProps) {
 
   const handleLoginSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    const roleLabel =
-      selectedVerifyRole === 'KAWIL'
-        ? 'Ka Wil'
-        : selectedVerifyRole === 'SUPER_ADMIN'
-        ? 'Super Admin'
-        : 'Ka Ops';
-
+    if (!username.trim()) {
+      setErrorMessage('Silakan masukkan Username / ID Pengguna.');
+      return;
+    }
     if (!password.trim()) {
-      setErrorMessage(`Silakan masukkan password otorisasi ${roleLabel}.`);
+      setErrorMessage('Silakan masukkan Password akun.');
       if (passwordInputRef.current) {
         passwordInputRef.current.focus();
       }
@@ -65,14 +72,7 @@ export default function LandingPage({ onSelectMode }: LandingPageProps) {
     setLockStatus(null);
 
     try {
-      const targetUser =
-        selectedVerifyRole === 'KAWIL'
-          ? 'kawil'
-          : selectedVerifyRole === 'SUPER_ADMIN'
-          ? 'superadmin'
-          : 'kaops';
-
-      const res = await authenticateUserSupabase(targetUser, password.trim());
+      const res = await authenticateUserSupabase(username.trim(), password.trim());
 
       if (res.success && res.token) {
         const effRole = res.role || selectedVerifyRole;
@@ -92,9 +92,9 @@ export default function LandingPage({ onSelectMode }: LandingPageProps) {
         onSelectMode(effRole === 'KAWIL' ? 'KAWIL' : 'KAOPS');
       } else {
         if (res.isLocked) {
-          setLockStatus(`Akses ${roleLabel} terkunci sementara. Silakan coba lagi.`);
+          setLockStatus('Akses terkunci sementara karena beberapa kali percobaan gagal. Silakan coba lagi.');
         } else {
-          setErrorMessage(res.message || 'Password salah atau otentikasi gagal.');
+          setErrorMessage(res.message || 'Username atau Password salah!');
         }
       }
     } catch (err: any) {
@@ -358,14 +358,35 @@ export default function LandingPage({ onSelectMode }: LandingPageProps) {
                 </div>
               ) : (
                 <form onSubmit={handleLoginSubmit} className="mt-4 space-y-3">
+                  {/* Field 1: Username / ID Pengguna */}
                   <div>
-                    {/* Label & Forgot Password Link */}
+                    <label
+                      htmlFor="supervisor-user"
+                      className="text-[10px] font-semibold tracking-wider text-slate-500 uppercase mb-1 block"
+                    >
+                      USERNAME / ID PENGGUNA
+                    </label>
+                    <div className="relative">
+                      <User className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+                      <input
+                        id="supervisor-user"
+                        type="text"
+                        value={username}
+                        onChange={(e) => setUsername(e.target.value)}
+                        placeholder="Contoh: superadmin, kaops, kawil"
+                        className="w-full bg-white border border-[#CBD5E1] rounded-lg pl-9 pr-3 py-2 text-xs text-slate-900 placeholder:text-slate-400 focus:outline-none focus:border-blue-600 focus:ring-1 focus:ring-blue-600 transition-colors"
+                      />
+                    </div>
+                  </div>
+
+                  {/* Field 2: Password */}
+                  <div>
                     <div className="flex items-center justify-between mb-1">
                       <label
                         htmlFor="supervisor-pass"
                         className="text-[10px] font-semibold tracking-wider text-slate-500 uppercase"
                       >
-                        PASSWORD OTORISASI
+                        PASSWORD AKUN
                       </label>
                       <button
                         type="button"
@@ -376,7 +397,6 @@ export default function LandingPage({ onSelectMode }: LandingPageProps) {
                       </button>
                     </div>
 
-                    {/* Input Box with Lock & Eye Toggle */}
                     <div className="relative">
                       <Lock className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
                       <input
@@ -386,9 +406,11 @@ export default function LandingPage({ onSelectMode }: LandingPageProps) {
                         value={password}
                         onChange={(e) => setPassword(e.target.value)}
                         placeholder={
-                          selectedVerifyRole === 'KAWIL'
-                            ? 'Masukkan password otorisasi Ka Wil...'
-                            : 'Masukkan password otorisasi Ka Ops...'
+                          selectedVerifyRole === 'SUPER_ADMIN'
+                            ? 'Password Super Admin (default: BcaAdmin2026!)'
+                            : selectedVerifyRole === 'KAWIL'
+                            ? 'Password Ka Wil (default: Kawil2026!)'
+                            : 'Password Ka Ops (default: Kaops2026!)'
                         }
                         className={`w-full bg-white border rounded-lg pl-9 pr-9 py-2 text-xs text-slate-900 placeholder:text-slate-400 focus:outline-none transition-colors ${
                           errorMessage
@@ -407,6 +429,26 @@ export default function LandingPage({ onSelectMode }: LandingPageProps) {
                     </div>
                   </div>
 
+                  {/* Helper Petunjuk Kredensial */}
+                  {selectedVerifyRole === 'SUPER_ADMIN' ? (
+                    <div className="p-2.5 rounded-lg bg-amber-50/90 border border-amber-200 text-amber-900 text-[11px] flex items-start gap-2">
+                      <Crown className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+                      <div>
+                        <span className="font-bold">Kredensial Super Admin:</span> Username <code className="bg-amber-100 px-1 py-0.5 rounded font-mono font-bold">superadmin</code> | Password <code className="bg-amber-100 px-1 py-0.5 rounded font-mono font-bold">BcaAdmin2026!</code>
+                      </div>
+                    </div>
+                  ) : selectedVerifyRole === 'KAWIL' ? (
+                    <div className="p-2 rounded-lg bg-blue-50 border border-blue-200 text-blue-900 text-[11px] flex items-center gap-2">
+                      <Building2 className="w-3.5 h-3.5 text-blue-600 shrink-0" />
+                      <span>Username: <code className="font-mono font-bold">kawil</code> | Password default: <code className="font-mono font-bold">Kawil2026!</code></span>
+                    </div>
+                  ) : (
+                    <div className="p-2 rounded-lg bg-slate-100 border border-slate-200 text-slate-700 text-[11px] flex items-center gap-2">
+                      <ShieldCheck className="w-3.5 h-3.5 text-slate-600 shrink-0" />
+                      <span>Username: <code className="font-mono font-bold">kaops</code> | Password default: <code className="font-mono font-bold">Kaops2026!</code></span>
+                    </div>
+                  )}
+
                   {/* Error Notice */}
                   {errorMessage && (
                     <div className="text-rose-700 text-xs font-medium bg-rose-50 border border-rose-200 rounded-md p-2 flex items-center gap-2">
@@ -418,20 +460,26 @@ export default function LandingPage({ onSelectMode }: LandingPageProps) {
                   {/* Audit Log Banner */}
                   <div className="bg-slate-50 border border-[#E5EAF2] rounded-lg p-2 flex items-center gap-2 text-xs text-slate-500">
                     <ShieldCheck className="w-3.5 h-3.5 text-blue-600 shrink-0" />
-                    <span>Setiap aktivitas login dicatat pada audit log</span>
+                    <span>Setiap aktivitas login dicatat pada audit log database</span>
                   </div>
 
-                  {/* Right-Aligned Submit Button - Solid Blue Enterprise Button */}
+                  {/* Right-Aligned Submit Button */}
                   <div className="flex justify-end pt-2">
                     <button
                       type="submit"
                       disabled={isLoading}
-                      className="bg-blue-600 hover:bg-blue-700 active:bg-blue-800 text-white font-medium text-xs py-2 px-5 rounded-lg transition-colors flex items-center gap-1.5 cursor-pointer shadow-xs disabled:opacity-50"
+                      className={`font-medium text-xs py-2 px-5 rounded-lg transition-colors flex items-center gap-1.5 cursor-pointer shadow-xs disabled:opacity-50 text-white ${
+                        selectedVerifyRole === 'SUPER_ADMIN'
+                          ? 'bg-amber-600 hover:bg-amber-700 active:bg-amber-800'
+                          : 'bg-blue-600 hover:bg-blue-700 active:bg-blue-800'
+                      }`}
                     >
                       {isLoading && <Clock className="w-3.5 h-3.5 animate-spin" />}
                       <span>
                         {isLoading
                           ? 'Memverifikasi...'
+                          : selectedVerifyRole === 'SUPER_ADMIN'
+                          ? 'Masuk sebagai Super Admin'
                           : selectedVerifyRole === 'KAWIL'
                           ? 'Masuk sebagai Ka Wil'
                           : 'Masuk sebagai Ka Ops'}
