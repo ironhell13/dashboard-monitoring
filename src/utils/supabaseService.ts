@@ -12,7 +12,7 @@ import {
   loadActiveIncidentDataset,
   loadLocalActions
 } from './dbCache';
-import type { OpenIncidentItem } from './monitoringService';
+import { type OpenIncidentItem, unpackCompactTabular } from './monitoringService';
 import { cleanWsid, parseDateTime } from './dailyIncidentParser';
 import { apiGet } from './apiClient';
 
@@ -764,8 +764,27 @@ export async function migrateDailyDataToSupabase(
     try {
       onProgress?.({ step: 'Menghubungi database Google Spreadsheet untuk mengunduh arsip insiden...', percent: 20 });
       const res = await apiGet('getDailyIncidentsFromDb', { limit: 30000 });
-      if (res && res.success && res.rows && res.rows.length > 0) {
-        dailyRows = res.rows;
+      if (res && res.success) {
+        const unpacked = unpackCompactTabular(res);
+        if (unpacked && unpacked.length > 0) {
+          dailyRows = unpacked;
+        } else if (res.rows && res.rows.length > 0) {
+          dailyRows = res.rows;
+        }
+      }
+    } catch (e) {}
+  }
+
+  // Sumber E: File Seed Daily Bawaan (daily-incidents-seed.json)
+  if (!dailyRows || dailyRows.length === 0) {
+    try {
+      onProgress?.({ step: 'Membaca arsip insiden dari daily-incidents-seed.json...', percent: 25 });
+      const resp = await fetch('/daily-incidents-seed.json');
+      if (resp.ok) {
+        const seedData = await resp.json();
+        if (Array.isArray(seedData) && seedData.length > 0) {
+          dailyRows = seedData;
+        }
       }
     } catch (e) {}
   }

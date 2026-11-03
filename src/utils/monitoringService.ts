@@ -78,7 +78,7 @@ const LOCAL_STORAGE_UPLOAD_LOGS = 'MONITORING_UPLOAD_LOGS_LOCAL';
  * Helper untuk memetakan format tabular compact array ke array of object
  * dengan normalisasi otomatis WSID dan pembersihan baris corrupt.
  */
-function unpackCompactTabular(res: any): any[] {
+export function unpackCompactTabular(res: any): any[] {
   if (res && res.data && res.headers && (!res.rows || res.rows.length === 0)) {
     const h = res.headers;
     const wsidIdx = h.indexOf('wsid');

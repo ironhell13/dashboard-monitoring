@@ -410,8 +410,10 @@ export default function SettingsPage({ userRole = 'KAOPS' }: SettingsPageProps) 
         setDailyMigrationProgress(p);
       });
       if (res.success) {
+        setDailyMigrationProgress({ step: 'Migrasi Selesai!', percent: 100, details: res.message });
         showToast(res.message, 'success');
       } else {
+        setDailyMigrationProgress(null);
         showToast(res.message, 'error');
       }
     } catch (err: any) {
@@ -466,7 +468,7 @@ export default function SettingsPage({ userRole = 'KAOPS' }: SettingsPageProps) 
         });
       }
 
-      setDailyMigrationProgress({ step: 'Selesai!', percent: 100 });
+      setDailyMigrationProgress({ step: 'Selesai!', percent: 100, details: `Sukses memigrasikan ${rows.length.toLocaleString()} insiden ke database Supabase!` });
       showToast(`Sukses memigrasikan ${rows.length.toLocaleString()} insiden dari ${file.name} ke database Supabase!`, 'success');
     } catch (err: any) {
       showToast(err.message || 'Gagal memproses file CSV.', 'error');
