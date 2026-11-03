@@ -6,9 +6,15 @@
 import { getSupabase, isSupabaseConfigured } from './supabaseClient';
 import type { QuickChipItem } from './quickChipsService';
 import { useDataStore } from '../store/useDataStore';
-import { loadCachedMasterData } from './dbCache';
+import {
+  loadCachedMasterData,
+  loadMonitoringSnapshot,
+  loadActiveIncidentDataset,
+  loadLocalActions
+} from './dbCache';
 import type { OpenIncidentItem } from './monitoringService';
 import { cleanWsid, parseDateTime } from './dailyIncidentParser';
+import { apiGet } from './apiClient';
 
 // ==============================================================================
 // 1. QUICK CHIPS (PILIHAN CEPAT) & REALTIME
@@ -699,6 +705,154 @@ export async function migrateAllDataToSupabase(
     message: 'Migrasi data master & rekap bulanan ke Supabase berhasil diselesaikan!',
     machinesCount: machines.length,
     uptimeCount: allUptimes.length
+  };
+}
+
+export async function migrateDailyDataToSupabase(
+  onProgress?: (p: MigrationProgress) => void
+): Promise<{
+  success: boolean;
+  message: string;
+  totalMigrated: number;
+  openCount: number;
+  closedCount: number;
+}> {
+  const client = getSupabase();
+  if (!client) {
+    throw new Error('Koneksi Supabase belum aktif. Pastikan URL dan Anon Key sudah disimpan.');
+  }
+
+  onProgress?.({ step: 'Mencari riwayat insiden harian dari cache browser & database lama...', percent: 10 });
+
+  let dailyRows: any[] = [];
+
+  // Sumber A: Monitoring Snapshot (IndexedDB)
+  try {
+    const snap = await loadMonitoringSnapshot();
+    if (snap && snap.allDailyIncidents && snap.allDailyIncidents.length > 0) {
+      dailyRows = snap.allDailyIncidents;
+    } else if (snap && snap.openIncidents && snap.openIncidents.length > 0) {
+      dailyRows = snap.openIncidents;
+    }
+  } catch (e) {}
+
+  // Sumber B: Active Incident Dataset (IndexedDB / LocalStorage)
+  if (!dailyRows || dailyRows.length === 0) {
+    try {
+      const cached = await loadActiveIncidentDataset();
+      if (cached && cached.length > 0) {
+        dailyRows = cached;
+      }
+    } catch (e) {}
+  }
+
+  // Sumber C: LocalStorage Fallback
+  if (!dailyRows || dailyRows.length === 0) {
+    try {
+      const raw = localStorage.getItem('MONITORING_ACTIVE_DATASET') || localStorage.getItem('MONITORING_INCIDENTS_LOCAL');
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          dailyRows = parsed;
+        }
+      }
+    } catch (e) {}
+  }
+
+  // Sumber D: Coba tarik dari Google Spreadsheet Backend jika API terhubung
+  if (!dailyRows || dailyRows.length === 0) {
+    try {
+      onProgress?.({ step: 'Menghubungi database Google Spreadsheet untuk mengunduh arsip insiden...', percent: 20 });
+      const res = await apiGet('getDailyIncidentsFromDb', { limit: 30000 });
+      if (res && res.success && res.rows && res.rows.length > 0) {
+        dailyRows = res.rows;
+      }
+    } catch (e) {}
+  }
+
+  if (!dailyRows || dailyRows.length === 0) {
+    return {
+      success: false,
+      message: 'Tidak ditemukan data daily di cache browser ini maupun Google Spreadsheet. Silakan unggah berkas CSV OASE harian Anda (Report Incident_ATM_CRM_*.csv) lewat form di bawah.',
+      totalMigrated: 0,
+      openCount: 0,
+      closedCount: 0
+    };
+  }
+
+  onProgress?.({ step: `Menemukan ${dailyRows.length.toLocaleString()} data insiden harian. Menyiapkan sinkronisasi...`, percent: 35 });
+
+  // Ambil riwayat tindakan lokal untuk disematkan jika ada
+  let localActions: any[] = [];
+  try {
+    localActions = await loadLocalActions();
+    if (!localActions || localActions.length === 0) {
+      const rawAct = localStorage.getItem('MONITORING_ACTIONS_LOCAL');
+      if (rawAct) localActions = JSON.parse(rawAct);
+    }
+  } catch (e) {}
+
+  const actionMap = new Map<string, any>();
+  if (Array.isArray(localActions)) {
+    localActions.forEach((a: any) => {
+      if (a.incidentKey) actionMap.set(a.incidentKey, a);
+      if (a.wsid) actionMap.set(a.wsid, a);
+    });
+  }
+
+  // Sinkronkan tindakan jika baris belum memiliki action
+  dailyRows.forEach((r) => {
+    const key = (r.incidentNumber && r.incidentNumber !== '-')
+      ? r.incidentNumber.trim().toUpperCase()
+      : `${(r.wsid || '').trim().toUpperCase()}|${(r.eventCodeDesc || '').trim().toUpperCase()}|${(r.startTime || '').trim()}`;
+    const act = actionMap.get(key) || actionMap.get(r.wsid);
+    if (act && (!r.actionTerakhir || r.actionTerakhir === '-')) {
+      r.actionTerakhir = act.isiAction;
+      r.actionTerakhirOleh = act.namaPetugas;
+      r.actionTerakhirWaktu = act.waktu;
+    }
+  });
+
+  // Kirim data ke Supabase per batch 500 baris
+  const chunkSize = 500;
+  const totalChunks = Math.ceil(dailyRows.length / chunkSize);
+  let openCount = 0;
+  let closedCount = 0;
+
+  for (let i = 0; i < totalChunks; i++) {
+    const chunk = dailyRows.slice(i * chunkSize, (i + 1) * chunkSize);
+    const progress = 40 + Math.round(((i + 1) / totalChunks) * 55);
+
+    chunk.forEach((r) => {
+      const isEnd = r.endTime && r.endTime !== '-' && r.status !== 'OPEN';
+      if (isEnd) closedCount++;
+      else openCount++;
+    });
+
+    onProgress?.({
+      step: `Mengunggah insiden ke Supabase: batch ${i + 1} dari ${totalChunks} (${(i * chunkSize + chunk.length).toLocaleString()} baris)...`,
+      percent: progress
+    });
+
+    await uploadIncidentsToSupabase({
+      uploaderName: 'Super Admin (Migrasi Database)',
+      sumber: 'Migrasi Arsip Daily',
+      fileName: 'Migrasi_Arsip_Daily_Sebelumnya.csv',
+      totalCsvLines: dailyRows.length,
+      chunkIndex: i,
+      totalChunks: totalChunks,
+      rows: chunk
+    });
+  }
+
+  onProgress?.({ step: 'Migrasi data daily ke Supabase berhasil diselesaikan!', percent: 100 });
+
+  return {
+    success: true,
+    message: `Berhasil memigrasikan ${dailyRows.length.toLocaleString()} data insiden harian (${openCount.toLocaleString()} Open, ${closedCount.toLocaleString()} Closed) ke Supabase!`,
+    totalMigrated: dailyRows.length,
+    openCount,
+    closedCount
   };
 }
 

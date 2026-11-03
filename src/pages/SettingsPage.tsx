@@ -38,7 +38,8 @@ import {
   UserCheck,
   UserX,
   Server,
-  Lock
+  Lock,
+  Upload
 } from 'lucide-react';
 import {
   type QuickChipCategory,
@@ -55,8 +56,11 @@ import {
   deleteUserSupabase,
   subscribeUsersSupabase,
   migrateAllDataToSupabase,
+  migrateDailyDataToSupabase,
+  uploadIncidentsToSupabase,
   type MigrationProgress
 } from '../utils/supabaseService';
+import { parseDailyIncidentCsv } from '../utils/dailyIncidentParser';
 import {
   getSupabaseUrl,
   getSupabaseAnonKey,
@@ -383,6 +387,93 @@ export default function SettingsPage({ userRole = 'KAOPS' }: SettingsPageProps) 
       setMigrationProgress(null);
     } finally {
       setIsMigrating(false);
+    }
+  };
+
+  // Daily Incidents Migration State & Actions
+  const [isMigratingDaily, setIsMigratingDaily] = useState(false);
+  const [dailyMigrationProgress, setDailyMigrationProgress] = useState<MigrationProgress | null>(null);
+
+  const handleStartDailyMigration = async () => {
+    if (!isSupabaseConfigured()) {
+      showToast('Koneksi Supabase belum terkonfigurasi. Simpan URL dan Anon Key terlebih dahulu.', 'error');
+      return;
+    }
+    if (!window.confirm('Yakin ingin memigrasikan riwayat insiden harian & tindakan dari cache lokal/spreadsheet ke database Supabase sekarang?')) {
+      return;
+    }
+
+    setIsMigratingDaily(true);
+    setDailyMigrationProgress({ step: 'Mencari arsip data daily...', percent: 5 });
+    try {
+      const res = await migrateDailyDataToSupabase((p) => {
+        setDailyMigrationProgress(p);
+      });
+      if (res.success) {
+        showToast(res.message, 'success');
+      } else {
+        showToast(res.message, 'error');
+      }
+    } catch (err: any) {
+      showToast(err.message || 'Gagal memigrasikan data daily.', 'error');
+      setDailyMigrationProgress(null);
+    } finally {
+      setIsMigratingDaily(false);
+    }
+  };
+
+  const handleDailyCsvFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (!isSupabaseConfigured()) {
+      showToast('Koneksi Supabase belum terkonfigurasi. Simpan URL dan Anon Key terlebih dahulu.', 'error');
+      return;
+    }
+
+    setIsMigratingDaily(true);
+    setDailyMigrationProgress({ step: `Membaca berkas ${file.name}...`, percent: 10 });
+
+    try {
+      const text = await file.text();
+      setDailyMigrationProgress({ step: 'Mem-parsing CSV laporan insiden OASE...', percent: 25 });
+      const parsed = parseDailyIncidentCsv(text);
+
+      if (!parsed.rows || parsed.rows.length === 0) {
+        throw new Error('Tidak ada baris insiden yang valid ditemukan di berkas CSV ini.');
+      }
+
+      const rows = parsed.rows;
+      const chunkSize = 500;
+      const totalChunks = Math.ceil(rows.length / chunkSize);
+
+      for (let i = 0; i < totalChunks; i++) {
+        const chunk = rows.slice(i * chunkSize, (i + 1) * chunkSize);
+        const pct = 30 + Math.round(((i + 1) / totalChunks) * 65);
+        setDailyMigrationProgress({
+          step: `Mengunggah batch ${i + 1} dari ${totalChunks} (${(i * chunkSize + chunk.length).toLocaleString()} baris)...`,
+          percent: pct
+        });
+
+        await uploadIncidentsToSupabase({
+          uploaderName: 'Super Admin (CSV Import)',
+          sumber: 'Upload CSV Langsung',
+          fileName: file.name,
+          totalCsvLines: rows.length,
+          chunkIndex: i,
+          totalChunks: totalChunks,
+          rows: chunk
+        });
+      }
+
+      setDailyMigrationProgress({ step: 'Selesai!', percent: 100 });
+      showToast(`Sukses memigrasikan ${rows.length.toLocaleString()} insiden dari ${file.name} ke database Supabase!`, 'success');
+    } catch (err: any) {
+      showToast(err.message || 'Gagal memproses file CSV.', 'error');
+      setDailyMigrationProgress(null);
+    } finally {
+      setIsMigratingDaily(false);
+      e.target.value = '';
     }
   };
 
@@ -1432,6 +1523,70 @@ export default function SettingsPage({ userRole = 'KAOPS' }: SettingsPageProps) 
                     </div>
                     {migrationProgress.details && (
                       <p className="text-[10px] text-slate-500 font-mono">{migrationProgress.details}</p>
+                    )}
+                  </div>
+                )}
+              </div>
+
+              {/* One-Click Daily Incidents Migration Tool */}
+              <div className="p-4 md:p-5 rounded-xl border border-indigo-200 bg-indigo-50/40 space-y-4">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                  <div className="flex items-center gap-2.5">
+                    <div className="w-9 h-9 rounded-lg bg-indigo-600 text-white flex items-center justify-center shrink-0">
+                      <FileText className="w-5 h-5" />
+                    </div>
+                    <div>
+                      <h4 className="text-xs font-bold text-slate-900">Migrasi Data Insiden Daily (OASE) ke Supabase</h4>
+                      <p className="text-[11px] text-slate-500">
+                        Pindahkan seluruh riwayat insiden harian &amp; catatan tindakan penanganan dari cache lokal/spreadsheet ke PostgreSQL
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="flex flex-wrap items-center gap-2 shrink-0">
+                    <label
+                      className={`px-3 py-2 rounded-lg border border-indigo-300 bg-white hover:bg-indigo-50 text-indigo-700 text-xs font-bold shadow-xs cursor-pointer flex items-center gap-1.5 transition-colors ${
+                        isMigratingDaily || !isSupabaseConfigured() ? 'opacity-50 pointer-events-none' : ''
+                      }`}
+                      title="Upload file CSV OASE yang tersimpan di komputer Anda"
+                    >
+                      <Upload className="w-4 h-4 text-indigo-600" />
+                      <span>Upload Berkas CSV OASE</span>
+                      <input
+                        type="file"
+                        accept=".csv"
+                        onChange={handleDailyCsvFileSelect}
+                        disabled={isMigratingDaily || !isSupabaseConfigured()}
+                        className="hidden"
+                      />
+                    </label>
+
+                    <button
+                      type="button"
+                      onClick={handleStartDailyMigration}
+                      disabled={isMigratingDaily || !isSupabaseConfigured()}
+                      className="px-4 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold shadow-xs cursor-pointer disabled:opacity-50 flex items-center gap-1.5 shrink-0"
+                    >
+                      {isMigratingDaily ? <RefreshCw className="w-4 h-4 animate-spin" /> : <ArrowUp className="w-4 h-4 rotate-45" />}
+                      <span>{isMigratingDaily ? 'Menyinkronkan Daily...' : 'Migrasikan Arsip Daily'}</span>
+                    </button>
+                  </div>
+                </div>
+
+                {dailyMigrationProgress && (
+                  <div className="p-3 bg-white rounded-lg border border-indigo-200 space-y-1.5">
+                    <div className="flex items-center justify-between text-xs font-semibold text-slate-700">
+                      <span>{dailyMigrationProgress.step}</span>
+                      <span className="text-indigo-700 font-bold">{dailyMigrationProgress.percent}%</span>
+                    </div>
+                    <div className="w-full bg-slate-100 rounded-full h-2 overflow-hidden">
+                      <div
+                        className="bg-indigo-600 h-2 rounded-full transition-all duration-300"
+                        style={{ width: `${dailyMigrationProgress.percent}%` }}
+                      />
+                    </div>
+                    {dailyMigrationProgress.details && (
+                      <p className="text-[10px] text-slate-500 font-mono">{dailyMigrationProgress.details}</p>
                     )}
                   </div>
                 )}
