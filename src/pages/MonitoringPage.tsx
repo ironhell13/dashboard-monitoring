@@ -123,6 +123,8 @@ import {
 import { useDataStore } from '../store/useDataStore';
 import FollowUpPage from './FollowUpPage';
 import { useQuickChips } from '../utils/quickChipsService';
+import { isSupabaseConfigured } from '../utils/supabaseClient';
+import { subscribeActiveIncidentsSupabase } from '../utils/supabaseService';
 
 interface MonitoringPageProps {
   onLogout?: () => void;
@@ -1420,6 +1422,18 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
 
   useEffect(() => {
     fetchOpenIncidents(true);
+  }, []);
+
+  // Supabase Realtime Listener untuk sinkronisasi multi-device instan antar PC
+  useEffect(() => {
+    if (isSupabaseConfigured()) {
+      const unsubscribe = subscribeActiveIncidentsSupabase(() => {
+        fetchOpenIncidents(true);
+      });
+      return () => {
+        unsubscribe();
+      };
+    }
   }, []);
 
   // Countdown timer simulation (15 seconds auto-refresh loop) & Live Clock
@@ -4267,9 +4281,10 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
       const autoCloseReport = autoClosedRows.length > 0
         ? ` (${autoClosedRows.length} problem hilang dari OASE otomatis di-auto-close oleh dashboard).`
         : '.';
+      const dbTargetName = isSupabaseConfigured() ? 'Supabase' : 'Google Spreadsheet';
       setSyncStatusBanner({
         type: 'success',
-        text: `Sukses sinkronisasi ${parsed.rows.length.toLocaleString()} insiden ke database Google Spreadsheet${autoCloseReport}`
+        text: `Sukses sinkronisasi ${parsed.rows.length.toLocaleString()} insiden ke database ${dbTargetName}${autoCloseReport}`
       });
 
       fetchUploadLogs();

@@ -1,6 +1,18 @@
 import { isGasEnvironment } from './spreadsheetService';
 import { apiGet, apiPost, isBackendConfigured } from './apiClient';
 import { cleanWsid } from './dailyIncidentParser';
+import { isSupabaseConfigured } from './supabaseClient';
+import {
+  fetchOpenIncidentsSupabase,
+  uploadIncidentsToSupabase,
+  saveIncidentActionSupabase,
+  bulkSaveIncidentActionSupabase,
+  fetchIncidentHistorySupabase,
+  fetchWsidPenangananHistorySupabase,
+  searchIncidentsSupabase,
+  fetchDailyIncidentsFromDbSupabase,
+  fetchUploadLogsSupabase
+} from './supabaseService';
 
 export interface OpenIncidentItem {
   incidentKey: string;
@@ -300,6 +312,20 @@ export const getOpenIncidentsApi = async (filters?: { forceSync?: boolean }): Pr
   totalOpen?: number;
   message?: string;
 }> => {
+  if (isSupabaseConfigured()) {
+    try {
+      const res = await fetchOpenIncidentsSupabase(filters);
+      if (res && res.success) {
+        try {
+          localStorage.setItem(LOCAL_STORAGE_INCIDENTS, JSON.stringify(res.incidents));
+        } catch (_) {}
+        return res;
+      }
+    } catch (err: any) {
+      console.warn('Supabase getOpenIncidents failed, falling back:', err);
+    }
+  }
+
   if (isGasEnvironment()) {
     return new Promise((resolve) => {
       (window as any).google.script.run
@@ -347,6 +373,17 @@ export const getIncidentHistoryApi = async (
   history: IncidentHistoryItem[];
   message?: string;
 }> => {
+  if (isSupabaseConfigured()) {
+    try {
+      const res = await fetchIncidentHistorySupabase(incidentKey, monthStr);
+      if (res && res.success && res.history && res.history.length > 0) {
+        return res;
+      }
+    } catch (err: any) {
+      console.warn('Supabase getIncidentHistory failed, falling back:', err);
+    }
+  }
+
   if (isGasEnvironment()) {
     return new Promise((resolve) => {
       (window as any).google.script.run
@@ -390,6 +427,53 @@ export const saveIncidentActionApi = async (payload: {
   message?: string;
   action?: any;
 }> => {
+  if (isSupabaseConfigured()) {
+    try {
+      const res = await saveIncidentActionSupabase(payload);
+      if (res && res.success) {
+        // Sync local cache
+        try {
+          const raw = localStorage.getItem(LOCAL_STORAGE_ACTIONS);
+          const list: IncidentHistoryItem[] = raw ? JSON.parse(raw) : [];
+          const kategori = payload.kategori || 'UPDATE';
+          const formattedAction = payload.isiAction.startsWith('[') ? payload.isiAction : `[${kategori}] ${payload.isiAction}`;
+          const newAction: IncidentHistoryItem = {
+            logId: 'ACT_' + Date.now(),
+            waktu: new Date().toISOString().replace('T', ' ').slice(0, 19),
+            incidentKey: payload.incidentKey,
+            wsid: payload.wsid,
+            eventCodeDesc: payload.eventCodeDesc,
+            tipe: kategori,
+            isiAction: payload.isiAction,
+            namaPetugas: payload.namaPetugas,
+            statusSebelum: 'OPEN',
+            statusSesudah: 'OPEN',
+            catatan: '-'
+          };
+          list.unshift(newAction);
+          localStorage.setItem(LOCAL_STORAGE_ACTIONS, JSON.stringify(list));
+
+          const rawInc = localStorage.getItem(LOCAL_STORAGE_INCIDENTS);
+          if (rawInc) {
+            const incList: OpenIncidentItem[] = JSON.parse(rawInc);
+            const found = incList.find((r) => r.incidentKey === payload.incidentKey);
+            if (found) {
+              found.actionTerakhir = formattedAction;
+              found.actionTerakhirOleh = payload.namaPetugas;
+              found.actionTerakhirWaktu = newAction.waktu;
+              found.jumlahAction = (found.jumlahAction || 0) + 1;
+              localStorage.setItem(LOCAL_STORAGE_INCIDENTS, JSON.stringify(incList));
+            }
+          }
+        } catch (_) {}
+
+        return res;
+      }
+    } catch (err: any) {
+      console.warn('Supabase saveIncidentAction failed, falling back:', err);
+    }
+  }
+
   if (isGasEnvironment()) {
     return new Promise((resolve) => {
       (window as any).google.script.run
@@ -462,6 +546,53 @@ export const bulkSaveIncidentActionApi = async (payload: {
   updatedCount?: number;
   message?: string;
 }> => {
+  if (isSupabaseConfigured()) {
+    try {
+      const incidentKeys = payload.items.map((it) => it.incidentKey);
+      const res = await bulkSaveIncidentActionSupabase({
+        incidentKeys,
+        items: payload.items,
+        monthStr: payload.items[0]?.monthStr || '',
+        isiAction: payload.isiAction,
+        namaPetugas: payload.namaPetugas,
+        kategori: payload.kategori
+      });
+      if (res && res.success) {
+        // Sync local cache
+        try {
+          const nowWib = new Date().toISOString().replace('T', ' ').slice(0, 19);
+          const raw = localStorage.getItem(LOCAL_STORAGE_ACTIONS);
+          const list: IncidentHistoryItem[] = raw ? JSON.parse(raw) : [];
+          const kategori = payload.kategori || 'UPDATE';
+          payload.items.forEach((it, idx) => {
+            list.unshift({
+              logId: 'BULK_' + Date.now() + '_' + idx,
+              waktu: nowWib,
+              incidentKey: it.incidentKey,
+              wsid: it.wsid,
+              eventCodeDesc: it.eventCodeDesc,
+              tipe: kategori,
+              isiAction: payload.isiAction,
+              namaPetugas: payload.namaPetugas,
+              statusSebelum: 'OPEN',
+              statusSesudah: 'OPEN',
+              catatan: '-'
+            });
+          });
+          localStorage.setItem(LOCAL_STORAGE_ACTIONS, JSON.stringify(list));
+        } catch (_) {}
+
+        return {
+          success: true,
+          updatedCount: res.count || payload.items.length,
+          message: res.message
+        };
+      }
+    } catch (err: any) {
+      console.warn('Supabase bulkSaveIncidentAction failed, falling back:', err);
+    }
+  }
+
   if (isGasEnvironment()) {
     return new Promise((resolve) => {
       (window as any).google.script.run
@@ -526,6 +657,17 @@ export const getWsidPenangananHistoryApi = async (
   history: IncidentHistoryItem[];
   message?: string;
 }> => {
+  if (isSupabaseConfigured()) {
+    try {
+      const res = await fetchWsidPenangananHistorySupabase(wsid, monthStr);
+      if (res && res.success && res.history && res.history.length > 0) {
+        return res;
+      }
+    } catch (err: any) {
+      console.warn('Supabase getWsidPenangananHistory failed, falling back:', err);
+    }
+  }
+
   if (isGasEnvironment()) {
     return new Promise((resolve) => {
       (window as any).google.script.run
@@ -571,6 +713,21 @@ export const searchIncidentsApi = async (filters: {
   totalCount?: number;
   message?: string;
 }> => {
+  if (isSupabaseConfigured()) {
+    try {
+      const res = await searchIncidentsSupabase(filters);
+      if (res && res.success && res.incidents && res.incidents.length > 0) {
+        return {
+          success: true,
+          incidents: res.incidents,
+          totalCount: res.totalCount
+        };
+      }
+    } catch (err: any) {
+      console.warn('Supabase searchIncidents failed, falling back:', err);
+    }
+  }
+
   if (isGasEnvironment()) {
     return new Promise((resolve) => {
       (window as any).google.script.run
@@ -645,6 +802,17 @@ export const uploadIncidentChunkApi = async (payload: {
   };
   message?: string;
 }> => {
+  if (isSupabaseConfigured()) {
+    try {
+      const res = await uploadIncidentsToSupabase(payload);
+      if (res && res.success) {
+        return res;
+      }
+    } catch (err: any) {
+      console.error('Supabase uploadIncidentChunk failed:', err);
+    }
+  }
+
   if (isGasEnvironment()) {
     return new Promise((resolve) => {
       (window as any).google.script.run
@@ -747,6 +915,17 @@ export const getUploadLogApi = async (): Promise<{
   logs: UploadLogItem[];
   message?: string;
 }> => {
+  if (isSupabaseConfigured()) {
+    try {
+      const res = await fetchUploadLogsSupabase();
+      if (res && res.success && res.logs && res.logs.length > 0) {
+        return { success: true, logs: res.logs };
+      }
+    } catch (err: any) {
+      console.warn('Supabase getUploadLog failed, falling back:', err);
+    }
+  }
+
   if (isGasEnvironment()) {
     return new Promise((resolve) => {
       (window as any).google.script.run
@@ -794,6 +973,27 @@ export const getDailyIncidentsFromDbApi = async (payload?: {
   availableMonths?: string[];
   message?: string;
 }> => {
+  if (isSupabaseConfigured()) {
+    try {
+      const res = await fetchDailyIncidentsFromDbSupabase(payload);
+      if (res && res.success && res.rows && res.rows.length > 0) {
+        return {
+          success: true,
+          rows: res.rows,
+          totalCount: res.totalCount,
+          lastUploadInfo: {
+            waktu: new Date().toISOString().replace('T', ' ').slice(0, 19),
+            uploader: 'Supabase Cloud DB',
+            sumber: 'PostgreSQL',
+            namaFile: 'incident_logs'
+          }
+        };
+      }
+    } catch (err: any) {
+      console.warn('Supabase getDailyIncidentsFromDb failed, falling back:', err);
+    }
+  }
+
   if (isGasEnvironment()) {
     return new Promise((resolve) => {
       (window as any).google.script.run

@@ -7,6 +7,8 @@ import { getSupabase, isSupabaseConfigured } from './supabaseClient';
 import type { QuickChipItem } from './quickChipsService';
 import { useDataStore } from '../store/useDataStore';
 import { loadCachedMasterData } from './dbCache';
+import type { OpenIncidentItem } from './monitoringService';
+import { cleanWsid, parseDateTime } from './dailyIncidentParser';
 
 // ==============================================================================
 // 1. QUICK CHIPS (PILIHAN CEPAT) & REALTIME
@@ -698,6 +700,616 @@ export async function migrateAllDataToSupabase(
     machinesCount: machines.length,
     uptimeCount: allUptimes.length
   };
+}
+
+// ==============================================================================
+// 7. DAILY INCIDENT & MONITORING ACTIONS (OASE INTEGRATION)
+// ==============================================================================
+
+function parseToIso(dateStr?: any): string | null {
+  if (!dateStr || dateStr === '-' || dateStr === '') return null;
+  try {
+    const d = parseDateTime(String(dateStr));
+    if (d && !isNaN(d.getTime())) return d.toISOString();
+    const fallback = new Date(dateStr);
+    if (!isNaN(fallback.getTime())) return fallback.toISOString();
+  } catch (e) {}
+  return null;
+}
+
+function mapRowToOpenIncident(row: any, machine?: any): OpenIncidentItem {
+  const m = machine || row.machines || {};
+  return {
+    incidentKey: row.incident_key,
+    incidentNumber: row.ticket_no || '-',
+    wsid: row.wsid,
+    lokasi: m.lokasi || row.lokasi || '-',
+    servicePoint: m.service_point || row.service_point || '-',
+    sektor: m.sektor_bca || row.sektor || '-',
+    typeMesin: m.tipe_mesin || row.type_mesin || '-',
+    vendor: m.vendor || row.vendor || '-',
+    eventCode: row.event_code || '-',
+    eventCodeDesc: row.problem || '-',
+    detail: row.keterangan || '-',
+    startTime: row.start_time ? new Date(row.start_time).toISOString().replace('T', ' ').slice(0, 19) : '-',
+    endTime: row.end_time ? new Date(row.end_time).toISOString().replace('T', ' ').slice(0, 19) : '-',
+    tanggal: row.start_time ? new Date(row.start_time).toISOString().slice(0, 10) : '-',
+    jam: row.start_time ? new Date(row.start_time).toISOString().slice(11, 19) : '-',
+    durationRaw: row.duration_minutes || 0,
+    durasiOpr: row.duration_minutes || 0,
+    status: row.status || 'OPEN',
+    actionTerakhir: row.action_taken || '-',
+    actionTerakhirOleh: row.action_by || '-',
+    actionTerakhirWaktu: row.action_at ? new Date(row.action_at).toISOString().replace('T', ' ').slice(0, 19) : '-',
+    jumlahAction: row.action_taken ? 1 : 0,
+    monthStr: row.start_time ? new Date(row.start_time).toISOString().slice(0, 7) : '',
+    closeSource: row.close_source || 'OASE'
+  };
+}
+
+export async function fetchOpenIncidentsSupabase(filters?: { forceSync?: boolean }): Promise<{
+  success: boolean;
+  incidents: OpenIncidentItem[];
+  totalOpen: number;
+  message?: string;
+}> {
+  const client = getSupabase();
+  if (!client) return { success: false, incidents: [], totalOpen: 0, message: 'Supabase belum dikonfigurasi.' };
+
+  try {
+    const { data, error } = await client
+      .from('active_incidents')
+      .select('*, machines(wsid, lokasi, sektor_bca, wilayah_operasional, vendor, tipe_mesin)')
+      .eq('status', 'OPEN')
+      .order('start_time', { ascending: false });
+
+    if (error) throw error;
+
+    const incidents: OpenIncidentItem[] = (data || []).map((row: any) =>
+      mapRowToOpenIncident(row, row.machines)
+    );
+
+    return {
+      success: true,
+      incidents,
+      totalOpen: incidents.length,
+      message: 'Sukses memuat insiden aktif dari Supabase'
+    };
+  } catch (err: any) {
+    return { success: false, incidents: [], totalOpen: 0, message: err.message };
+  }
+}
+
+export async function uploadIncidentsToSupabase(payload: {
+  uploaderName: string;
+  sumber: string;
+  fileName: string;
+  totalCsvLines: number;
+  chunkIndex: number;
+  totalChunks: number;
+  rows: any[];
+}): Promise<{
+  success: boolean;
+  stats?: {
+    totalLines: number;
+    matched: number;
+    newCount: number;
+    updatedCount: number;
+    unchangedCount: number;
+    skippedCount: number;
+  };
+  message?: string;
+}> {
+  const client = getSupabase();
+  if (!client) return { success: false, message: 'Supabase belum dikonfigurasi.' };
+
+  try {
+    const rows = payload.rows || [];
+    if (rows.length === 0) {
+      return {
+        success: true,
+        stats: {
+          totalLines: payload.totalCsvLines,
+          matched: 0,
+          newCount: 0,
+          updatedCount: 0,
+          unchangedCount: 0,
+          skippedCount: payload.totalCsvLines
+        }
+      };
+    }
+
+    // 1. Siapkan active_incidents payload
+    const activePayload = rows.map((r: any) => {
+      const key = (r.incidentNumber && r.incidentNumber !== '-')
+        ? String(r.incidentNumber).trim().toUpperCase()
+        : `${(r.wsid || '').trim().toUpperCase()}|${(r.eventCodeDesc || '').trim().toUpperCase()}|${(r.startTime || '').trim()}`;
+
+      const wsidClean = cleanWsid(r.wsid) || String(r.wsid || '').trim();
+      const sTime = parseToIso(r.startTime);
+      const eTime = parseToIso(r.endTime);
+      const dur = Math.round(Number(r.durasiOpr || r.durationRaw || r.durasi || 0));
+
+      return {
+        incident_key: key,
+        wsid: wsidClean,
+        ticket_no: r.incidentNumber || r.ticketNo || '-',
+        problem: r.eventCodeDesc || r.problem || '-',
+        keterangan: r.detail || r.keterangan || '-',
+        status: r.status || (eTime ? 'CLOSED' : 'OPEN'),
+        start_time: sTime,
+        end_time: eTime,
+        duration_minutes: dur,
+        action_taken: (r.actionTerakhir && r.actionTerakhir !== '-') ? r.actionTerakhir : null,
+        action_by: (r.actionTerakhirOleh && r.actionTerakhirOleh !== '-') ? r.actionTerakhirOleh : null,
+        action_at: parseToIso(r.actionTerakhirWaktu),
+        updated_at: new Date().toISOString()
+      };
+    });
+
+    // 2. Proteksi Foreign Key: pastikan WSID baru terdaftar di tabel machines
+    const uniqueWsids = Array.from(new Set(activePayload.map((p) => p.wsid).filter(Boolean)));
+    if (uniqueWsids.length > 0) {
+      const machineStubs = uniqueWsids.map((w) => ({
+        wsid: w,
+        lokasi: '-',
+        tipe_mesin: '-',
+        vendor: '-',
+        wilayah_operasional: 'Wilayah Operasional',
+        sektor_bca: '-'
+      }));
+      await client.from('machines').upsert(machineStubs, { onConflict: 'wsid', ignoreDuplicates: true }).catch(() => {});
+    }
+
+    // 3. Pertahankan action_taken yang sudah diinput petugas sebelumnya jika CSV baru tidak membawa action
+    const keys = activePayload.map((p) => p.incident_key);
+    const { data: existingWithActions } = await client
+      .from('active_incidents')
+      .select('incident_key, action_taken, action_by, action_at')
+      .in('incident_key', keys)
+      .not('action_taken', 'is', null);
+
+    if (existingWithActions && existingWithActions.length > 0) {
+      const existingActionMap = new Map(existingWithActions.map((x) => [x.incident_key, x]));
+      for (const item of activePayload) {
+        if (!item.action_taken) {
+          const prev = existingActionMap.get(item.incident_key);
+          if (prev) {
+            item.action_taken = prev.action_taken;
+            item.action_by = prev.action_by;
+            item.action_at = prev.action_at;
+          }
+        }
+      }
+    }
+
+    // 4. Batch upsert active_incidents (150 per batch)
+    const bSize = 150;
+    for (let i = 0; i < activePayload.length; i += bSize) {
+      const chunk = activePayload.slice(i, i + bSize);
+      const { error: actErr } = await client
+        .from('active_incidents')
+        .upsert(chunk, { onConflict: 'incident_key' });
+      if (actErr) console.warn('Supabase active_incidents upsert warning:', actErr);
+    }
+
+    // 5. Batch insert incident_logs (audit riwayat daily)
+    const logsPayload = rows.map((r: any) => {
+      const key = (r.incidentNumber && r.incidentNumber !== '-')
+        ? String(r.incidentNumber).trim().toUpperCase()
+        : `${(r.wsid || '').trim().toUpperCase()}|${(r.eventCodeDesc || '').trim().toUpperCase()}|${(r.startTime || '').trim()}`;
+      const wsidClean = cleanWsid(r.wsid) || String(r.wsid || '').trim();
+      const sTime = parseToIso(r.startTime);
+      const eTime = parseToIso(r.endTime);
+      const dur = Math.round(Number(r.durasiOpr || r.durationRaw || r.durasi || 0));
+      const mStr = sTime ? sTime.slice(0, 7) : (r.dateStr ? r.dateStr.slice(0, 7) : null);
+
+      return {
+        incident_key: key,
+        wsid: wsidClean,
+        ticket_no: r.incidentNumber || r.ticketNo || '-',
+        problem: r.eventCodeDesc || r.problem || '-',
+        keterangan: r.detail || r.keterangan || '-',
+        status: r.status || (eTime ? 'CLOSED' : 'OPEN'),
+        start_time: sTime,
+        end_time: eTime,
+        duration_minutes: dur,
+        action_taken: (r.actionTerakhir && r.actionTerakhir !== '-') ? r.actionTerakhir : null,
+        action_by: (r.actionTerakhirOleh && r.actionTerakhirOleh !== '-') ? r.actionTerakhirOleh : null,
+        action_at: parseToIso(r.actionTerakhirWaktu),
+        periode_bulan: mStr
+      };
+    });
+
+    for (let j = 0; j < logsPayload.length; j += bSize) {
+      const chunk = logsPayload.slice(j, j + bSize);
+      await client.from('incident_logs').insert(chunk).catch(() => {});
+    }
+
+    // 6. Catat upload log di chunk terakhir
+    if (payload.chunkIndex === payload.totalChunks - 1) {
+      await client.from('upload_logs').insert([
+        {
+          file_name: payload.fileName,
+          file_type: 'DAILY_INCIDENT_OASE',
+          total_rows: payload.totalCsvLines,
+          uploaded_by: payload.uploaderName,
+          status: 'SUCCESS'
+        }
+      ]).catch(() => {});
+    }
+
+    return {
+      success: true,
+      stats: {
+        totalLines: payload.totalCsvLines,
+        matched: rows.length,
+        newCount: rows.length,
+        updatedCount: 0,
+        unchangedCount: 0,
+        skippedCount: 0
+      },
+      message: 'Insiden harian berhasil disimpan ke database Supabase!'
+    };
+  } catch (err: any) {
+    return { success: false, message: err.message || 'Gagal menyimpan insiden ke Supabase.' };
+  }
+}
+
+export async function saveIncidentActionSupabase(payload: {
+  incidentKey: string;
+  monthStr: string;
+  wsid: string;
+  eventCodeDesc: string;
+  isiAction: string;
+  namaPetugas: string;
+  kategori?: 'UPDATE' | 'PENANGANAN';
+}): Promise<{ success: boolean; message?: string }> {
+  const client = getSupabase();
+  if (!client) return { success: false, message: 'Supabase belum dikonfigurasi.' };
+
+  try {
+    const kategori = payload.kategori || 'UPDATE';
+    const formattedAction = payload.isiAction.startsWith('[') ? payload.isiAction : `[${kategori}] ${payload.isiAction}`;
+    const nowIso = new Date().toISOString();
+
+    const { error } = await client
+      .from('active_incidents')
+      .update({
+        action_taken: formattedAction,
+        action_by: payload.namaPetugas,
+        action_at: nowIso,
+        updated_at: nowIso
+      })
+      .eq('incident_key', payload.incidentKey);
+
+    if (error) throw error;
+
+    // Catat log tindakan ke incident_logs
+    await client.from('incident_logs').insert([
+      {
+        incident_key: payload.incidentKey,
+        wsid: payload.wsid,
+        problem: payload.eventCodeDesc,
+        action_taken: formattedAction,
+        action_by: payload.namaPetugas,
+        action_at: nowIso,
+        status: 'OPEN',
+        periode_bulan: payload.monthStr || nowIso.slice(0, 7)
+      }
+    ]).catch(() => {});
+
+    return { success: true, message: 'Tindakan berhasil disimpan ke Supabase!' };
+  } catch (err: any) {
+    return { success: false, message: err.message };
+  }
+}
+
+export async function bulkSaveIncidentActionSupabase(payload: {
+  incidentKeys: string[];
+  items?: { incidentKey: string; monthStr: string; wsid: string; eventCodeDesc: string }[];
+  monthStr: string;
+  isiAction: string;
+  namaPetugas: string;
+  kategori?: 'UPDATE' | 'PENANGANAN';
+}): Promise<{ success: boolean; count?: number; message?: string }> {
+  const client = getSupabase();
+  if (!client) return { success: false, message: 'Supabase belum dikonfigurasi.' };
+
+  try {
+    const kategori = payload.kategori || 'UPDATE';
+    const formattedAction = payload.isiAction.startsWith('[') ? payload.isiAction : `[${kategori}] ${payload.isiAction}`;
+    const nowIso = new Date().toISOString();
+
+    const { error } = await client
+      .from('active_incidents')
+      .update({
+        action_taken: formattedAction,
+        action_by: payload.namaPetugas,
+        action_at: nowIso,
+        is_bulk_action: true,
+        updated_at: nowIso
+      })
+      .in('incident_key', payload.incidentKeys);
+
+    if (error) throw error;
+
+    // Catat batch log ke incident_logs
+    if (payload.items && payload.items.length > 0) {
+      const logs = payload.items.map((it) => ({
+        incident_key: it.incidentKey,
+        wsid: it.wsid,
+        problem: it.eventCodeDesc,
+        action_taken: formattedAction,
+        action_by: payload.namaPetugas,
+        action_at: nowIso,
+        status: 'OPEN',
+        periode_bulan: it.monthStr || payload.monthStr || nowIso.slice(0, 7)
+      }));
+      await client.from('incident_logs').insert(logs).catch(() => {});
+    }
+
+    return {
+      success: true,
+      count: payload.incidentKeys.length,
+      message: `${payload.incidentKeys.length} tindakan massal berhasil disimpan ke Supabase!`
+    };
+  } catch (err: any) {
+    return { success: false, message: err.message };
+  }
+}
+
+export async function fetchIncidentHistorySupabase(
+  incidentKey: string,
+  _monthStr?: string
+): Promise<{ success: boolean; history: any[]; message?: string }> {
+  const client = getSupabase();
+  if (!client) return { success: false, history: [], message: 'Supabase belum dikonfigurasi.' };
+
+  try {
+    const { data, error } = await client
+      .from('incident_logs')
+      .select('*')
+      .eq('incident_key', incidentKey)
+      .not('action_taken', 'is', null)
+      .order('action_at', { ascending: false })
+      .limit(50);
+
+    if (error) throw error;
+
+    const history: any[] = (data || []).map((row: any) => ({
+      logId: String(row.id),
+      waktu: row.action_at ? new Date(row.action_at).toISOString().replace('T', ' ').slice(0, 19) : (row.created_at || '-'),
+      incidentKey: row.incident_key,
+      wsid: row.wsid,
+      eventCodeDesc: row.problem || '-',
+      tipe: (row.action_taken && row.action_taken.startsWith('[PENANGANAN]')) ? 'PENANGANAN' : 'UPDATE',
+      isiAction: row.action_taken || '-',
+      namaPetugas: row.action_by || '-',
+      statusSebelum: 'OPEN',
+      statusSesudah: row.status || 'OPEN',
+      catatan: row.keterangan || '-'
+    }));
+
+    if (history.length === 0) {
+      const { data: actData } = await client
+        .from('active_incidents')
+        .select('*')
+        .eq('incident_key', incidentKey)
+        .maybeSingle();
+
+      if (actData && actData.action_taken) {
+        history.push({
+          logId: 'ACT_CURRENT',
+          waktu: actData.action_at ? new Date(actData.action_at).toISOString().replace('T', ' ').slice(0, 19) : '-',
+          incidentKey: actData.incident_key,
+          wsid: actData.wsid,
+          eventCodeDesc: actData.problem || '-',
+          tipe: (actData.action_taken && actData.action_taken.startsWith('[PENANGANAN]')) ? 'PENANGANAN' : 'UPDATE',
+          isiAction: actData.action_taken,
+          namaPetugas: actData.action_by || '-',
+          statusSebelum: 'OPEN',
+          statusSesudah: actData.status || 'OPEN',
+          catatan: actData.keterangan || '-'
+        });
+      }
+    }
+
+    return { success: true, history };
+  } catch (err: any) {
+    return { success: false, history: [], message: err.message };
+  }
+}
+
+export async function fetchWsidPenangananHistorySupabase(
+  wsid: string,
+  monthStr?: string
+): Promise<{ success: boolean; history: any[]; message?: string }> {
+  const client = getSupabase();
+  if (!client) return { success: false, history: [], message: 'Supabase belum dikonfigurasi.' };
+
+  try {
+    const clean = cleanWsid(wsid) || wsid.trim().toUpperCase();
+    let query = client
+      .from('incident_logs')
+      .select('*')
+      .eq('wsid', clean)
+      .not('action_taken', 'is', null)
+      .order('action_at', { ascending: false })
+      .limit(50);
+
+    if (monthStr && monthStr !== 'ALL') {
+      query = query.eq('periode_bulan', monthStr);
+    }
+
+    const { data, error } = await query;
+    if (error) throw error;
+
+    const history = (data || []).map((row: any) => ({
+      logId: String(row.id),
+      waktu: row.action_at ? new Date(row.action_at).toISOString().replace('T', ' ').slice(0, 19) : (row.created_at || '-'),
+      incidentKey: row.incident_key,
+      wsid: row.wsid,
+      eventCodeDesc: row.problem || '-',
+      tipe: (row.action_taken && row.action_taken.startsWith('[PENANGANAN]')) ? 'PENANGANAN' : 'UPDATE',
+      isiAction: row.action_taken || '-',
+      namaPetugas: row.action_by || '-',
+      statusSebelum: 'OPEN',
+      statusSesudah: row.status || 'OPEN',
+      catatan: row.keterangan || '-'
+    }));
+
+    return { success: true, history };
+  } catch (err: any) {
+    return { success: false, history: [], message: err.message };
+  }
+}
+
+export async function searchIncidentsSupabase(filters: {
+  monthStr?: string;
+  query?: string;
+  status?: string;
+  eventCodeDesc?: string;
+  limit?: number;
+}): Promise<{
+  success: boolean;
+  incidents: OpenIncidentItem[];
+  totalCount: number;
+  message?: string;
+}> {
+  const client = getSupabase();
+  if (!client) return { success: false, incidents: [], totalCount: 0, message: 'Supabase belum dikonfigurasi.' };
+
+  try {
+    let query = client
+      .from('incident_logs')
+      .select('*, machines(wsid, lokasi, sektor_bca, wilayah_operasional, vendor, tipe_mesin)')
+      .order('start_time', { ascending: false })
+      .limit(filters.limit || 500);
+
+    if (filters.monthStr && filters.monthStr !== 'ALL') {
+      query = query.eq('periode_bulan', filters.monthStr);
+    }
+    if (filters.status && filters.status !== 'ALL') {
+      query = query.eq('status', filters.status);
+    }
+    if (filters.eventCodeDesc && filters.eventCodeDesc !== 'ALL') {
+      query = query.eq('problem', filters.eventCodeDesc);
+    }
+    if (filters.query) {
+      const q = filters.query.trim();
+      query = query.or(`wsid.ilike.%${q}%,problem.ilike.%${q}%`);
+    }
+
+    const { data, error } = await query;
+    if (error) throw error;
+
+    const incidents = (data || []).map((r: any) => mapRowToOpenIncident(r, r.machines));
+    return {
+      success: true,
+      incidents,
+      totalCount: incidents.length
+    };
+  } catch (err: any) {
+    return { success: false, incidents: [], totalCount: 0, message: err.message };
+  }
+}
+
+export async function fetchDailyIncidentsFromDbSupabase(payload?: {
+  monthStr?: string;
+  startMonth?: string;
+  endMonth?: string;
+  limit?: number;
+}): Promise<{
+  success: boolean;
+  rows: any[];
+  totalCount: number;
+  message?: string;
+}> {
+  const client = getSupabase();
+  if (!client) return { success: false, rows: [], totalCount: 0, message: 'Supabase belum dikonfigurasi.' };
+
+  try {
+    let query = client
+      .from('incident_logs')
+      .select('*, machines(wsid, lokasi, sektor_bca, wilayah_operasional, vendor, tipe_mesin)')
+      .order('start_time', { ascending: false })
+      .limit(payload?.limit || 10000);
+
+    if (payload?.monthStr && payload.monthStr !== 'ALL') {
+      query = query.eq('periode_bulan', payload.monthStr);
+    }
+
+    const { data, error } = await query;
+    if (error) throw error;
+
+    const rows = (data || []).map((row: any) => mapRowToOpenIncident(row, row.machines));
+
+    return {
+      success: true,
+      rows,
+      totalCount: rows.length,
+      message: 'Sukses memuat riwayat insiden harian dari Supabase'
+    };
+  } catch (err: any) {
+    return { success: false, rows: [], totalCount: 0, message: err.message };
+  }
+}
+
+export function subscribeActiveIncidentsSupabase(onUpdate: () => void) {
+  const client = getSupabase();
+  if (!client) return () => {};
+
+  const channel = client
+    .channel('realtime_active_incidents')
+    .on(
+      'postgres_changes',
+      { event: '*', schema: 'public', table: 'active_incidents' },
+      () => {
+        onUpdate();
+      }
+    )
+    .subscribe();
+
+  return () => {
+    client.removeChannel(channel);
+  };
+}
+
+export async function fetchUploadLogsSupabase(): Promise<{
+  success: boolean;
+  logs: any[];
+  message?: string;
+}> {
+  const client = getSupabase();
+  if (!client) return { success: false, logs: [], message: 'Supabase belum dikonfigurasi.' };
+
+  try {
+    const { data, error } = await client
+      .from('upload_logs')
+      .select('*')
+      .order('created_at', { ascending: false })
+      .limit(50);
+
+    if (error) throw error;
+
+    const logs = (data || []).map((l: any) => ({
+      waktu: l.created_at ? new Date(l.created_at).toISOString().replace('T', ' ').slice(0, 19) : '-',
+      uploader: l.uploaded_by || '-',
+      sumber: l.file_type || 'Monitoring',
+      namaFile: l.file_name || '-',
+      totalLines: l.total_rows || 0,
+      lolosFilter: l.total_rows || 0,
+      baru: l.total_rows || 0,
+      diupdate: 0,
+      tanpaPerubahan: 0,
+      dilewati: 0
+    }));
+
+    return { success: true, logs };
+  } catch (err: any) {
+    return { success: false, logs: [], message: err.message };
+  }
 }
 
 
