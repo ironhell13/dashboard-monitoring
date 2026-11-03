@@ -1,0 +1,73 @@
+{
+  "globalTrendData": [
+    {
+      "periode": "2026-02",
+      "uptimeATM": 99.6,
+      "uptimeCRM": 98.92,
+      "jumlahMesinATM": 378,
+      "jumlahMesinCRM": 1398
+    },
+    {
+      "periode": "2026-03",
+      "uptimeATM": 99.58,
+      "uptimeCRM": 98.83,
+      "jumlahMesinATM": 375,
+      "jumlahMesinCRM": 1401
+    },
+    {
+      "periode": "2026-04",
+      "uptimeATM": 99.54,
+      "uptimeCRM": 98.92,
+      "jumlahMesinATM": 363,
+      "jumlahMesinCRM": 1412
+    },
+    {
+      "periode": "2026-05",
+      "uptimeATM": 99.57,
+      "uptimeCRM": 98.86,
+      "jumlahMesinATM": 361,
+      "jumlahMesinCRM": 1382
+    },
+    {
+      "periode": "2026-06",
+      "uptimeATM": 99.56,
+      "uptimeCRM": 98.9,
+      "jumlahMesinATM": 360,
+      "jumlahMesinCRM": 1378
+    },
+    {
+      "periode": "2026-07",
+      "uptimeATM": 99.45,
+      "uptimeCRM": 98.73,
+      "jumlahMesinATM": 358,
+      "jumlahMesinCRM": 1391
+    },
+    {
+      "periode": "2026-08",
+      "uptimeATM": 99.46,
+      "uptimeCRM": 98.71,
+      "jumlahMesinATM": 354,
+      "jumlahMesinCRM": 1391
+    }
+  ],
+  "availablePeriodes": [
+    "2026-02",
+    "2026-03",
+    "2026-04",
+    "2026-05",
+    "2026-06",
+    "2026-07",
+    "2026-08"
+  ],
+  "lockedPeriodes": [
+    "2026-02",
+    "2026-03",
+    "2026-04",
+    "2026-05",
+    "2026-06",
+    "2026-07",
+    "2026-08"
+  ],
+  "totalMachines": 2043,
+  "lastUpdated": "2026-11-03T09:03:53.163Z"
+}

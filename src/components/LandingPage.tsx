@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import {
   Zap,
   ShieldCheck,
@@ -36,6 +36,11 @@ export default function LandingPage({ onSelectMode }: LandingPageProps) {
   const [showForgotModal, setShowForgotModal] = useState(false);
 
   const passwordInputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    // Eager prefetch dataset ringkasan di latar belakang selagi user berada di halaman login
+    fetch('/summary-data.json').catch(() => {});
+  }, []);
 
   const handleSelectRole = (role: VerifyRole) => {
     setSelectedVerifyRole(role);

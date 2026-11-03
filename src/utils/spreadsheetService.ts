@@ -360,6 +360,39 @@ export const saveUptimePeriod = async (file: ParsedUptimeFile, forceUpdate: bool
   }
 };
 
+export interface DashboardSummaryData {
+  success: boolean;
+  globalTrendData: any[];
+  availablePeriodes: string[];
+  lockedPeriodes: string[];
+  totalMachines: number;
+  lastUpdated: string;
+}
+
+/**
+ * Mengambil ringkasan data dashboard instan (~1.4 KB, < 20ms)
+ * Digunakan untuk first-render instant pada Dashboard Overview tanpa perlu menunggu 10 MB detail mesin.
+ */
+export const fetchDashboardSummary = async (): Promise<DashboardSummaryData | null> => {
+  try {
+    const res = await fetch('/summary-data.json');
+    if (res.ok) {
+      const data = await res.json();
+      return {
+        success: true,
+        globalTrendData: data.globalTrendData || [],
+        availablePeriodes: (data.availablePeriodes || []).map(normalizePeriode),
+        lockedPeriodes: (data.lockedPeriodes || []).map(normalizePeriode),
+        totalMachines: data.totalMachines || 0,
+        lastUpdated: data.lastUpdated || new Date().toISOString()
+      };
+    }
+  } catch (err) {
+    console.warn('Gagal memuat summary-data.json:', err);
+  }
+  return null;
+};
+
 /**
  * Mengambil data dashboard dari database lokal / Snapshot / Bundled Data (~30ms)
  * Telah dioptimalkan penuh: Bebas dari pemanggilan lambat Google Spreadsheet.

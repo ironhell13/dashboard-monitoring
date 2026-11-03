@@ -15,7 +15,7 @@ import CekDailyPage from './pages/CekDailyPage';
 import SettingsPage from './pages/SettingsPage';
 import { useDataStore } from './store/useDataStore';
 import { matchData } from './utils/dataMatcher';
-import { fetchDashboardData, fetchFollowUpTickets, fetchFollowUpTicketsModern, isGasEnvironment } from './utils/spreadsheetService';
+import { fetchDashboardData, fetchDashboardSummary, fetchFollowUpTickets, fetchFollowUpTicketsModern, isGasEnvironment } from './utils/spreadsheetService';
 import { logoutKaOpsApi, logoutKaWilApi } from './utils/monitoringService';
 import { loadDashboardSnapshot, saveDashboardSnapshot } from './utils/dbCache';
 import { Loader2, Zap } from 'lucide-react';
@@ -142,20 +142,20 @@ function App() {
   ]);
 
   // Strategi Cache-First (Stale-While-Revalidate):
-  // 1. Baca IndexedDB Cache instan (< 50ms) -> Dashboard langsung terbuka tanpa menunggu
-  // 2. Di latar belakang, sinkronkan data terbaru & tiket follow-up
-  // 3. Jika data baru tersedia, perbarui store & simpan ke cache secara mulus
+  // Strategi Akselerasi Dua Tahap (Two-Phase Instant Hydration):
+  // 1. TAHAP 1 (< 30ms): Coba muat cache snapshot IndexedDB ATAU ringkasan summary dataset (1.4 KB).
+  //    Dashboard Overview langsung terbuka seketika tanpa blocking UI!
+  // 2. TAHAP 2 (Latar Belakang / Non-Blocking): Muat tiket follow-up dan dataset lengkap 2.043 mesin.
+  //    Setelah selesai, data mesin di store diperbarui dan disimpan ke IndexedDB secara mulus.
   useEffect(() => {
     let isMounted = true;
 
     async function initializeDashboard() {
-      let hasLocalCache = false;
+      let hasFullData = false;
 
-      // STEP 1: Coba muat cache lokal berkecepatan tinggi
+      // STEP 1: Coba muat cache snapshot lokal (IndexedDB ~15ms)
       try {
-        setLoadingStatusText('Membaca cache database lokal...');
         const cached = await loadDashboardSnapshot();
-
         if (isMounted && cached && cached.masterData && cached.masterData.length > 0) {
           applyDataset(
             cached.masterData,
@@ -164,51 +164,50 @@ function App() {
             cached.lastUpdated,
             cached.followUpTickets
           );
-          hasLocalCache = true;
-          // Segera tampilkan antarmuka dashboard ke user!
+          hasFullData = true;
+          // Segera buka dashboard dari cache lokal
           setIsDbLoaded(true);
         }
       } catch (cacheErr) {
-        console.warn('Cache lokal belum tersedia:', cacheErr);
+        console.warn('Cache snapshot lokal belum tersedia:', cacheErr);
       }
 
-      // STEP 2: Sinkronisasi latar belakang
-      setIsSyncing(true);
-      if (!hasLocalCache) {
-        setLoadingStatusText('Membaca data performa downtime...');
-      }
-
-      try {
-        const dbData = await fetchDashboardData();
-        if (!isMounted) return;
-
-        let tickets = dbData.tickets || [];
-        // Jika tiket belum disertakan, ambil terpisah
-        if (!tickets || tickets.length === 0) {
-          try {
-            const ticketRes = await fetchFollowUpTickets();
-            if (ticketRes.success && ticketRes.tickets) {
-              tickets = ticketRes.tickets;
-            }
-          } catch (tErr) {
-            console.warn('Gagal memuat tiket follow-up:', tErr);
-          }
-        }
-
-        // Muat tiket follow-up modern (Ka Ops / Ka Wil & Monitoring)
+      // STEP 2: Jika belum ada cache snapshot (misal Incognito / Cold Start),
+      // muat SUMMARY DATASET TERLEBIH DAHULU (1.4 KB, < 20ms) agar Dashboard LANGSUNG MUNCUL seketika!
+      if (!hasFullData) {
         try {
-          if (dbData && dbData.modernFollowUpTickets && dbData.modernFollowUpTickets.length > 0) {
-            setModernTickets(dbData.modernFollowUpTickets);
-          } else {
-            const mRes = await fetchFollowUpTicketsModern();
-            if (mRes.success && mRes.tickets) {
-              setModernTickets(mRes.tickets);
-            }
+          const summary = await fetchDashboardSummary();
+          if (isMounted && summary && summary.globalTrendData && summary.globalTrendData.length > 0) {
+            setGlobalTrendData(summary.globalTrendData);
+            setAvailablePeriodes(summary.availablePeriodes || []);
+            setLockedPeriodes(summary.lockedPeriodes || []);
+            setLastDbSync(summary.lastUpdated);
+            // LANGSUNG BUKA DASHBOARD INSTAN (< 30ms)!
+            setIsDbLoaded(true);
+          }
+        } catch (summaryErr) {
+          console.warn('Gagal memuat dashboard summary:', summaryErr);
+        }
+      }
+
+      // STEP 3: Latar Belakang (Non-Blocking) - Sinkronisasi tiket & detail 2.043 mesin
+      setIsSyncing(true);
+      try {
+        // 3a. Ambil tiket follow-up terbaru
+        try {
+          const mRes = await fetchFollowUpTicketsModern();
+          if (isMounted && mRes.success && mRes.tickets) {
+            setModernTickets(mRes.tickets);
           }
         } catch (mErr) {
           console.warn('Gagal memuat tiket modern:', mErr);
         }
 
+        // 3b. Muat dataset detail mesin jika belum ada
+        const dbData = await fetchDashboardData();
+        if (!isMounted) return;
+
+        let tickets = dbData.tickets || [];
         if (dbData && dbData.hasData && dbData.masterData?.length > 0) {
           applyDataset(
             dbData.masterData,
@@ -218,7 +217,7 @@ function App() {
             tickets
           );
 
-          // Simpan snapshot terbaru ke IndexedDB agar kunjungan berikutnya instan
+          // Simpan snapshot ke IndexedDB untuk kunjungan berikutnya
           await saveDashboardSnapshot({
             masterData: dbData.masterData,
             parsedUptimeFiles: dbData.parsedUptimeFiles || [],
@@ -229,13 +228,9 @@ function App() {
           });
 
           setSyncError(null);
-        } else if (hasLocalCache) {
-          setSyncError(null);
-        } else {
-          setLockedPeriodes(dbData?.lockedPeriodes || []);
         }
       } catch (syncErr: any) {
-        console.warn('Sinkronisasi data dashboard:', syncErr);
+        console.warn('Sinkronisasi data latar belakang:', syncErr);
         if (isMounted) {
           setSyncError(syncErr?.message || String(syncErr));
         }
@@ -252,7 +247,17 @@ function App() {
     return () => {
       isMounted = false;
     };
-  }, [applyDataset, setIsDbLoaded, setIsSyncing, setSyncError, setLockedPeriodes]);
+  }, [
+    applyDataset,
+    setIsDbLoaded,
+    setIsSyncing,
+    setSyncError,
+    setGlobalTrendData,
+    setAvailablePeriodes,
+    setLockedPeriodes,
+    setLastDbSync,
+    setModernTickets
+  ]);
 
   // 1. Mode Landing
   if (appMode === 'LANDING') {

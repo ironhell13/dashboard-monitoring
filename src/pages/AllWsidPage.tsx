@@ -30,12 +30,13 @@ import {
 import { exportAllWsidExcel, SERVICE_POINT_MAP, getServicePointName } from '../utils/comprehensiveExporter';
 import { cleanSektorName } from '../utils/dailyIncidentParser';
 import { evaluateMachineHealth, type MachineHealthStatus } from '../utils/slaHelper';
-import type { MachineData } from '../store/useDataStore';
+import { useDataStore, type MachineData } from '../store/useDataStore';
 
 export default function AllWsidPage() {
   const navigate = useNavigate();
   const allFilteredData = useFilteredData();
   const location = useLocation();
+  const { machines, isSyncing } = useDataStore();
 
   // Selection & Inspector State
   const [selectedWsid, setSelectedWsid] = useState<string | null>(location.state?.selectedWsid || null);
@@ -706,23 +707,37 @@ export default function AllWsidPage() {
                   <tr>
                     <td colSpan={7} className="py-14 text-center">
                       <div className="max-w-xs mx-auto space-y-2">
-                        <div className="w-12 h-12 rounded-2xl bg-slate-100 text-slate-400 flex items-center justify-center mx-auto">
-                          <Search size={22} />
-                        </div>
-                        <p className="font-bold text-slate-700 text-sm">
-                          Tidak ada mesin ditemukan
-                        </p>
-                        <p className="text-slate-400 text-xs">
-                          Coba ubah kata kunci pencarian atau reset filter di atas.
-                        </p>
-                        {hasActiveFilters && (
-                          <button
-                            type="button"
-                            onClick={handleResetFilters}
-                            className="mt-2 px-3 py-1.5 bg-white text-slate-700 border border-[#E5EAF2] rounded-lg text-xs font-medium hover:bg-slate-50 transition-colors cursor-pointer"
-                          >
-                            Reset Semua Filter
-                          </button>
+                        {isSyncing && machines.length === 0 ? (
+                          <div className="flex flex-col items-center justify-center gap-2 py-4">
+                            <Activity size={24} className="text-blue-600 animate-pulse" />
+                            <p className="font-bold text-slate-800 text-sm">
+                              Menyiapkan data 2.043 mesin...
+                            </p>
+                            <p className="text-slate-400 text-xs">
+                              Sedang sinkronisasi data detail mesin di latar belakang.
+                            </p>
+                          </div>
+                        ) : (
+                          <>
+                            <div className="w-12 h-12 rounded-2xl bg-slate-100 text-slate-400 flex items-center justify-center mx-auto">
+                              <Search size={22} />
+                            </div>
+                            <p className="font-bold text-slate-700 text-sm">
+                              Tidak ada mesin ditemukan
+                            </p>
+                            <p className="text-slate-400 text-xs">
+                              Coba ubah kata kunci pencarian atau reset filter di atas.
+                            </p>
+                            {hasActiveFilters && (
+                              <button
+                                type="button"
+                                onClick={handleResetFilters}
+                                className="mt-2 px-3 py-1.5 bg-white text-slate-700 border border-[#E5EAF2] rounded-lg text-xs font-medium hover:bg-slate-50 transition-colors cursor-pointer"
+                              >
+                                Reset Semua Filter
+                              </button>
+                            )}
+                          </>
                         )}
                       </div>
                     </td>

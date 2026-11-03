@@ -25,12 +25,15 @@ import {
   ReferenceLine 
 } from 'recharts';
 import { exportComprehensiveExcel, formatBulanTahun } from '../utils/comprehensiveExporter';
+import { fetchDashboardData } from '../utils/spreadsheetService';
+import { matchData } from '../utils/dataMatcher';
 
 const SLA_ATM = 99.00;
 const SLA_CRM = 98.50;
 
 export default function TotalUptimeBulanPage() {
   const [tableViewMode, setTableViewMode] = useState<'COMBINED' | 'SPLIT' | 'ATM' | 'CRM'>('COMBINED');
+  const [isExporting, setIsExporting] = useState(false);
   const { 
     globalTrendData, 
     rawMasterData, 
@@ -39,7 +42,28 @@ export default function TotalUptimeBulanPage() {
     selectedPeriode 
   } = useDataStore();
 
-  const handleExportAll = () => {
+  const handleExportAll = async () => {
+    if (machines.length === 0) {
+      setIsExporting(true);
+      try {
+        const dbData = await fetchDashboardData();
+        if (dbData && dbData.hasData && dbData.masterData?.length > 0) {
+          const matchedMachines = matchData(dbData.masterData, dbData.parsedUptimeFiles || []);
+          exportComprehensiveExcel({
+            masterData: dbData.masterData,
+            parsedUptimeFiles: dbData.parsedUptimeFiles || [],
+            machines: matchedMachines,
+            selectedPeriode
+          });
+        }
+      } catch (err) {
+        console.error('Gagal export:', err);
+      } finally {
+        setIsExporting(false);
+      }
+      return;
+    }
+
     exportComprehensiveExcel({
       masterData: rawMasterData,
       parsedUptimeFiles: rawUptimeFiles,
@@ -88,10 +112,11 @@ export default function TotalUptimeBulanPage() {
 
         <button
           onClick={handleExportAll}
-          className="inline-flex items-center gap-1.5 px-3 h-8 bg-blue-600 hover:bg-blue-700 text-white rounded-md text-xs font-medium transition-colors shadow-2xs cursor-pointer self-start sm:self-auto"
+          disabled={isExporting}
+          className="inline-flex items-center gap-1.5 px-3 h-8 bg-blue-600 hover:bg-blue-700 text-white rounded-md text-xs font-medium transition-colors shadow-2xs cursor-pointer self-start sm:self-auto disabled:opacity-60"
         >
-          <Download size={13} />
-          <span>Export Laporan Lengkap (.xlsx)</span>
+          <Download size={13} className={isExporting ? 'animate-bounce' : ''} />
+          <span>{isExporting ? 'Menyiapkan Data Excel...' : 'Export Laporan Lengkap (.xlsx)'}</span>
         </button>
       </div>
 

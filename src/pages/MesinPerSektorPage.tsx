@@ -31,7 +31,7 @@ interface SektorRow {
 export default function MesinPerSektorPage() {
   const navigate = useNavigate();
   const filteredData = useFilteredData();
-  const { rawMasterData, rawUptimeFiles, machines, selectedPeriode } = useDataStore();
+  const { rawMasterData, rawUptimeFiles, machines, selectedPeriode, isSyncing } = useDataStore();
   const [expandedSektor, setExpandedSektor] = useState<string | null>(null);
   const [selectedWsid, setSelectedWsid] = useState<string | null>(null);
 
@@ -225,7 +225,14 @@ export default function MesinPerSektorPage() {
               {dataSektor.length === 0 ? (
                 <tr>
                   <td colSpan={8} className="px-4 py-8 text-center text-slate-400">
-                    Tidak ada data yang tersedia untuk filter saat ini.
+                    {isSyncing && machines.length === 0 ? (
+                      <div className="flex flex-col items-center justify-center gap-2 py-4">
+                        <Activity className="w-5 h-5 text-blue-600 animate-pulse" />
+                        <span className="text-xs text-slate-600 font-medium">Memuat dan mengolah 2.043 data mesin per sektor...</span>
+                      </div>
+                    ) : (
+                      'Tidak ada data yang tersedia untuk filter saat ini.'
+                    )}
                   </td>
                 </tr>
               ) : (
