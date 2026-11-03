@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import {
   Settings,
   Sparkles,
@@ -30,7 +30,15 @@ import {
   RefreshCw,
   ExternalLink,
   Copy,
-  HelpCircle
+  HelpCircle,
+  UserPlus,
+  Key,
+  Mail,
+  Phone,
+  UserCheck,
+  UserX,
+  Server,
+  Lock
 } from 'lucide-react';
 import {
   type QuickChipCategory,
@@ -38,12 +46,67 @@ import {
   QUICK_CHIP_CATEGORIES,
   useQuickChips
 } from '../utils/quickChipsService';
+import {
+  type AppUser,
+  type AppUserRole,
+  type AppUserStatus,
+  fetchUsersSupabase,
+  saveUserSupabase,
+  deleteUserSupabase,
+  subscribeUsersSupabase
+} from '../utils/supabaseService';
+import {
+  getSupabaseUrl,
+  getSupabaseAnonKey,
+  setSupabaseCredentials,
+  isSupabaseConfigured,
+  testSupabaseConnection
+} from '../utils/supabaseClient';
+
+const DEFAULT_APP_USERS: AppUser[] = [
+  {
+    id: 'usr_superadmin',
+    username: 'superadmin',
+    fullName: 'Super Administrator eMons BCA',
+    email: 'superadmin@bca.co.id',
+    role: 'SUPER_ADMIN',
+    status: 'ACTIVE',
+    createdAt: '2026-11-03T10:00:00Z'
+  },
+  {
+    id: 'usr_kaops',
+    username: 'kaops',
+    fullName: 'Kepala Operasional (Ka Ops)',
+    email: 'kaops@bca.co.id',
+    role: 'KAOPS',
+    status: 'ACTIVE',
+    createdAt: '2026-11-03T10:00:00Z'
+  },
+  {
+    id: 'usr_kawil',
+    username: 'kawil',
+    fullName: 'Kepala Wilayah (Ka Wil)',
+    email: 'kawil@bca.co.id',
+    role: 'KAWIL',
+    status: 'ACTIVE',
+    createdAt: '2026-11-03T10:00:00Z'
+  },
+  {
+    id: 'usr_monitoring',
+    username: 'monitoring',
+    fullName: 'Tim Monitoring & Dispatcher',
+    email: 'monitoring@bca.co.id',
+    role: 'MONITORING',
+    status: 'ACTIVE',
+    createdAt: '2026-11-03T10:00:00Z'
+  }
+];
 
 interface SettingsPageProps {
   userRole?: 'KAWIL' | 'KAOPS' | 'MONITORING';
 }
 
-type SettingsSubMenu = 'QUICK_CHIPS' | 'ACCOUNTS' | 'SLA_CONFIG' | 'PROBLEM_WHITELIST';
+type SettingsSubMenu = 'QUICK_CHIPS' | 'ACCOUNTS' | 'DATABASE_CONFIG' | 'SLA_CONFIG' | 'PROBLEM_WHITELIST';
 
 export default function SettingsPage({ userRole = 'KAOPS' }: SettingsPageProps) {
   const [activeSubMenu, setActiveSubMenu] = useState<SettingsSubMenu>('QUICK_CHIPS');
@@ -84,6 +147,245 @@ export default function SettingsPage({ userRole = 'KAOPS' }: SettingsPageProps) 
 
   // Modal State for Reset Confirmation
   const [isResetConfirmOpen, setIsResetConfirmOpen] = useState(false);
+
+  // User Management State (Super Admin & Multi-User)
+  const [users, setUsers] = useState<AppUser[]>([]);
+  const [userSearchQuery, setUserSearchQuery] = useState('');
+  const [userRoleFilter, setUserRoleFilter] = useState<AppUserRole | 'ALL'>('ALL');
+  const [isUserModalOpen, setIsUserModalOpen] = useState(false);
+  const [editingUser, setEditingUser] = useState<AppUser | null>(null);
+  const [userFormUsername, setUserFormUsername] = useState('');
+  const [userFormFullName, setUserFormFullName] = useState('');
+  const [userFormEmail, setUserFormEmail] = useState('');
+  const [userFormPassword, setUserFormPassword] = useState('');
+  const [userFormRole, setUserFormRole] = useState<AppUserRole>('MONITORING');
+  const [userFormStatus, setUserFormStatus] = useState<AppUserStatus>('ACTIVE');
+  const [userFormSektor, setUserFormSektor] = useState('');
+  const [userFormError, setUserFormError] = useState('');
+  const [isUserLoading, setIsUserLoading] = useState(false);
+
+  // Supabase Configuration State
+  const [supabaseUrlInput, setSupabaseUrlInput] = useState('');
+  const [supabaseKeyInput, setSupabaseKeyInput] = useState('');
+  const [isTestingSupabase, setIsTestingSupabase] = useState(false);
+  const [supabaseTestStatus, setSupabaseTestStatus] = useState<{ success: boolean; message: string } | null>(null);
+
+  // Load initial Supabase Credentials & Users list
+  useEffect(() => {
+    setSupabaseUrlInput(getSupabaseUrl());
+    setSupabaseKeyInput(getSupabaseAnonKey());
+    loadUsersList();
+
+    const unsub = subscribeUsersSupabase((updated) => {
+      setUsers(updated);
+    });
+    return () => unsub();
+  }, []);
+
+  const loadUsersList = async () => {
+    setIsUserLoading(true);
+    try {
+      if (isSupabaseConfigured()) {
+        const res = await fetchUsersSupabase();
+        if (res.success && res.users.length > 0) {
+          setUsers(res.users);
+          setIsUserLoading(false);
+          return;
+        }
+      }
+      const saved = localStorage.getItem('EMONS_LOCAL_USERS');
+      if (saved) {
+        setUsers(JSON.parse(saved));
+      } else {
+        setUsers(DEFAULT_APP_USERS);
+        localStorage.setItem('EMONS_LOCAL_USERS', JSON.stringify(DEFAULT_APP_USERS));
+      }
+    } catch (e) {
+      console.warn('Gagal load users:', e);
+    } finally {
+      setIsUserLoading(false);
+    }
+  };
+
+  const handleOpenCreateUserModal = () => {
+    setEditingUser(null);
+    setUserFormUsername('');
+    setUserFormFullName('');
+    setUserFormEmail('');
+    setUserFormPassword('');
+    setUserFormRole('MONITORING');
+    setUserFormStatus('ACTIVE');
+    setUserFormSektor('');
+    setUserFormError('');
+    setIsUserModalOpen(true);
+  };
+
+  const handleOpenEditUserModal = (user: AppUser) => {
+    setEditingUser(user);
+    setUserFormUsername(user.username);
+    setUserFormFullName(user.fullName);
+    setUserFormEmail(user.email || '');
+    setUserFormPassword('');
+    setUserFormRole(user.role);
+    setUserFormStatus(user.status);
+    setUserFormSektor(user.assignedSektor || '');
+    setUserFormError('');
+    setIsUserModalOpen(true);
+  };
+
+  const handleSaveUser = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!userFormUsername.trim() || !userFormFullName.trim()) {
+      setUserFormError('Username dan Nama Lengkap wajib diisi!');
+      return;
+    }
+    if (!editingUser && !userFormPassword.trim()) {
+      setUserFormError('Password wajib diisi untuk pengguna baru!');
+      return;
+    }
+
+    try {
+      if (isSupabaseConfigured()) {
+        const res = await saveUserSupabase({
+          id: editingUser?.id,
+          username: userFormUsername,
+          fullName: userFormFullName,
+          email: userFormEmail,
+          password: userFormPassword,
+          role: userFormRole,
+          status: userFormStatus,
+          assignedSektor: userFormSektor
+        });
+
+        if (!res.success) throw new Error(res.message);
+        showToast(editingUser ? 'Pengguna berhasil diperbarui di Supabase!' : 'Pengguna baru berhasil ditambahkan ke Supabase!', 'success');
+        loadUsersList();
+      } else {
+        const current = [...users];
+        if (editingUser) {
+          const idx = current.findIndex((u) => u.id === editingUser.id);
+          if (idx !== -1) {
+            current[idx] = {
+              ...current[idx],
+              username: userFormUsername.trim().toLowerCase(),
+              fullName: userFormFullName.trim(),
+              email: userFormEmail.trim() || undefined,
+              role: userFormRole,
+              status: userFormStatus,
+              assignedSektor: userFormSektor.trim() || undefined,
+              updatedAt: new Date().toISOString()
+            };
+          }
+          showToast('Pengguna berhasil diperbarui (tersimpan lokal).', 'info');
+        } else {
+          if (current.some((u) => u.username.toLowerCase() === userFormUsername.trim().toLowerCase())) {
+            throw new Error(`Username "${userFormUsername}" sudah terdaftar.`);
+          }
+          current.push({
+            id: `usr_${Date.now()}`,
+            username: userFormUsername.trim().toLowerCase(),
+            fullName: userFormFullName.trim(),
+            email: userFormEmail.trim() || undefined,
+            role: userFormRole,
+            status: userFormStatus,
+            assignedSektor: userFormSektor.trim() || undefined,
+            createdAt: new Date().toISOString()
+          });
+          showToast('Pengguna baru berhasil ditambahkan (tersimpan lokal).', 'info');
+        }
+        setUsers(current);
+        localStorage.setItem('EMONS_LOCAL_USERS', JSON.stringify(current));
+      }
+
+      setIsUserModalOpen(false);
+      setEditingUser(null);
+    } catch (err: any) {
+      setUserFormError(err.message || 'Gagal menyimpan pengguna.');
+    }
+  };
+
+  const handleDeleteUser = async (user: AppUser) => {
+    if (user.username === 'superadmin') {
+      showToast('Akun Super Administrator utama tidak boleh dihapus demi keamanan sistem!', 'error');
+      return;
+    }
+
+    if (window.confirm(`Yakin ingin menghapus pengguna "${user.fullName}" (@${user.username})?`)) {
+      try {
+        if (isSupabaseConfigured()) {
+          const res = await deleteUserSupabase(user.id);
+          if (!res.success) throw new Error(res.message);
+          showToast('Pengguna berhasil dihapus dari Supabase.', 'success');
+          loadUsersList();
+        } else {
+          const filtered = users.filter((u) => u.id !== user.id);
+          setUsers(filtered);
+          localStorage.setItem('EMONS_LOCAL_USERS', JSON.stringify(filtered));
+          showToast('Pengguna berhasil dihapus dari penyimpanan lokal.', 'info');
+        }
+      } catch (err: any) {
+        showToast(err.message || 'Gagal menghapus pengguna.', 'error');
+      }
+    }
+  };
+
+  const handleSaveSupabaseConfig = async () => {
+    const cleanUrl = supabaseUrlInput.trim();
+    const cleanKey = supabaseKeyInput.trim();
+    setSupabaseCredentials(cleanUrl, cleanKey);
+    showToast('Kredensial Supabase berhasil disimpan di browser.', 'success');
+    handleTestSupabaseConfig();
+  };
+
+  const handleTestSupabaseConfig = async () => {
+    setIsTestingSupabase(true);
+    setSupabaseTestStatus(null);
+    try {
+      const res = await testSupabaseConnection();
+      setSupabaseTestStatus(res);
+      if (res.success) {
+        showToast('Koneksi Supabase Sukses!', 'success');
+        loadUsersList();
+      } else {
+        showToast(res.message, 'error');
+      }
+    } catch (err: any) {
+      setSupabaseTestStatus({ success: false, message: err.message || 'Gagal menghubungi Supabase.' });
+    } finally {
+      setIsTestingSupabase(false);
+    }
+  };
+
+  // Filtered Users
+  const filteredUsers = useMemo(() => {
+    return users.filter((u) => {
+      const matchRole = userRoleFilter === 'ALL' || u.role === userRoleFilter;
+      const q = userSearchQuery.trim().toLowerCase();
+      const matchSearch =
+        !q ||
+        u.username.toLowerCase().includes(q) ||
+        u.fullName.toLowerCase().includes(q) ||
+        (u.email && u.email.toLowerCase().includes(q)) ||
+        (u.assignedSektor && u.assignedSektor.toLowerCase().includes(q));
+      return matchRole && matchSearch;
+    });
+  }, [users, userRoleFilter, userSearchQuery]);
+
+  const getRoleBadge = (role: AppUserRole) => {
+    switch (role) {
+      case 'SUPER_ADMIN':
+        return { label: 'Super Admin', badgeClass: 'bg-purple-100 text-purple-800 border-purple-200' };
+      case 'KAWIL':
+        return { label: 'Ka Wil', badgeClass: 'bg-indigo-100 text-indigo-800 border-indigo-200' };
+      case 'KAOPS':
+        return { label: 'Ka Ops', badgeClass: 'bg-blue-100 text-blue-800 border-blue-200' };
+      case 'MONITORING':
+        return { label: 'Monitoring', badgeClass: 'bg-emerald-100 text-emerald-800 border-emerald-200' };
+      case 'VIEWER':
+      default:
+        return { label: 'Viewer', badgeClass: 'bg-slate-100 text-slate-800 border-slate-200' };
+    }
+  };
 
   // Manual Trigger Refresh dari Server Cloud
   const handleManualSync = async () => {
@@ -302,27 +604,61 @@ export default function SettingsPage({ userRole = 'KAOPS' }: SettingsPageProps) 
                 </span>
               </button>
 
-              {/* 2. Sub Menu: Manajemen Akun & Hak Akses (Coming Soon) */}
+              {/* 2. Sub Menu: Manajemen Akun & Hak Akses (Active) */}
               <button
                 type="button"
                 onClick={() => setActiveSubMenu('ACCOUNTS')}
                 className={`w-full flex items-center justify-between px-3 py-2.5 rounded-xl text-xs font-semibold transition-all cursor-pointer text-left ${
                   activeSubMenu === 'ACCOUNTS'
-                    ? 'bg-blue-600 text-white shadow-sm'
+                    ? 'bg-blue-600 text-white shadow-sm shadow-blue-600/30'
                     : 'text-slate-700 hover:bg-slate-100'
                 }`}
               >
                 <div className="flex items-center gap-2.5 min-w-0">
-                  <Users className={`w-4 h-4 shrink-0 ${activeSubMenu === 'ACCOUNTS' ? 'text-white' : 'text-slate-500'}`} />
+                  <Users className={`w-4 h-4 shrink-0 ${activeSubMenu === 'ACCOUNTS' ? 'text-white' : 'text-blue-600'}`} />
                   <div className="truncate">
-                    <span className="block font-bold">Akun & Akses</span>
+                    <span className="block font-bold">Akun & Pengguna</span>
                     <span className={`text-[10px] block truncate ${activeSubMenu === 'ACCOUNTS' ? 'text-blue-100' : 'text-slate-400'}`}>
-                      Password & Token Akses
+                      Super Admin & Hak Akses
                     </span>
                   </div>
                 </div>
-                <span className="text-[9px] px-1.5 py-0.5 rounded-full font-bold bg-amber-100 text-amber-800 border border-amber-200 shrink-0">
-                  Segera
+                <span
+                  className={`text-[10px] px-1.5 py-0.5 rounded-full font-bold shrink-0 ${
+                    activeSubMenu === 'ACCOUNTS' ? 'bg-white/20 text-white' : 'bg-slate-100 text-slate-600'
+                  }`}
+                >
+                  {users.length}
+                </span>
+              </button>
+
+              {/* 3. Sub Menu: Database Supabase PostgreSQL (Active) */}
+              <button
+                type="button"
+                onClick={() => setActiveSubMenu('DATABASE_CONFIG')}
+                className={`w-full flex items-center justify-between px-3 py-2.5 rounded-xl text-xs font-semibold transition-all cursor-pointer text-left ${
+                  activeSubMenu === 'DATABASE_CONFIG'
+                    ? 'bg-blue-600 text-white shadow-sm shadow-blue-600/30'
+                    : 'text-slate-700 hover:bg-slate-100'
+                }`}
+              >
+                <div className="flex items-center gap-2.5 min-w-0">
+                  <Database className={`w-4 h-4 shrink-0 ${activeSubMenu === 'DATABASE_CONFIG' ? 'text-white' : 'text-emerald-600'}`} />
+                  <div className="truncate">
+                    <span className="block font-bold">Database Supabase</span>
+                    <span className={`text-[10px] block truncate ${activeSubMenu === 'DATABASE_CONFIG' ? 'text-blue-100' : 'text-slate-400'}`}>
+                      Koneksi PostgreSQL & Realtime
+                    </span>
+                  </div>
+                </div>
+                <span
+                  className={`text-[9px] px-1.5 py-0.5 rounded-full font-bold shrink-0 ${
+                    isSupabaseConfigured()
+                      ? 'bg-emerald-100 text-emerald-800 border border-emerald-200'
+                      : 'bg-amber-100 text-amber-800 border border-amber-200'
+                  }`}
+                >
+                  {isSupabaseConfigured() ? 'Terkoneksi' : 'Setup'}
                 </span>
               </button>
 
@@ -684,21 +1020,362 @@ export default function SettingsPage({ userRole = 'KAOPS' }: SettingsPageProps) 
             </div>
           )}
 
-          {/* Sub Menu 2: Accounts (Coming Soon Preview) */}
+          {/* Sub Menu 2: Accounts (Manajemen Pengguna & Super Admin) */}
           {activeSubMenu === 'ACCOUNTS' && (
-            <div className="bg-white rounded-2xl border border-slate-200 p-8 text-center shadow-2xs space-y-4">
-              <div className="w-14 h-14 rounded-2xl bg-amber-50 text-amber-600 border border-amber-200 flex items-center justify-center mx-auto">
-                <Users className="w-7 h-7" />
+            <div className="bg-white rounded-2xl border border-slate-200 p-4 md:p-6 shadow-2xs space-y-5">
+              {/* Header */}
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-4 border-b border-slate-100">
+                <div>
+                  <div className="flex items-center gap-2">
+                    <h2 className="text-base md:text-lg font-bold text-slate-900 flex items-center gap-2">
+                      <Users className="w-5 h-5 text-blue-600" />
+                      Manajemen Pengguna & Super Admin
+                    </h2>
+                    <span className="text-[10px] px-2 py-0.5 font-bold rounded-full bg-blue-100 text-blue-800 border border-blue-200">
+                      CRUD Aktif
+                    </span>
+                  </div>
+                  <p className="text-xs text-slate-500 mt-0.5">
+                    Kelola akun, tambah pengguna baru (Super Admin, Ka Wil, Ka Ops, Monitoring), ubah hak akses, atau hapus user.
+                  </p>
+                </div>
+
+                <div className="flex items-center gap-2 shrink-0">
+                  <button
+                    type="button"
+                    onClick={loadUsersList}
+                    disabled={isUserLoading}
+                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-slate-200 text-slate-600 hover:bg-slate-100 text-xs font-semibold transition-colors cursor-pointer disabled:opacity-50"
+                    title="Refresh data pengguna"
+                  >
+                    <RefreshCw className={`w-3.5 h-3.5 ${isUserLoading ? 'animate-spin text-blue-600' : ''}`} />
+                    <span>Refresh</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={handleOpenCreateUserModal}
+                    className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold shadow-xs transition-colors cursor-pointer"
+                  >
+                    <UserPlus className="w-4 h-4" />
+                    <span>Tambah User Baru</span>
+                  </button>
+                </div>
               </div>
-              <div className="max-w-md mx-auto space-y-1">
-                <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-100 text-amber-800 border border-amber-200 uppercase tracking-wider">
-                  Segera Hadir di Versi Berikutnya
+
+              {/* Role Filter Tabs */}
+              <div className="flex flex-wrap items-center gap-1.5 p-1 bg-slate-100/80 rounded-xl">
+                <button
+                  type="button"
+                  onClick={() => setUserRoleFilter('ALL')}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer flex items-center gap-1.5 ${
+                    userRoleFilter === 'ALL'
+                      ? 'bg-white text-blue-700 shadow-2xs font-bold'
+                      : 'text-slate-600 hover:text-slate-900 hover:bg-white/50'
+                  }`}
+                >
+                  <span>Semua Peran</span>
+                  <span className="text-[10px] px-1.5 py-0.2 rounded-full bg-slate-200 text-slate-700 font-bold">
+                    {users.length}
+                  </span>
+                </button>
+
+                {(['SUPER_ADMIN', 'KAOPS', 'KAWIL', 'MONITORING'] as AppUserRole[]).map((r) => {
+                  const meta = getRoleBadge(r);
+                  const count = users.filter((u) => u.role === r).length;
+                  return (
+                    <button
+                      key={r}
+                      type="button"
+                      onClick={() => setUserRoleFilter(r)}
+                      className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer flex items-center gap-1.5 ${
+                        userRoleFilter === r
+                          ? 'bg-white text-blue-700 shadow-2xs font-bold'
+                          : 'text-slate-600 hover:text-slate-900 hover:bg-white/50'
+                      }`}
+                    >
+                      <span>{meta.label}</span>
+                      <span className="text-[10px] px-1.5 py-0.2 rounded-full bg-slate-200 text-slate-700 font-bold">
+                        {count}
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+
+              {/* Search Bar */}
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                <div className="relative flex-1 max-w-sm">
+                  <Search className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                  <input
+                    type="text"
+                    placeholder="Cari nama, username, email, atau sektor..."
+                    value={userSearchQuery}
+                    onChange={(e) => setUserSearchQuery(e.target.value)}
+                    className="w-full pl-8 pr-8 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-xs text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-1 focus:ring-blue-500 focus:bg-white"
+                  />
+                  {userSearchQuery && (
+                    <button
+                      type="button"
+                      onClick={() => setUserSearchQuery('')}
+                      className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 cursor-pointer"
+                    >
+                      <X className="w-3.5 h-3.5" />
+                    </button>
+                  )}
+                </div>
+
+                <span className="text-xs text-slate-500">
+                  Menampilkan <strong>{filteredUsers.length}</strong> dari {users.length} pengguna
                 </span>
-                <h3 className="text-base font-bold text-slate-900 mt-2">Manajemen Akun & Hak Akses Supervisor</h3>
-                <p className="text-xs text-slate-500 leading-relaxed">
-                  Modul ini akan memungkinkan Super Admin Ka Wil / Ka Ops untuk mengganti password login supervisor,
-                  mengatur sesi aktif, dan mengonfigurasi hak akses petugas Tim Monitoring secara mandiri.
+              </div>
+
+              {/* Users Table */}
+              {filteredUsers.length === 0 ? (
+                <div className="py-12 text-center rounded-xl border border-dashed border-slate-200 bg-slate-50/50">
+                  <Users className="w-8 h-8 text-slate-300 mx-auto mb-2" />
+                  <p className="text-xs font-semibold text-slate-700">Tidak ada pengguna yang cocok</p>
+                  <p className="text-[11px] text-slate-400 mt-0.5">
+                    {userSearchQuery ? 'Coba ubah kata kunci pencarian Anda' : 'Belum ada pengguna untuk filter ini'}
+                  </p>
+                </div>
+              ) : (
+                <div className="overflow-x-auto rounded-xl border border-slate-200">
+                  <table className="w-full text-left text-xs">
+                    <thead className="bg-slate-50 border-b border-slate-200 text-slate-500 font-bold uppercase text-[10px] tracking-wider">
+                      <tr>
+                        <th className="px-4 py-3">Pengguna</th>
+                        <th className="px-3 py-3">Peran / Hak Akses</th>
+                        <th className="px-3 py-3">Status</th>
+                        <th className="px-3 py-3">Batas Sektor</th>
+                        <th className="px-3 py-3 text-right">Aksi</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100 bg-white">
+                      {filteredUsers.map((u) => {
+                        const roleMeta = getRoleBadge(u.role);
+                        const isMainSuperAdmin = u.username.toLowerCase() === 'superadmin';
+                        return (
+                          <tr key={u.id} className="hover:bg-slate-50/70 transition-colors">
+                            <td className="px-4 py-3">
+                              <div className="flex items-center gap-3">
+                                <div className="w-8 h-8 rounded-full bg-blue-100 text-blue-700 font-bold flex items-center justify-center shrink-0 text-xs">
+                                  {u.fullName ? u.fullName.charAt(0).toUpperCase() : 'U'}
+                                </div>
+                                <div className="min-w-0">
+                                  <div className="flex items-center gap-1.5 font-bold text-slate-900">
+                                    <span>{u.fullName}</span>
+                                    {isMainSuperAdmin && (
+                                      <span className="px-1.5 py-0.2 rounded text-[9px] bg-purple-100 text-purple-800 font-bold border border-purple-200">
+                                        Root
+                                      </span>
+                                    )}
+                                  </div>
+                                  <div className="text-[11px] text-slate-400 flex items-center gap-2">
+                                    <span className="font-mono text-slate-500">@{u.username}</span>
+                                    {u.email && <span>• {u.email}</span>}
+                                  </div>
+                                </div>
+                              </div>
+                            </td>
+                            <td className="px-3 py-3">
+                              <span className={`inline-block px-2.5 py-0.5 rounded-full text-[10px] font-bold border ${roleMeta.badgeClass}`}>
+                                {roleMeta.label}
+                              </span>
+                            </td>
+                            <td className="px-3 py-3">
+                              <span
+                                className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold border ${
+                                  u.status === 'ACTIVE'
+                                    ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                                    : 'bg-slate-100 text-slate-500 border-slate-200'
+                                }`}
+                              >
+                                <span className={`w-1.5 h-1.5 rounded-full ${u.status === 'ACTIVE' ? 'bg-emerald-500' : 'bg-slate-400'}`} />
+                                <span>{u.status === 'ACTIVE' ? 'Aktif' : 'Nonaktif'}</span>
+                              </span>
+                            </td>
+                            <td className="px-3 py-3 text-slate-600 text-[11px]">
+                              {u.assignedSektor ? (
+                                <span className="font-medium text-blue-700">{u.assignedSektor}</span>
+                              ) : (
+                                <span className="text-slate-400 italic">Semua Sektor (Bebas)</span>
+                              )}
+                            </td>
+                            <td className="px-3 py-3 text-right">
+                              <div className="flex items-center justify-end gap-1">
+                                <button
+                                  type="button"
+                                  onClick={() => handleOpenEditUserModal(u)}
+                                  title="Edit data / reset password"
+                                  className="p-1.5 rounded-lg text-slate-500 hover:text-blue-600 hover:bg-blue-50 cursor-pointer transition-colors"
+                                >
+                                  <Edit3 className="w-3.5 h-3.5" />
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => handleDeleteUser(u)}
+                                  disabled={isMainSuperAdmin}
+                                  title={isMainSuperAdmin ? 'Akun Super Admin utama tidak boleh dihapus' : 'Hapus user ini'}
+                                  className={`p-1.5 rounded-lg transition-colors ${
+                                    isMainSuperAdmin
+                                      ? 'text-slate-200 cursor-not-allowed'
+                                      : 'text-slate-400 hover:text-rose-600 hover:bg-rose-50 cursor-pointer'
+                                  }`}
+                                >
+                                  <Trash2 className="w-3.5 h-3.5" />
+                                </button>
+                              </div>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Sub Menu 3: Database Supabase Configuration */}
+          {activeSubMenu === 'DATABASE_CONFIG' && (
+            <div className="bg-white rounded-2xl border border-slate-200 p-4 md:p-6 shadow-2xs space-y-6">
+              {/* Header */}
+              <div className="pb-4 border-b border-slate-100">
+                <div className="flex items-center gap-2">
+                  <h2 className="text-base md:text-lg font-bold text-slate-900 flex items-center gap-2">
+                    <Database className="w-5 h-5 text-emerald-600" />
+                    Koneksi Database Supabase (PostgreSQL)
+                  </h2>
+                  <span
+                    className={`text-[10px] px-2 py-0.5 font-bold rounded-full border ${
+                      isSupabaseConfigured()
+                        ? 'bg-emerald-100 text-emerald-800 border-emerald-200'
+                        : 'bg-amber-100 text-amber-800 border-amber-200'
+                    }`}
+                  >
+                    {isSupabaseConfigured() ? 'Terkoneksi' : 'Perlu Setup'}
+                  </span>
+                </div>
+                <p className="text-xs text-slate-500 mt-0.5">
+                  Hubungkan dashboard ke database cloud Supabase untuk menghilangkan keterbatasan spreadsheet, latensi &lt; 50ms, dan sinkronisasi realtime multi-PC.
                 </p>
+              </div>
+
+              {/* Status Banner */}
+              <div
+                className={`p-4 rounded-xl border flex items-start gap-3 ${
+                  isSupabaseConfigured()
+                    ? 'bg-emerald-50 border-emerald-200 text-emerald-900'
+                    : 'bg-amber-50 border-amber-200 text-amber-900'
+                }`}
+              >
+                <div
+                  className={`w-9 h-9 rounded-lg flex items-center justify-center shrink-0 ${
+                    isSupabaseConfigured() ? 'bg-emerald-200 text-emerald-800' : 'bg-amber-200 text-amber-800'
+                  }`}
+                >
+                  <Server className="w-5 h-5" />
+                </div>
+                <div className="space-y-1">
+                  <h4 className="text-xs font-bold">
+                    {isSupabaseConfigured()
+                      ? 'Database Supabase Terkonfigurasi'
+                      : 'Kredensial Supabase Belum Terhubung'}
+                  </h4>
+                  <p className="text-[11px] leading-relaxed text-slate-600">
+                    {isSupabaseConfigured()
+                      ? 'Dashboard saat ini terhubung langsung ke database PostgreSQL Supabase. Query data, tiket, insiden, dan penambahan pengguna berlangsung instan.'
+                      : 'Dashboard saat ini masih menggunakan Google Apps Script / LocalStorage. Masukkan Project URL dan Anon Key Supabase Anda di bawah untuk mengaktifkan database PostgreSQL.'}
+                  </p>
+                </div>
+              </div>
+
+              {/* Form Input Kredensial */}
+              <div className="bg-slate-50 p-4 md:p-5 rounded-xl border border-slate-200 space-y-4">
+                <span className="text-xs font-bold text-slate-900 block">Kredensial API Proyek Supabase:</span>
+
+                <div>
+                  <label className="block text-xs font-semibold text-slate-700 mb-1">
+                    Supabase Project URL *
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="https://xyzcompany.supabase.co"
+                    value={supabaseUrlInput}
+                    onChange={(e) => setSupabaseUrlInput(e.target.value)}
+                    className="w-full px-3 py-2 bg-white border border-slate-300 rounded-lg text-xs font-mono text-slate-800 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                  />
+                  <p className="text-[10px] text-slate-400 mt-1">Ditemukan di: Project Settings &gt; API &gt; Project URL</p>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold text-slate-700 mb-1">
+                    Supabase Anon / Public Key *
+                  </label>
+                  <textarea
+                    rows={3}
+                    placeholder="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+                    value={supabaseKeyInput}
+                    onChange={(e) => setSupabaseKeyInput(e.target.value)}
+                    className="w-full px-3 py-2 bg-white border border-slate-300 rounded-lg text-xs font-mono text-slate-800 focus:outline-none focus:ring-1 focus:ring-blue-500 resize-none leading-relaxed"
+                  />
+                  <p className="text-[10px] text-slate-400 mt-1">Ditemukan di: Project Settings &gt; API &gt; Project API Keys &gt; anon public</p>
+                </div>
+
+                {supabaseTestStatus && (
+                  <div
+                    className={`p-3 rounded-lg text-xs border flex items-center gap-2 ${
+                      supabaseTestStatus.success
+                        ? 'bg-emerald-100/70 border-emerald-300 text-emerald-800'
+                        : 'bg-rose-100/70 border-rose-300 text-rose-800'
+                    }`}
+                  >
+                    {supabaseTestStatus.success ? (
+                      <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+                    ) : (
+                      <AlertTriangle className="w-4 h-4 text-rose-600 shrink-0" />
+                    )}
+                    <span>{supabaseTestStatus.message}</span>
+                  </div>
+                )}
+
+                <div className="pt-2 flex flex-wrap items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={handleSaveSupabaseConfig}
+                    className="px-4 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold shadow-xs cursor-pointer flex items-center gap-1.5"
+                  >
+                    <Check className="w-4 h-4" />
+                    <span>Simpan &amp; Uji Koneksi</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={handleTestSupabaseConfig}
+                    disabled={isTestingSupabase}
+                    className="px-3.5 py-2 rounded-lg border border-slate-300 bg-white hover:bg-slate-100 text-slate-700 text-xs font-semibold cursor-pointer flex items-center gap-1.5 disabled:opacity-50"
+                  >
+                    <RefreshCw className={`w-3.5 h-3.5 text-slate-500 ${isTestingSupabase ? 'animate-spin text-emerald-600' : ''}`} />
+                    <span>{isTestingSupabase ? 'Menguji...' : 'Uji Koneksi Saja'}</span>
+                  </button>
+                </div>
+              </div>
+
+              {/* Panduan Schema SQL */}
+              <div className="p-4 rounded-xl border border-blue-200 bg-blue-50/50 space-y-2">
+                <div className="flex items-center gap-2 text-xs font-bold text-blue-950">
+                  <FileText className="w-4 h-4 text-blue-600" />
+                  <span>File SQL Schema Siap Pakai</span>
+                </div>
+                <p className="text-[11px] text-slate-600 leading-relaxed">
+                  File skema lengkap (<code className="bg-blue-100 px-1 py-0.5 rounded font-mono text-[10px]">supabase/schema.sql</code>) telah mencakup seluruh tabel master mesin, rekap uptime bulanan, insiden aktif, tiket follow up, quick chips, serta tabel pengguna (<code className="bg-blue-100 px-1 py-0.5 rounded font-mono text-[10px]">app_users</code>) dengan Super Admin default.
+                </p>
+                <div className="pt-1">
+                  <span className="text-[11px] font-semibold text-blue-800">
+                    Jalankan file tersebut di menu SQL Editor pada dashboard Supabase Anda.
+                  </span>
+                </div>
               </div>
             </div>
           )}
@@ -992,6 +1669,172 @@ export default function SettingsPage({ userRole = 'KAOPS' }: SettingsPageProps) 
                 Saya Mengerti
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL: Tambah / Edit Pengguna (Super Admin) */}
+      {isUserModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-2xs animate-fadeIn">
+          <div className="bg-white rounded-2xl max-w-md w-full shadow-2xl border border-slate-200 overflow-hidden flex flex-col">
+            <div className="px-5 py-4 border-b border-slate-100 flex items-center justify-between bg-slate-50">
+              <div className="flex items-center gap-2">
+                <div className="w-7 h-7 rounded-lg bg-blue-100 text-blue-700 flex items-center justify-center">
+                  <UserPlus className="w-4 h-4" />
+                </div>
+                <h3 className="text-sm font-bold text-slate-900">
+                  {editingUser ? `Edit Pengguna (@${editingUser.username})` : 'Tambah Pengguna Baru'}
+                </h3>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsUserModalOpen(false)}
+                className="text-slate-400 hover:text-slate-600 p-1 rounded-lg hover:bg-slate-200/60 cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <form onSubmit={handleSaveUser} className="p-5 space-y-3.5">
+              {userFormError && (
+                <div className="p-3 rounded-xl bg-rose-50 border border-rose-200 text-rose-700 text-xs flex items-center gap-2">
+                  <AlertTriangle className="w-4 h-4 shrink-0 text-rose-600" />
+                  <span>{userFormError}</span>
+                </div>
+              )}
+
+              {/* Username & Nama Lengkap */}
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-[11px] font-semibold text-slate-700 mb-1">
+                    Username *
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="misal: budi_ops"
+                    value={userFormUsername}
+                    disabled={Boolean(editingUser)}
+                    onChange={(e) => {
+                      setUserFormUsername(e.target.value.toLowerCase().replace(/\s+/g, '_'));
+                      if (userFormError) setUserFormError('');
+                    }}
+                    className="w-full px-3 py-1.5 bg-slate-50 border border-slate-300 rounded-lg text-xs font-mono text-slate-800 focus:outline-none focus:ring-1 focus:ring-blue-500 focus:bg-white disabled:opacity-60"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-[11px] font-semibold text-slate-700 mb-1">
+                    Nama Lengkap *
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="Budi Santoso"
+                    value={userFormFullName}
+                    onChange={(e) => {
+                      setUserFormFullName(e.target.value);
+                      if (userFormError) setUserFormError('');
+                    }}
+                    className="w-full px-3 py-1.5 bg-slate-50 border border-slate-300 rounded-lg text-xs text-slate-800 focus:outline-none focus:ring-1 focus:ring-blue-500 focus:bg-white"
+                  />
+                </div>
+              </div>
+
+              {/* Email & Password */}
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-[11px] font-semibold text-slate-700 mb-1">
+                    Email
+                  </label>
+                  <input
+                    type="email"
+                    placeholder="budi@bca.co.id"
+                    value={userFormEmail}
+                    onChange={(e) => setUserFormEmail(e.target.value)}
+                    className="w-full px-3 py-1.5 bg-slate-50 border border-slate-300 rounded-lg text-xs text-slate-800 focus:outline-none focus:ring-1 focus:ring-blue-500 focus:bg-white"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-[11px] font-semibold text-slate-700 mb-1">
+                    {editingUser ? 'Password Baru (Opsional)' : 'Password *'}
+                  </label>
+                  <input
+                    type="password"
+                    placeholder={editingUser ? 'Kosongkan jika tidak ubah' : 'Password aman'}
+                    value={userFormPassword}
+                    onChange={(e) => {
+                      setUserFormPassword(e.target.value);
+                      if (userFormError) setUserFormError('');
+                    }}
+                    className="w-full px-3 py-1.5 bg-slate-50 border border-slate-300 rounded-lg text-xs text-slate-800 focus:outline-none focus:ring-1 focus:ring-blue-500 focus:bg-white"
+                  />
+                </div>
+              </div>
+
+              {/* Role & Status */}
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-[11px] font-semibold text-slate-700 mb-1">
+                    Peran / Role *
+                  </label>
+                  <select
+                    value={userFormRole}
+                    onChange={(e) => setUserFormRole(e.target.value as AppUserRole)}
+                    className="w-full px-3 py-1.5 bg-slate-50 border border-slate-300 rounded-lg text-xs text-slate-800 focus:outline-none focus:ring-1 focus:ring-blue-500 focus:bg-white"
+                  >
+                    <option value="SUPER_ADMIN">Super Admin (Akses Penuh)</option>
+                    <option value="KAOPS">Ka Ops (Kepala Operasional)</option>
+                    <option value="KAWIL">Ka Wil (Kepala Wilayah)</option>
+                    <option value="MONITORING">Monitoring (Dispatcher &amp; Tindakan)</option>
+                    <option value="VIEWER">Viewer (Hanya Lihat)</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-[11px] font-semibold text-slate-700 mb-1">
+                    Status Akun *
+                  </label>
+                  <select
+                    value={userFormStatus}
+                    onChange={(e) => setUserFormStatus(e.target.value as AppUserStatus)}
+                    className="w-full px-3 py-1.5 bg-slate-50 border border-slate-300 rounded-lg text-xs text-slate-800 focus:outline-none focus:ring-1 focus:ring-blue-500 focus:bg-white"
+                  >
+                    <option value="ACTIVE">Aktif (Dapat Login)</option>
+                    <option value="INACTIVE">Nonaktif (Diblokir)</option>
+                  </select>
+                </div>
+              </div>
+
+              {/* Batasan Sektor (Opsional) */}
+              <div>
+                <label className="block text-[11px] font-semibold text-slate-700 mb-1">
+                  Batas Sektor Tertentu (Opsional)
+                </label>
+                <input
+                  type="text"
+                  placeholder="Kosongkan jika berhak melihat semua sektor (default)"
+                  value={userFormSektor}
+                  onChange={(e) => setUserFormSektor(e.target.value)}
+                  className="w-full px-3 py-1.5 bg-slate-50 border border-slate-300 rounded-lg text-xs text-slate-800 focus:outline-none focus:ring-1 focus:ring-blue-500 focus:bg-white"
+                />
+              </div>
+
+              <div className="pt-3 border-t border-slate-100 flex items-center justify-end gap-2">
+                <button
+                  type="button"
+                  onClick={() => setIsUserModalOpen(false)}
+                  className="px-3.5 py-1.5 rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-100 text-xs font-semibold cursor-pointer"
+                >
+                  Batal
+                </button>
+                <button
+                  type="submit"
+                  className="px-4 py-1.5 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold shadow-xs cursor-pointer"
+                >
+                  {editingUser ? 'Simpan Perubahan' : 'Tambahkan Pengguna'}
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}
