@@ -1,6 +1,4 @@
-import { isGasEnvironment } from './spreadsheetService';
 import { authenticateUserSupabase } from './supabaseService';
-import { apiGet, apiPost, isBackendConfigured } from './apiClient';
 import { cleanWsid } from './dailyIncidentParser';
 import { isSupabaseConfigured } from './supabaseClient';
 import {
@@ -160,7 +158,7 @@ export const logoutKaWilApi = async (_token?: string): Promise<{ success: boolea
 };
 
 /**
- * 2. Database Insiden Spreadsheet ID Management
+ * 2. Database Insiden ID Management
  */
 export const getIncidentDbIdApi = async (): Promise<{
   success: boolean;
@@ -168,57 +166,25 @@ export const getIncidentDbIdApi = async (): Promise<{
   name?: string;
   error?: string;
 }> => {
-  if (isGasEnvironment()) {
-    return new Promise((resolve) => {
-      (window as any).google.script.run
-        .withSuccessHandler((res: any) => resolve(res || { success: true, id: '' }))
-        .withFailureHandler((err: any) => resolve({ success: false, id: '', error: err?.message || String(err) }))
-        .getIncidentDbId();
-    });
-  }
-
-  if (isBackendConfigured()) {
-    try {
-      const res = await apiGet('getIncidentDbId');
-      if (res && res.success !== undefined) return res;
-    } catch (err) {}
-  }
-
   const id = localStorage.getItem('INCIDENT_DB_SPREADSHEET_ID') || '';
-  return { success: true, id, name: id ? 'Database Insiden' : '' };
+  return { success: true, id, name: id ? 'Database Insiden' : 'Supabase Cloud Database' };
 };
 
 export const setIncidentDbIdApi = async (
   idOrUrl: string,
-  token?: string
+  _token?: string
 ): Promise<{
   success: boolean;
   id?: string;
   name?: string;
   message?: string;
 }> => {
-  if (isGasEnvironment()) {
-    return new Promise((resolve) => {
-      (window as any).google.script.run
-        .withSuccessHandler((res: any) => resolve(res || { success: true }))
-        .withFailureHandler((err: any) => resolve({ success: false, message: err?.message || String(err) }))
-        .setIncidentDbId(idOrUrl, token);
-    });
-  }
-
-  if (isBackendConfigured()) {
-    try {
-      const res = await apiPost('setIncidentDbId', { idOrUrl, token });
-      if (res && res.success !== undefined) return res;
-    } catch (err) {}
-  }
-
   localStorage.setItem('INCIDENT_DB_SPREADSHEET_ID', idOrUrl);
   return {
     success: true,
     id: idOrUrl,
     name: 'Database Insiden Lokal',
-    message: 'ID Spreadsheet berhasil disimpan di penyimpanan lokal.'
+    message: 'ID Database berhasil disimpan di penyimpanan lokal.'
   };
 };
 
@@ -234,7 +200,7 @@ export const getOpenIncidentsApi = async (filters?: { forceSync?: boolean }): Pr
   if (isSupabaseConfigured()) {
     try {
       const res = await fetchOpenIncidentsSupabase(filters);
-      if (res && res.success) {
+      if (res && res.success && res.incidents && res.incidents.length > 0) {
         try {
           localStorage.setItem(LOCAL_STORAGE_INCIDENTS, JSON.stringify(res.incidents));
         } catch (_) {}
@@ -245,40 +211,34 @@ export const getOpenIncidentsApi = async (filters?: { forceSync?: boolean }): Pr
     }
   }
 
-  if (isGasEnvironment()) {
-    return new Promise((resolve) => {
-      (window as any).google.script.run
-        .withSuccessHandler((res: any) => resolve(res || { success: true, incidents: [] }))
-        .withFailureHandler((err: any) => resolve({ success: false, incidents: [], message: err?.message || String(err) }))
-        .getOpenIncidents(filters || {});
-    });
-  }
-
-  if (isBackendConfigured()) {
-    try {
-      const res = await apiGet('getOpenIncidents', filters || {});
-      if (res && res.success !== undefined) {
-        return {
-          success: true,
-          incidents: res.incidents || [],
-          totalOpen: res.totalOpen || (res.incidents ? res.incidents.length : 0),
-          message: res.message
-        };
-      }
-    } catch (err: any) {
-      console.warn('API getOpenIncidents failed, falling back to local storage:', err);
-    }
-  }
-
-  // Local fallback
+  // Local fallback: Coba ambil dari localStorage
   try {
     const raw = localStorage.getItem(LOCAL_STORAGE_INCIDENTS);
     const list: OpenIncidentItem[] = raw ? JSON.parse(raw) : [];
-    const openList = list.filter((r) => r.status === 'OPEN');
-    return { success: true, incidents: openList, totalOpen: openList.length };
-  } catch (e: any) {
-    return { success: false, incidents: [], message: e.message };
-  }
+    const openList = list.filter((r) => r.status === 'OPEN' || !r.endTime || r.endTime === '-');
+    if (openList.length > 0) {
+      return { success: true, incidents: openList, totalOpen: openList.length };
+    }
+  } catch (e: any) {}
+
+  // Fallback ke bundled seed (/daily-incidents-seed.json) jika storage masih kosong
+  try {
+    const resp = await fetch('/daily-incidents-seed.json');
+    if (resp.ok) {
+      const seedData = await resp.json();
+      if (Array.isArray(seedData) && seedData.length > 0) {
+        const seedOpen = seedData.filter((r: any) => r.status === 'OPEN' || !r.endTime || r.endTime === '-');
+        if (seedOpen.length > 0) {
+          try {
+            localStorage.setItem(LOCAL_STORAGE_INCIDENTS, JSON.stringify(seedOpen));
+          } catch (_) {}
+          return { success: true, incidents: seedOpen, totalOpen: seedOpen.length };
+        }
+      }
+    }
+  } catch (_) {}
+
+  return { success: true, incidents: [], totalOpen: 0 };
 };
 
 /**
@@ -300,26 +260,6 @@ export const getIncidentHistoryApi = async (
       }
     } catch (err: any) {
       console.warn('Supabase getIncidentHistory failed, falling back:', err);
-    }
-  }
-
-  if (isGasEnvironment()) {
-    return new Promise((resolve) => {
-      (window as any).google.script.run
-        .withSuccessHandler((res: any) => resolve(res || { success: true, history: [] }))
-        .withFailureHandler((err: any) => resolve({ success: false, history: [], message: err?.message || String(err) }))
-        .getIncidentHistory(incidentKey, monthStr);
-    });
-  }
-
-  if (isBackendConfigured()) {
-    try {
-      const res = await apiGet('getIncidentHistory', { incidentKey, monthStr });
-      if (res && res.success !== undefined) {
-        return { success: true, history: res.history || [] };
-      }
-    } catch (err: any) {
-      console.warn('API getIncidentHistory failed, falling back to local:', err);
     }
   }
 
@@ -390,26 +330,6 @@ export const saveIncidentActionApi = async (payload: {
       }
     } catch (err: any) {
       console.warn('Supabase saveIncidentAction failed, falling back:', err);
-    }
-  }
-
-  if (isGasEnvironment()) {
-    return new Promise((resolve) => {
-      (window as any).google.script.run
-        .withSuccessHandler((res: any) => resolve(res || { success: true }))
-        .withFailureHandler((err: any) => resolve({ success: false, message: err?.message || String(err) }))
-        .saveIncidentAction(payload);
-    });
-  }
-
-  if (isBackendConfigured()) {
-    try {
-      const res = await apiPost('saveIncidentAction', payload);
-      if (res && res.success !== undefined) {
-        return res;
-      }
-    } catch (err: any) {
-      console.warn('API saveIncidentAction failed, falling back to local:', err);
     }
   }
 
@@ -512,26 +432,6 @@ export const bulkSaveIncidentActionApi = async (payload: {
     }
   }
 
-  if (isGasEnvironment()) {
-    return new Promise((resolve) => {
-      (window as any).google.script.run
-        .withSuccessHandler((res: any) => resolve(res || { success: true }))
-        .withFailureHandler((err: any) => resolve({ success: false, message: err?.message || String(err) }))
-        .bulkSaveIncidentAction(payload);
-    });
-  }
-
-  if (isBackendConfigured()) {
-    try {
-      const res = await apiPost('bulkSaveIncidentAction', payload);
-      if (res && res.success !== undefined) {
-        return res;
-      }
-    } catch (err: any) {
-      console.warn('API bulkSaveIncidentAction failed, falling back to local:', err);
-    }
-  }
-
   try {
     const nowWib = new Date().toISOString().replace('T', ' ').slice(0, 19);
     const raw = localStorage.getItem(LOCAL_STORAGE_ACTIONS);
@@ -587,26 +487,6 @@ export const getWsidPenangananHistoryApi = async (
     }
   }
 
-  if (isGasEnvironment()) {
-    return new Promise((resolve) => {
-      (window as any).google.script.run
-        .withSuccessHandler((res: any) => resolve(res || { success: true, history: [] }))
-        .withFailureHandler((err: any) => resolve({ success: false, history: [], message: err?.message || String(err) }))
-        .getWsidPenangananHistory(wsid, monthStr || 'ALL');
-    });
-  }
-
-  if (isBackendConfigured()) {
-    try {
-      const res = await apiGet('getWsidPenangananHistory', { wsid, monthStr: monthStr || 'ALL' });
-      if (res && res.success !== undefined) {
-        return { success: true, history: res.history || [] };
-      }
-    } catch (err: any) {
-      console.warn('API getWsidPenangananHistory failed, falling back to local:', err);
-    }
-  }
-
   try {
     const raw = localStorage.getItem(LOCAL_STORAGE_ACTIONS);
     const list: IncidentHistoryItem[] = raw ? JSON.parse(raw) : [];
@@ -644,31 +524,6 @@ export const searchIncidentsApi = async (filters: {
       }
     } catch (err: any) {
       console.warn('Supabase searchIncidents failed, falling back:', err);
-    }
-  }
-
-  if (isGasEnvironment()) {
-    return new Promise((resolve) => {
-      (window as any).google.script.run
-        .withSuccessHandler((res: any) => resolve(res || { success: true, incidents: [] }))
-        .withFailureHandler((err: any) => resolve({ success: false, incidents: [], message: err?.message || String(err) }))
-        .searchIncidents(filters);
-    });
-  }
-
-  if (isBackendConfigured()) {
-    try {
-      const res = await apiGet('searchIncidents', filters);
-      if (res && res.success !== undefined) {
-        return {
-          success: true,
-          incidents: res.incidents || [],
-          totalCount: res.totalCount || (res.incidents ? res.incidents.length : 0),
-          message: res.message
-        };
-      }
-    } catch (err: any) {
-      console.warn('API searchIncidents failed, falling back to local:', err);
     }
   }
 
@@ -729,30 +584,6 @@ export const uploadIncidentChunkApi = async (payload: {
       }
     } catch (err: any) {
       console.error('Supabase uploadIncidentChunk failed:', err);
-    }
-  }
-
-  if (isGasEnvironment()) {
-    return new Promise((resolve) => {
-      (window as any).google.script.run
-        .withSuccessHandler((res: any) => resolve(res || { success: true }))
-        .withFailureHandler((err: any) => resolve({ success: false, message: err?.message || String(err) }))
-        .uploadIncidentChunk(payload);
-    });
-  }
-
-  if (isBackendConfigured()) {
-    try {
-      const res = await apiPost('uploadIncidentChunk', payload);
-      if (res && res.success !== undefined) {
-        return res;
-      }
-    } catch (err: any) {
-      console.error('API uploadIncidentChunk failed:', err);
-      return {
-        success: false,
-        message: 'Gagal mengirim data ke database server: ' + (err.message || String(err))
-      };
     }
   }
 
@@ -845,26 +676,6 @@ export const getUploadLogApi = async (): Promise<{
     }
   }
 
-  if (isGasEnvironment()) {
-    return new Promise((resolve) => {
-      (window as any).google.script.run
-        .withSuccessHandler((res: any) => resolve(res || { success: true, logs: [] }))
-        .withFailureHandler((err: any) => resolve({ success: false, logs: [], message: err?.message || String(err) }))
-        .getUploadLog();
-    });
-  }
-
-  if (isBackendConfigured()) {
-    try {
-      const res = await apiGet('getUploadLog');
-      if (res && res.success !== undefined) {
-        return { success: true, logs: res.logs || [] };
-      }
-    } catch (err: any) {
-      console.warn('API getUploadLog failed, falling back to local:', err);
-    }
-  }
-
   try {
     const raw = localStorage.getItem(LOCAL_STORAGE_UPLOAD_LOGS);
     const list: UploadLogItem[] = raw ? JSON.parse(raw) : [];
@@ -913,44 +724,7 @@ export const getDailyIncidentsFromDbApi = async (payload?: {
     }
   }
 
-  if (isGasEnvironment()) {
-    return new Promise((resolve) => {
-      (window as any).google.script.run
-        .withSuccessHandler((res: any) => {
-          if (!res) {
-            resolve({ success: true, rows: [] });
-            return;
-          }
-          const unpacked = unpackCompactTabular(res);
-          resolve({
-            ...res,
-            rows: unpacked.length > 0 ? unpacked : (res.rows || [])
-          });
-        })
-        .withFailureHandler((err: any) => resolve({ success: false, rows: [], message: err?.message || String(err) }))
-        .getDailyIncidentsFromDb(payload);
-    });
-  }
-
-  if (isBackendConfigured()) {
-    try {
-      const sanitizedPayload = {
-        limit: 60000,
-        ...payload
-      };
-      const res = await apiGet('getDailyIncidentsFromDb', sanitizedPayload);
-      if (res && res.success !== undefined) {
-        const unpacked = unpackCompactTabular(res);
-        return {
-          ...res,
-          rows: unpacked.length > 0 ? unpacked : (res.rows || [])
-        };
-      }
-    } catch (err: any) {
-      console.warn('API getDailyIncidentsFromDb failed, falling back to local:', err);
-    }
-  }
-
+  // Fallback 1: LocalStorage MONITORING_ACTIVE_DATASET
   try {
     const rawActive = localStorage.getItem('MONITORING_ACTIVE_DATASET');
     if (rawActive) {
@@ -971,7 +745,34 @@ export const getDailyIncidentsFromDbApi = async (payload?: {
         }
       } catch (e) {}
     }
+  } catch (_) {}
 
+  // Fallback 2: Bundled seed (/daily-incidents-seed.json) dari Edge CDN (Instan < 50ms)
+  try {
+    const resp = await fetch('/daily-incidents-seed.json');
+    if (resp.ok) {
+      const seedData = await resp.json();
+      if (Array.isArray(seedData) && seedData.length > 0) {
+        try {
+          localStorage.setItem('MONITORING_ACTIVE_DATASET', JSON.stringify(seedData));
+        } catch (_) {}
+        return {
+          success: true,
+          rows: seedData,
+          totalCount: seedData.length,
+          lastUploadInfo: {
+            waktu: new Date().toISOString().replace('T', ' ').slice(0, 19),
+            uploader: 'Sistem (Seed Dataset)',
+            sumber: 'OASE Daily Dataset',
+            namaFile: 'Report_Incident_Seed.csv'
+          }
+        };
+      }
+    }
+  } catch (_) {}
+
+  // Fallback 3: LOCAL_STORAGE_INCIDENTS
+  try {
     const raw = localStorage.getItem(LOCAL_STORAGE_INCIDENTS);
     const list: OpenIncidentItem[] = raw ? JSON.parse(raw) : [];
     return {

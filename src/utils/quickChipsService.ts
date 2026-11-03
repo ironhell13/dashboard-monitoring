@@ -1,5 +1,4 @@
 import { useState, useEffect } from 'react';
-import { apiGet, apiPost, isBackendConfigured } from './apiClient';
 import { isSupabaseConfigured } from './supabaseClient';
 import { saveQuickChipsSupabase, fetchQuickChipsSupabase } from './supabaseService';
 

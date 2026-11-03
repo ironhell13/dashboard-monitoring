@@ -520,7 +520,7 @@ export default function SettingsPage({ userRole = 'KAOPS' }: SettingsPageProps) 
         showToast(res.message || 'Server belum ter-deploy versi baru. Data tetap tersimpan secara lokal.', 'error');
       }
     } catch (err: any) {
-      showToast('Gagal menghubungi server cloud Google Apps Script.', 'error');
+      showToast('Gagal menghubungi server database cloud.', 'error');
     } finally {
       setIsSyncing(false);
     }
@@ -1391,7 +1391,7 @@ export default function SettingsPage({ userRole = 'KAOPS' }: SettingsPageProps) 
                   <p className="text-[11px] leading-relaxed text-slate-600">
                     {isSupabaseConfigured()
                       ? 'Dashboard saat ini terhubung langsung ke database PostgreSQL Supabase. Query data, tiket, insiden, dan penambahan pengguna berlangsung instan.'
-                      : 'Dashboard saat ini masih menggunakan Google Apps Script / LocalStorage. Masukkan Project URL dan Anon Key Supabase Anda di bawah untuk mengaktifkan database PostgreSQL.'}
+                      : 'Dashboard saat ini masih menggunakan Cache Offline / LocalStorage. Masukkan Project URL dan Anon Key Supabase Anda di bawah untuk mengaktifkan sinkronisasi database PostgreSQL secara penuh.'}
                   </p>
                 </div>
               </div>

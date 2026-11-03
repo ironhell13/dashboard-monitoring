@@ -34,6 +34,4 @@ pnpm-debug.log*
 # Vercel CLI cache
 .vercel/
 
-# Heavy test data (if any)
-sample-data.json
-public/sample-data.json
+

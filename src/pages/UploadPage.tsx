@@ -16,8 +16,7 @@ import {
 import { parseMasterData, parseUptimeFile, type MasterRow, type ParsedUptimeFile } from '../utils/excelParser';
 import { matchData } from '../utils/dataMatcher';
 import { useDataStore } from '../store/useDataStore';
-import { saveMasterData, saveUptimePeriod, unlockPeriode, isGasEnvironment } from '../utils/spreadsheetService';
-import { isBackendConfigured } from '../utils/apiClient';
+import { saveMasterData, saveUptimePeriod, unlockPeriode } from '../utils/spreadsheetService';
 import { isSupabaseConfigured } from '../utils/supabaseClient';
 import { saveDashboardSnapshot } from '../utils/dbCache';
 import { formatBulanTahun, normalizePeriode } from '../utils/comprehensiveExporter';

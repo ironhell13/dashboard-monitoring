@@ -14,7 +14,6 @@ import {
 } from './dbCache';
 import { type OpenIncidentItem, unpackCompactTabular } from './monitoringService';
 import { cleanWsid, parseDateTime } from './dailyIncidentParser';
-import { apiGet } from './apiClient';
 
 // ==============================================================================
 // 1. QUICK CHIPS (PILIHAN CEPAT) & REALTIME
@@ -884,23 +883,7 @@ export async function migrateDailyDataToSupabase(
     } catch (e) {}
   }
 
-  // Sumber D: Coba tarik dari Google Spreadsheet Backend jika API terhubung
-  if (!dailyRows || dailyRows.length === 0) {
-    try {
-      onProgress?.({ step: 'Menghubungi database Google Spreadsheet untuk mengunduh arsip insiden...', percent: 20 });
-      const res = await apiGet('getDailyIncidentsFromDb', { limit: 30000 });
-      if (res && res.success) {
-        const unpacked = unpackCompactTabular(res);
-        if (unpacked && unpacked.length > 0) {
-          dailyRows = unpacked;
-        } else if (res.rows && res.rows.length > 0) {
-          dailyRows = res.rows;
-        }
-      }
-    } catch (e) {}
-  }
-
-  // Sumber E: File Seed Daily Bawaan (daily-incidents-seed.json)
+  // Sumber D: File Seed Daily Bawaan (daily-incidents-seed.json)
   if (!dailyRows || dailyRows.length === 0) {
     try {
       onProgress?.({ step: 'Membaca arsip insiden dari daily-incidents-seed.json...', percent: 25 });
@@ -1018,8 +1001,27 @@ function parseToIso(dateStr?: any): string | null {
   return null;
 }
 
+function getMachineMetadata(wsid?: string): any {
+  if (!wsid) return null;
+  try {
+    const list = useDataStore.getState().machines || [];
+    const w = String(wsid).trim().toUpperCase();
+    const found = list.find((m) => String(m.wsid || '').trim().toUpperCase() === w);
+    if (found) {
+      return {
+        lokasi: found.lokasi || '-',
+        service_point: found.servicePoint || found.wilayahOperasional || '-',
+        sektor_bca: found.sektorBCA || '-',
+        tipe_mesin: found.tipeMesin || '-',
+        vendor: found.vendor || '-'
+      };
+    }
+  } catch (_) {}
+  return null;
+}
+
 function mapRowToOpenIncident(row: any, machine?: any): OpenIncidentItem {
-  const m = machine || row.machines || {};
+  const m = machine || row.machines || getMachineMetadata(row.wsid) || {};
   return {
     incidentKey: row.incident_key,
     incidentNumber: row.ticket_no || '-',
@@ -1060,14 +1062,14 @@ export async function fetchOpenIncidentsSupabase(filters?: { forceSync?: boolean
   try {
     const { data, error } = await client
       .from('active_incidents')
-      .select('*, machines(wsid, lokasi, sektor_bca, wilayah_operasional, vendor, tipe_mesin)')
+      .select('*')
       .eq('status', 'OPEN')
       .order('start_time', { ascending: false });
 
     if (error) throw error;
 
     const incidents: OpenIncidentItem[] = (data || []).map((row: any) =>
-      mapRowToOpenIncident(row, row.machines)
+      mapRowToOpenIncident(row, getMachineMetadata(row.wsid))
     );
 
     return {
@@ -1535,7 +1537,7 @@ export async function searchIncidentsSupabase(filters: {
   try {
     let query = client
       .from('incident_logs')
-      .select('*, machines(wsid, lokasi, sektor_bca, wilayah_operasional, vendor, tipe_mesin)')
+      .select('*')
       .order('start_time', { ascending: false })
       .limit(filters.limit || 500);
 
@@ -1556,7 +1558,7 @@ export async function searchIncidentsSupabase(filters: {
     const { data, error } = await query;
     if (error) throw error;
 
-    const incidents = (data || []).map((r: any) => mapRowToOpenIncident(r, r.machines));
+    const incidents = (data || []).map((r: any) => mapRowToOpenIncident(r, getMachineMetadata(r.wsid)));
     return {
       success: true,
       incidents,
@@ -1584,7 +1586,7 @@ export async function fetchDailyIncidentsFromDbSupabase(payload?: {
   try {
     let query = client
       .from('incident_logs')
-      .select('*, machines(wsid, lokasi, sektor_bca, wilayah_operasional, vendor, tipe_mesin)')
+      .select('*')
       .order('start_time', { ascending: false })
       .limit(payload?.limit || 10000);
 
@@ -1595,7 +1597,7 @@ export async function fetchDailyIncidentsFromDbSupabase(payload?: {
     const { data, error } = await query;
     if (error) throw error;
 
-    const rows = (data || []).map((row: any) => mapRowToOpenIncident(row, row.machines));
+    const rows = (data || []).map((row: any) => mapRowToOpenIncident(row, getMachineMetadata(row.wsid)));
 
     return {
       success: true,

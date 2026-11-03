@@ -93,7 +93,6 @@ import {
   type UploadLogItem
 } from '../utils/monitoringService';
 import StickyTableWrapper from '../components/StickyTableWrapper';
-import { isBackendConfigured } from '../utils/apiClient';
 import {
   parseDailyIncidentCsv,
   exportDailyIncidentsToExcel,
@@ -812,8 +811,6 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
 
   // 1. Navigation Tab State
   const [activeTab, setActiveTab] = useState<MonitoringTab>('OPEN');
-  const [isConfigModalOpen, setIsConfigModalOpen] = useState<boolean>(false);
-  const [backendActive, setBackendActive] = useState<boolean>(() => isBackendConfigured());
 
   // 2. Shared State: Petugas, Duty Modal, Live Countdown & Dataset
   const [petugasName, setPetugasName] = useState(() => {
@@ -1235,7 +1232,7 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
         } else {
           setSyncStatusBanner({
             type: 'error',
-            text: `Sinkronisasi database gagal: ${res.message || 'Koneksi ke Apps Script terputus'}`
+            text: `Sinkronisasi database gagal: ${res.message || 'Koneksi database terputus'}`
           });
         }
       }

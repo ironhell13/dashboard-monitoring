@@ -15,7 +15,7 @@ import CekDailyPage from './pages/CekDailyPage';
 import SettingsPage from './pages/SettingsPage';
 import { useDataStore } from './store/useDataStore';
 import { matchData } from './utils/dataMatcher';
-import { fetchDashboardData, fetchDashboardSummary, fetchFollowUpTickets, fetchFollowUpTicketsModern, isGasEnvironment } from './utils/spreadsheetService';
+import { fetchDashboardData, fetchDashboardSummary, fetchFollowUpTickets, fetchFollowUpTicketsModern } from './utils/spreadsheetService';
 import { logoutKaOpsApi, logoutKaWilApi } from './utils/monitoringService';
 import { loadDashboardSnapshot, saveDashboardSnapshot } from './utils/dbCache';
 import { Loader2, Zap } from 'lucide-react';
@@ -132,7 +132,7 @@ function App() {
       setLockedPeriodes(lockedPeriodes);
     }
     setLastDbSync(lastUpdated || null);
-    setDbSource(isGasEnvironment() ? 'gas' : 'local');
+    setDbSource('local');
 
     if (tickets && Array.isArray(tickets) && tickets.length > 0) {
       setFollowUpTickets(tickets);

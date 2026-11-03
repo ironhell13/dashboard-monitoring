@@ -1,6 +1,5 @@
 import type { MasterRow, ParsedUptimeFile } from './excelParser';
 import { normalizePeriode } from './comprehensiveExporter';
-import { apiGet, apiPost, isBackendConfigured } from './apiClient';
 import { getSupabase, isSupabaseConfigured } from './supabaseClient';
 import {
   saveCachedMasterData,
@@ -61,12 +60,10 @@ const LOCAL_STORAGE_KEYS = {
 
 /**
  * Mendeteksi apakah aplikasi sedang berjalan dalam Google Apps Script (Web App)
+ * Dinonaktifkan permanen karena telah bermigrasi 100% ke arsitektur Supabase & Vercel.
  */
 export const isGasEnvironment = (): boolean => {
-  return (
-    typeof window !== 'undefined' &&
-    Boolean((window as any).google?.script?.run)
-  );
+  return false;
 };
 
 /**
@@ -437,7 +434,10 @@ export const fetchDashboardData = async (): Promise<DashboardDbData> => {
 
   // 3. Fallback Bundled Dataset dari CDN/Edge (Instant < 100ms)
   try {
-    const res = await fetch('/sample-data.json');
+    let res = await fetch('/sample-data.json');
+    if (!res.ok) {
+      res = await fetch('/master-machines-seed.json');
+    }
     if (res.ok) {
       const sample = await res.json();
       if (sample.rawMasterData && sample.rawUptimeFiles) {
@@ -602,30 +602,14 @@ export const fetchDashboardData = async (): Promise<DashboardDbData> => {
 };
 
 /**
- * Cek status koneksi spreadsheet
+ * Cek status koneksi spreadsheet / database
  */
 export const checkSpreadsheetStatus = async (): Promise<ConnectionStatusResult> => {
-  if (isGasEnvironment()) {
-    return new Promise((resolve) => {
-      (window as any).google.script.run
-        .withSuccessHandler((res: ConnectionStatusResult) => resolve(res))
-        .withFailureHandler((err: any) => resolve({ success: false, message: String(err) }))
-        .checkSpreadsheetStatus();
-    });
-  }
-
-  if (isBackendConfigured()) {
-    try {
-      const res = await apiGet('checkSpreadsheetStatus');
-      if (res && res.success !== undefined) return res;
-    } catch (err) {}
-  }
-
   const rawLocked = localStorage.getItem(LOCAL_STORAGE_KEYS.LOCKED);
   const lastUpdated = localStorage.getItem(LOCAL_STORAGE_KEYS.LAST_SYNC);
   return {
     success: true,
-    spreadsheetName: 'Local Storage Database (Dev Mode)',
+    spreadsheetName: isSupabaseConfigured() ? 'Supabase PostgreSQL Cloud' : 'Local Storage Database (Dev Mode)',
     lockedPeriodes: rawLocked ? JSON.parse(rawLocked) : [],
     lastUpdated
   };
@@ -635,20 +619,13 @@ export const checkSpreadsheetStatus = async (): Promise<ConnectionStatusResult> 
  * Buka kunci periode tertentu (fitur admin perbaikan data)
  */
 export const unlockPeriode = async (periode: string): Promise<{ success: boolean; message?: string }> => {
-  if (isGasEnvironment()) {
-    return new Promise((resolve) => {
-      (window as any).google.script.run
-        .withSuccessHandler((res: any) => resolve(res))
-        .withFailureHandler((err: any) => resolve({ success: false, message: String(err) }))
-        .unlockPeriode(periode);
-    });
-  }
-
-  if (isBackendConfigured()) {
+  if (isSupabaseConfigured()) {
     try {
-      const res = await apiPost('unlockPeriode', { periode });
-      if (res && res.success !== undefined) return res;
-    } catch (err) {}
+      const client = getSupabase();
+      if (client) {
+        await client.from('monthly_uptime').update({ is_locked: false }).eq('periode', periode);
+      }
+    } catch (_) {}
   }
 
   try {
@@ -658,21 +635,19 @@ export const unlockPeriode = async (periode: string): Promise<{ success: boolean
     localStorage.setItem(LOCAL_STORAGE_KEYS.LOCKED, JSON.stringify(lockedPeriodes));
 
     const rawUptime = localStorage.getItem(LOCAL_STORAGE_KEYS.UPTIME);
-    if (rawUptime) {
-      let uptimeFiles: ParsedUptimeFile[] = JSON.parse(rawUptime);
-      uptimeFiles = uptimeFiles.filter(f => f.periode !== periode);
-      localStorage.setItem(LOCAL_STORAGE_KEYS.UPTIME, JSON.stringify(uptimeFiles));
-    }
+    let uptimeFiles: ParsedUptimeFile[] = rawUptime ? JSON.parse(rawUptime) : [];
+    uptimeFiles = uptimeFiles.filter(f => f.periode !== periode);
+    localStorage.setItem(LOCAL_STORAGE_KEYS.UPTIME, JSON.stringify(uptimeFiles));
+
+    await saveCachedLockedPeriodes(lockedPeriodes);
+    await saveCachedUptimeFiles(uptimeFiles);
 
     return {
       success: true,
-      message: `Periode ${periode} berhasil dibuka kuncinya dari Database Lokal.`
+      message: `Periode ${periode} berhasil dibuka kuncinya.`
     };
   } catch (err: any) {
-    return {
-      success: false,
-      message: err.message
-    };
+    return { success: false, message: err.message };
   }
 };
 
@@ -716,26 +691,9 @@ export interface FollowUpTicket {
 const LOCAL_STORAGE_FOLLOWUP_KEY = 'DOWNTIME_BCA_DB_FOLLOWUP';
 
 /**
- * Mengambil seluruh data tiket follow-up dari Google Spreadsheet / LocalStorage
+ * Mengambil seluruh data tiket follow-up dari LocalStorage / Cache
  */
 export const fetchFollowUpTickets = async (): Promise<{ success: boolean; tickets: FollowUpTicket[]; error?: string }> => {
-  if (isGasEnvironment()) {
-    return new Promise((resolve) => {
-      (window as any).google.script.run
-        .withSuccessHandler((res: { success: boolean; tickets: FollowUpTicket[] }) => {
-          resolve(res || { success: true, tickets: [] });
-        })
-        .withFailureHandler((err: any) => {
-          resolve({
-            success: false,
-            tickets: [],
-            error: err?.message || String(err)
-          });
-        })
-        .getFollowUpTickets();
-    });
-  }
-
   try {
     const raw = localStorage.getItem(LOCAL_STORAGE_FOLLOWUP_KEY);
     const tickets: FollowUpTicket[] = raw ? JSON.parse(raw) : [];
@@ -746,18 +704,9 @@ export const fetchFollowUpTickets = async (): Promise<{ success: boolean; ticket
 };
 
 /**
- * Menyimpan / memperbarui tiket follow-up ke Google Spreadsheet / LocalStorage
+ * Menyimpan / memperbarui tiket follow-up ke LocalStorage / Cache
  */
 export const saveFollowUpTicket = async (ticket: FollowUpTicket): Promise<{ success: boolean; ticket?: FollowUpTicket; message?: string; error?: string }> => {
-  if (isGasEnvironment()) {
-    return new Promise((resolve) => {
-      (window as any).google.script.run
-        .withSuccessHandler((res: any) => resolve(res || { success: true, ticket }))
-        .withFailureHandler((err: any) => resolve({ success: false, error: err?.message || String(err) }))
-        .saveFollowUpTicket(ticket);
-    });
-  }
-
   try {
     const raw = localStorage.getItem(LOCAL_STORAGE_FOLLOWUP_KEY);
     let tickets: FollowUpTicket[] = raw ? JSON.parse(raw) : [];
@@ -777,18 +726,9 @@ export const saveFollowUpTicket = async (ticket: FollowUpTicket): Promise<{ succ
 };
 
 /**
- * Menghapus tiket follow-up dari Google Spreadsheet / LocalStorage
+ * Menghapus tiket follow-up dari LocalStorage / Cache
  */
 export const deleteFollowUpTicket = async (ticketId: string): Promise<{ success: boolean; message?: string; error?: string }> => {
-  if (isGasEnvironment()) {
-    return new Promise((resolve) => {
-      (window as any).google.script.run
-        .withSuccessHandler((res: any) => resolve(res || { success: true }))
-        .withFailureHandler((err: any) => resolve({ success: false, error: err?.message || String(err) }))
-        .deleteFollowUpTicket(ticketId);
-    });
-  }
-
   try {
     const raw = localStorage.getItem(LOCAL_STORAGE_FOLLOWUP_KEY);
     if (raw) {
@@ -906,34 +846,6 @@ export const fetchFollowUpTicketsModern = async (): Promise<{ success: boolean; 
     }
   }
 
-  if (isGasEnvironment()) {
-    return new Promise((resolve) => {
-      (window as any).google.script.run
-        .withSuccessHandler((res: { success: boolean; tickets: FollowUpTicketItem[] }) => {
-          resolve(res || { success: true, tickets: [] });
-        })
-        .withFailureHandler((err: any) => {
-          resolve({
-            success: false,
-            tickets: [],
-            error: err?.message || String(err)
-          });
-        })
-        .getFollowUpTicketsModern();
-    });
-  }
-
-  if (isBackendConfigured()) {
-    try {
-      const res = await apiGet('getFollowUpTicketsModern');
-      if (res && res.success !== undefined) {
-        return { success: true, tickets: res.tickets || [] };
-      }
-    } catch (err: any) {
-      console.warn('API fetchFollowUpTicketsModern failed, fallback local:', err);
-    }
-  }
-
   try {
     const raw = localStorage.getItem(LOCAL_STORAGE_MODERN_TICKET_KEY);
     const tickets: FollowUpTicketItem[] = raw ? JSON.parse(raw) : [];
@@ -1006,24 +918,6 @@ export const saveFollowUpTicketModern = async (ticket: FollowUpTicketItem): Prom
     }
   }
 
-  if (isGasEnvironment()) {
-    return new Promise((resolve) => {
-      (window as any).google.script.run
-        .withSuccessHandler((res: any) => resolve(res || { success: true, ticket }))
-        .withFailureHandler((err: any) => resolve({ success: false, error: err?.message || String(err) }))
-        .saveFollowUpTicketModern(ticket);
-    });
-  }
-
-  if (isBackendConfigured()) {
-    try {
-      const res = await apiPost('saveFollowUpTicketModern', { ticket });
-      if (res && res.success !== undefined) return res;
-    } catch (err: any) {
-      console.warn('API saveFollowUpTicketModern failed, fallback local:', err);
-    }
-  }
-
   try {
     const raw = localStorage.getItem(LOCAL_STORAGE_MODERN_TICKET_KEY);
     let tickets: FollowUpTicketItem[] = raw ? JSON.parse(raw) : [];
@@ -1061,22 +955,6 @@ export const deleteFollowUpTicketModern = async (ticketId: string): Promise<{ su
     } catch (err: any) {
       console.warn('Supabase deleteFollowUpTicketModern failed:', err);
     }
-  }
-
-  if (isGasEnvironment()) {
-    return new Promise((resolve) => {
-      (window as any).google.script.run
-        .withSuccessHandler((res: any) => resolve(res || { success: true }))
-        .withFailureHandler((err: any) => resolve({ success: false, error: err?.message || String(err) }))
-        .deleteFollowUpTicketModern(ticketId);
-    });
-  }
-
-  if (isBackendConfigured()) {
-    try {
-      const res = await apiPost('deleteFollowUpTicketModern', { ticketId });
-      if (res && res.success !== undefined) return res;
-    } catch (err: any) {}
   }
 
   try {
