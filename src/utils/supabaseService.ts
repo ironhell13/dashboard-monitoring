@@ -293,7 +293,7 @@ export async function upsertMachinesBatchSupabase(
         tipe_mesin: m.tipeMesin || m.tipe_mesin || '',
         status_aktif: m.statusAktif || m.status_aktif || 'AKTIF',
         jam_operasional: m.jam || m.jam_operasional || '(00:00 - 24:00)',
-        opr: Number(m.opr) || 43200,
+        opr: Math.round(Number(m.opr) || 43200),
         updated_at: new Date().toISOString()
       }));
 
@@ -331,17 +331,17 @@ export async function upsertMonthlyUptimeBatchSupabase(
         wsid: String(r.wsid || '').trim().replace(/^0+/, '') || String(r.wsid || ''),
         periode: r.periode,
         uh: Number(r.uh) || 0,
-        uh_frx: Number(r.uhFrx || r.uh_frx) || 0,
-        uh_dur: Number(r.uhDur || r.uh_dur) || 0,
-        um: Number(r.um) || 0,
-        um_frx: Number(r.umFrx || r.um_frx) || 0,
-        um_dur: Number(r.umDur || r.um_dur) || 0,
-        pm: Number(r.pm) || 0,
-        pm_frx: Number(r.pmFrx || r.pm_frx) || 0,
-        pm_dur: Number(r.pmDur || r.pm_dur) || 0,
-        total_downtime_dur: Number(r.totalDowntimeDur || r.total_downtime_dur) || 0,
+        uh_frx: Math.round(Number(r.uhFrx || r.uh_frx) || 0),
+        uh_dur: Math.round(Number(r.uhDur || r.uh_dur) || 0),
+        um: Number(r.um !== undefined ? r.um : (r.kom || 0)),
+        um_frx: Math.round(Number(r.umFrx || r.komFrx || r.um_frx) || 0),
+        um_dur: Math.round(Number(r.umDur || r.komDur || r.um_dur) || 0),
+        pm: Number(r.pm !== undefined ? r.pm : (r.hw || 0)),
+        pm_frx: Math.round(Number(r.pmFrx || r.hwFrx || r.pm_frx) || 0),
+        pm_dur: Math.round(Number(r.pmDur || r.hwDur || r.pm_dur) || 0),
+        total_downtime_dur: Math.round(Number(r.durTotal !== undefined ? r.durTotal : (r.totalDowntimeDur !== undefined ? r.totalDowntimeDur : (r.total_downtime_dur || 0)))),
         target_sla: Number(r.targetSla || r.target_sla) || 98.50,
-        target_vol: Number(r.targetVol || r.target_vol) || 0,
+        target_vol: Math.round(Number(r.targetVol || r.target_vol) || 0),
         is_locked: Boolean(r.isLocked || r.is_locked),
         updated_at: new Date().toISOString()
       }));
@@ -621,7 +621,7 @@ export async function migrateAllDataToSupabase(
       tipe_mesin: m.tipeMesin || m['Tipe Mesin'] || m.tipe_mesin || '',
       status_aktif: m.statusAktif || m.Status || m.status_aktif || 'AKTIF',
       jam_operasional: String(m.jam || m['Jam Operasi'] || m.jam_operasional || '(00:00 - 24:00)'),
-      opr: Number(m.opr) || 43200,
+      opr: Math.round(Number(m.opr) || 43200),
       updated_at: new Date().toISOString()
     }));
 
@@ -647,16 +647,17 @@ export async function migrateAllDataToSupabase(
             wsid,
             periode: d.periode,
             uh: Number(d.uh) || 0,
-            uh_frx: Number(d.uhFrx) || 0,
-            uh_dur: Number(d.uhDur) || 0,
-            um: Number(d.um || d.kom) || 0,
-            um_frx: Number(d.umFrx || d.komFrx) || 0,
-            um_dur: Number(d.umDur || d.komDur) || 0,
-            pm: Number(d.pm || d.hw) || 0,
-            pm_frx: Number(d.pmFrx || d.hwFrx) || 0,
-            pm_dur: Number(d.pmDur || d.hwDur) || 0,
-            total_downtime_dur: Number(d.total || d.durTotal) || 0,
+            uh_frx: Math.round(Number(d.uhFrx || d.uh_frx) || 0),
+            uh_dur: Math.round(Number(d.uhDur || d.uh_dur) || 0),
+            um: Number(d.um !== undefined ? d.um : (d.kom || 0)),
+            um_frx: Math.round(Number(d.umFrx || d.komFrx || d.um_frx) || 0),
+            um_dur: Math.round(Number(d.umDur || d.komDur || d.um_dur) || 0),
+            pm: Number(d.pm !== undefined ? d.pm : (d.hw || 0)),
+            pm_frx: Math.round(Number(d.pmFrx || d.hwFrx || d.pm_frx) || 0),
+            pm_dur: Math.round(Number(d.pmDur || d.hwDur || d.pm_dur) || 0),
+            total_downtime_dur: Math.round(Number(d.durTotal !== undefined ? d.durTotal : (d.total_downtime_dur !== undefined ? d.total_downtime_dur : 0))),
             target_sla: 98.50,
+            target_vol: Math.round(Number(d.targetVol || d.target_vol) || 0),
             is_locked: true,
             updated_at: new Date().toISOString()
           });
