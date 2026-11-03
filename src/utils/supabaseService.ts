@@ -1584,20 +1584,32 @@ export async function fetchDailyIncidentsFromDbSupabase(payload?: {
   if (!client) return { success: false, rows: [], totalCount: 0, message: 'Supabase belum dikonfigurasi.' };
 
   try {
-    let query = client
-      .from('incident_logs')
-      .select('*')
-      .order('start_time', { ascending: false })
-      .limit(payload?.limit || 10000);
+    const targetLimit = payload?.limit || 10000;
+    const chunkSize = 1000;
+    const allData: any[] = [];
 
-    if (payload?.monthStr && payload.monthStr !== 'ALL') {
-      query = query.eq('periode_bulan', payload.monthStr);
+    // Gunakan range pagination untuk melewati limit default 1.000 baris PostgREST Supabase
+    for (let from = 0; from < targetLimit; from += chunkSize) {
+      const to = Math.min(from + chunkSize - 1, targetLimit - 1);
+      let query = client
+        .from('incident_logs')
+        .select('*')
+        .order('start_time', { ascending: false })
+        .range(from, to);
+
+      if (payload?.monthStr && payload.monthStr !== 'ALL') {
+        query = query.eq('periode_bulan', payload.monthStr);
+      }
+
+      const { data, error } = await query;
+      if (error) throw error;
+      if (!data || data.length === 0) break;
+
+      allData.push(...data);
+      if (data.length < chunkSize) break;
     }
 
-    const { data, error } = await query;
-    if (error) throw error;
-
-    const rows = (data || []).map((row: any) => mapRowToOpenIncident(row, getMachineMetadata(row.wsid)));
+    const rows = allData.map((row: any) => mapRowToOpenIncident(row, getMachineMetadata(row.wsid)));
 
     return {
       success: true,

@@ -992,6 +992,7 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
   openIncidentsRef.current = openIncidents;
   const historyResultsRef = useRef<OpenIncidentItem[]>([]);
   historyResultsRef.current = historyResults;
+  const evaluateChronicRef = useRef<((inc: any) => any) | null>(null);
 
   // 5b. Tab: Grafik Frekuensi Problem 24 Jam State
   const [grafik24Sp, setGrafik24Sp] = useState<string>('ALL');
@@ -1152,10 +1153,15 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
         const mappedHistory = res.rows.map((r) => {
           const key = (r.incidentNumber && r.incidentNumber !== '-') ? r.incidentNumber : `${r.wsid}|${r.eventCodeDesc}|${r.startTime}`;
           const sTime = formatStartProblemTime(r.startTime) !== '-' ? formatStartProblemTime(r.startTime) : getDisplayStartTime(r);
+          const eTime = formatStartProblemTime(r.endTime);
           const dText = (!r.detail || r.detail === '-' || isDateLikeString(r.detail)) ? '-' : r.detail;
           const actText = (r.actionTerakhir && r.actionTerakhir !== '-' && !isTechnicalMachineLog(r.actionTerakhir)) ? r.actionTerakhir : '-';
           const hasAction = actText !== '-';
           const spParts = (r.servicePointSektor || '').split('-');
+          const compDate = toComparableDate(sTime || r.dateStr || r.tanggal || '');
+          const epochStart = parseToEpoch(sTime);
+          const epochEnd = parseToEpoch(eTime);
+          const searchIdx = `${r.wsid || ''} ${r.lokasi || ''} ${r.eventCodeDesc || ''} ${r.servicePoint || spParts[0]?.trim() || ''} ${r.sektor || spParts[1]?.trim() || ''} ${r.vendorMesin || r.vendor || ''} ${r.typeMesin || ''} ${actText} ${dText}`.toLowerCase();
 
           return {
             incidentKey: key,
@@ -1170,7 +1176,7 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
             eventCodeDesc: r.eventCodeDesc,
             detail: dText,
             startTime: sTime,
-            endTime: formatStartProblemTime(r.endTime),
+            endTime: eTime,
             tanggal: r.dateStr || '-',
             jam: r.hourStr || '00:00',
             durationRaw: r.rawDuration || 0,
@@ -1187,8 +1193,12 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
                 ? 'DASHBOARD'
                 : 'OASE'),
             comment: r.comment || undefined,
-            keterangan: actText !== '-' ? actText : undefined
-          };
+            keterangan: actText !== '-' ? actText : undefined,
+            _compDate: compDate,
+            _epochStart: epochStart,
+            _epochEnd: epochEnd,
+            _search: searchIdx
+          } as any;
         });
 
         historyCacheRef.current[month] = mappedHistory;
@@ -1635,6 +1645,9 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
       return res;
     };
 
+    // Expose evaluation function for on-demand lazy evaluation of paginated rows
+    evaluateChronicRef.current = evaluateChronicItem;
+
     // Evaluasi seluruh open incidents aktif (biasanya 10-50 item, sekejap < 1ms)
     for (const inc of openIncidents) {
       if (inc.incidentKey) {
@@ -1642,17 +1655,8 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
       }
     }
 
-    // Hanya evaluasi riwayat jika user membuka tab Riwayat (History)
-    if (activeTab === 'HISTORY') {
-      for (const inc of historyResults) {
-        if (inc.incidentKey && !resultMap.has(inc.incidentKey)) {
-          resultMap.set(inc.incidentKey, evaluateChronicItem(inc));
-        }
-      }
-    }
-
     return resultMap;
-  }, [openIncidents, allDailyIncidents, historyResults, activeTab]);
+  }, [openIncidents, allDailyIncidents]);
 
   const masterSchedMap = useMemo(() => {
     const map = new Map<string, any>();
@@ -3437,11 +3441,16 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
       const mappedLocal = allDailyIncidents.map((r) => {
         const key = (r.incidentNumber && r.incidentNumber !== '-') ? r.incidentNumber : `${r.wsid}|${r.eventCodeDesc}|${r.startTime}`;
         const sTime = formatStartProblemTime(r.startTime) !== '-' ? formatStartProblemTime(r.startTime) : getDisplayStartTime(r);
+        const eTime = formatStartProblemTime(r.endTime);
         const dText = (!r.detail || r.detail === '-' || isDateLikeString(r.detail)) ? '-' : r.detail;
 
         let actionText = (r.actionTerakhir && r.actionTerakhir !== '-' && !isTechnicalMachineLog(r.actionTerakhir)) ? r.actionTerakhir : '-';
         const hasAction = actionText !== '-';
         const spParts = (r.servicePointSektor || '').split('-');
+        const compDate = toComparableDate(sTime || r.dateStr || r.tanggal || '');
+        const epochStart = parseToEpoch(sTime);
+        const epochEnd = parseToEpoch(eTime);
+        const searchIdx = `${r.wsid || ''} ${r.lokasi || ''} ${r.eventCodeDesc || ''} ${r.servicePoint || spParts[0]?.trim() || ''} ${r.sektor || spParts[1]?.trim() || ''} ${r.vendorMesin || r.vendor || ''} ${r.typeMesin || ''} ${actionText} ${dText}`.toLowerCase();
 
         return {
           incidentKey: key,
@@ -3456,7 +3465,7 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
           eventCodeDesc: r.eventCodeDesc,
           detail: dText,
           startTime: sTime,
-          endTime: formatStartProblemTime(r.endTime),
+          endTime: eTime,
           tanggal: r.dateStr || '-',
           jam: r.hourStr || '00:00',
           durationRaw: r.rawDuration || 0,
@@ -3473,8 +3482,12 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
               ? 'DASHBOARD'
               : 'OASE'),
           comment: r.comment || undefined,
-          keterangan: actionText !== '-' ? actionText : undefined
-        };
+          keterangan: actionText !== '-' ? actionText : undefined,
+          _compDate: compDate,
+          _epochStart: epochStart,
+          _epochEnd: epochEnd,
+          _search: searchIdx
+        } as any;
       });
       historyCacheRef.current[historyMonth] = mappedLocal;
       setHistoryResults(mappedLocal);
@@ -3492,6 +3505,7 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
       if (res.success && res.incidents) {
         const clean = res.incidents.map((it) => {
           const sTime = formatStartProblemTime(it.startTime) !== '-' ? formatStartProblemTime(it.startTime) : getDisplayStartTime(it);
+          const eTime = formatStartProblemTime(it.endTime);
           const dText = (!it.detail || it.detail === '-' || isDateLikeString(it.detail)) ? '-' : it.detail;
           const isClosed = isEndTimeFilled(it.endTime);
           const closeSrc: 'OASE' | 'DASHBOARD' | '-' = !isClosed
@@ -3499,13 +3513,21 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
             : (it.closeSource === 'DASHBOARD' || it.actionTerakhirOleh === 'Sistem Dashboard' || (typeof it.actionTerakhir === 'string' && it.actionTerakhir.includes('[AUTO-CLOSE]'))
               ? 'DASHBOARD'
               : 'OASE');
+          const compDate = toComparableDate(sTime || it.tanggal || '');
+          const epochStart = parseToEpoch(sTime);
+          const epochEnd = parseToEpoch(eTime);
+          const searchIdx = `${it.wsid || ''} ${it.lokasi || ''} ${it.eventCodeDesc || ''} ${it.servicePoint || ''} ${it.sektor || ''} ${it.vendor || ''} ${it.typeMesin || ''} ${it.actionTerakhir || ''} ${dText}`.toLowerCase();
           return {
             ...it,
             detail: dText,
             startTime: sTime,
-            endTime: formatStartProblemTime(it.endTime),
-            closeSource: closeSrc
-          };
+            endTime: eTime,
+            closeSource: closeSrc,
+            _compDate: compDate,
+            _epochStart: epochStart,
+            _epochEnd: epochEnd,
+            _search: searchIdx
+          } as any;
         });
         historyCacheRef.current[historyMonth] = clean;
         setHistoryResults(clean);
@@ -3937,67 +3959,63 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
 
   const filteredHistory = useMemo(() => {
     if (activeTab !== 'HISTORY') return [];
-    return historyResults.filter((r) => {
-      if (historyStatus !== 'ALL' && r.status !== historyStatus) return false;
-      if (
-        selectedEventCodesHistory.length > 0 &&
-        !selectedEventCodesHistory.includes(r.eventCodeDesc)
-      ) {
-        return false;
-      }
-      if (!isDateInRange(getDisplayStartTime(r) || r.tanggal, historyStartDate, historyEndDate)) {
-        return false;
-      }
-      if (historyQuery.trim()) {
-        const q = historyQuery.toLowerCase().trim();
-        const m =
-          r.wsid.toLowerCase().includes(q) ||
-          r.lokasi.toLowerCase().includes(q) ||
-          r.eventCodeDesc.toLowerCase().includes(q) ||
-          r.servicePoint.toLowerCase().includes(q) ||
-          (r.sektor || '').toLowerCase().includes(q) ||
-          (r.vendor || '').toLowerCase().includes(q) ||
-          (r.typeMesin || '').toLowerCase().includes(q) ||
-          (r.actionTerakhir || '').toLowerCase().includes(q) ||
-          (r.detail || '').toLowerCase().includes(q);
-        if (!m) return false;
-      }
+    const hasStatus = historyStatus !== 'ALL';
+    const hasEvents = selectedEventCodesHistory.length > 0;
+    const eventsSet = hasEvents ? new Set(selectedEventCodesHistory) : null;
+    const compStart = historyStartDate ? toComparableDate(historyStartDate, false) : '';
+    const compEnd = historyEndDate ? toComparableDate(historyEndDate, true) : '';
+    const q = historyQuery.trim().toLowerCase();
+
+    return historyResults.filter((r: any) => {
+      if (hasStatus && r.status !== historyStatus) return false;
+      if (eventsSet && !eventsSet.has(r.eventCodeDesc)) return false;
+      if (compStart && r._compDate && r._compDate < compStart) return false;
+      if (compEnd && r._compDate && r._compDate > compEnd) return false;
+      if (q && r._search && !r._search.includes(q)) return false;
       return true;
     });
   }, [activeTab, historyResults, historyStatus, selectedEventCodesHistory, historyQuery, historyStartDate, historyEndDate]);
 
   const sortedHistory = useMemo(() => {
     if (activeTab !== 'HISTORY') return [];
+    if (filteredHistory.length === 0) return [];
     const list = [...filteredHistory];
-    list.sort((a, b) => {
+    const isAsc = historySortDirection === 'asc';
+
+    list.sort((a: any, b: any) => {
       let diff = 0;
-      if (historySortColumn === 'wsid') {
-        diff = a.wsid.localeCompare(b.wsid);
-      } else if (historySortColumn === 'typeMesin') {
-        diff = (a.typeMesin || '').localeCompare(b.typeMesin || '');
-      } else if (historySortColumn === 'eventCodeDesc') {
-        diff = (a.eventCodeDesc || '').localeCompare(b.eventCodeDesc || '');
-      } else if (historySortColumn === 'startTime') {
-        diff = parseToEpoch(getDisplayStartTime(a)) - parseToEpoch(getDisplayStartTime(b));
-      } else if (historySortColumn === 'endTime') {
-        diff = parseToEpoch(a.endTime) - parseToEpoch(b.endTime);
-      } else if (historySortColumn === 'durasiOpr') {
-        const durA = getHistoryEffectiveDuration(a);
-        const durB = getHistoryEffectiveDuration(b);
-        diff = durA - durB;
-      } else if (historySortColumn === 'chronic') {
-        const cA = chronicInfoMap.get(a.incidentKey);
-        const cB = chronicInfoMap.get(b.incidentKey);
-        const scoreA = cA?.is3xSehari ? 3 : cA?.is3x5Hari ? 2 : 0;
-        const scoreB = cB?.is3xSehari ? 3 : cB?.is3x5Hari ? 2 : 0;
-        diff = scoreA - scoreB;
-      } else if (historySortColumn === 'actionTerakhir') {
-        diff = (a.actionTerakhir || '').localeCompare(b.actionTerakhir || '');
+      switch (historySortColumn) {
+        case 'wsid':
+          diff = a.wsid.localeCompare(b.wsid);
+          break;
+        case 'typeMesin':
+          diff = (a.typeMesin || '').localeCompare(b.typeMesin || '');
+          break;
+        case 'eventCodeDesc':
+          diff = (a.eventCodeDesc || '').localeCompare(b.eventCodeDesc || '');
+          break;
+        case 'startTime':
+          diff = (a._epochStart || 0) - (b._epochStart || 0);
+          break;
+        case 'endTime':
+          diff = (a._epochEnd || 0) - (b._epochEnd || 0);
+          break;
+        case 'durasiOpr':
+          diff = (a.durasiOpr || 0) - (b.durasiOpr || 0);
+          break;
+        case 'chronic':
+          diff = (a.durasiOpr || 0) - (b.durasiOpr || 0);
+          break;
+        case 'actionTerakhir':
+          diff = (a.actionTerakhir || '').localeCompare(b.actionTerakhir || '');
+          break;
+        default:
+          diff = (a._epochStart || 0) - (b._epochStart || 0);
       }
-      return historySortDirection === 'asc' ? diff : -diff;
+      return isAsc ? diff : -diff;
     });
     return list;
-  }, [activeTab, filteredHistory, historySortColumn, historySortDirection, chronicInfoMap, getHistoryEffectiveDuration]);
+  }, [activeTab, filteredHistory, historySortColumn, historySortDirection]);
 
   const totalPagesHistory = Math.ceil(sortedHistory.length / pageSizeHistory) || 1;
   const paginatedHistory = useMemo(() => {
@@ -4021,21 +4039,9 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
 
   const historyAvailableEvents = useMemo(() => {
     const set = new Set<string>();
-    historyResults.forEach((r) => {
-      if (r.eventCodeDesc && r.eventCodeDesc.trim()) {
-        set.add(r.eventCodeDesc.trim());
-      }
-    });
-    allDailyIncidents.forEach((r) => {
-      if (r.eventCodeDesc && r.eventCodeDesc.trim()) {
-        set.add(r.eventCodeDesc.trim());
-      }
-    });
-    if (set.size === 0) {
-      TARGET_EVENT_CODES.forEach((c) => set.add(c));
-    }
+    TARGET_EVENT_CODES.forEach((c) => set.add(c));
     return Array.from(set).sort((a, b) => a.localeCompare(b));
-  }, [historyResults, allDailyIncidents]);
+  }, []);
 
   // =========================================================================
   // TAB 4: LOGIC UPLOAD CSV
@@ -9133,7 +9139,7 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
                       </tr>
                     ) : (
                       paginatedHistory.map((r) => {
-                        const chronic = chronicInfoMap.get(r.incidentKey);
+                        const chronic = chronicInfoMap.get(r.incidentKey) || evaluateChronicRef.current?.(r);
                         return (
                           <tr key={r.incidentKey} className="h-10 hover:bg-[#F8F9FF] transition-colors">
                             {/* 1. WSID / Lokasi */}
@@ -9641,7 +9647,7 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
               </div>
               {/* Chronic Alert Banner if detected */}
               {(() => {
-                const c = chronicInfoMap.get(activeIncidentDetail.incidentKey);
+                const c = chronicInfoMap.get(activeIncidentDetail.incidentKey) || evaluateChronicRef.current?.(activeIncidentDetail);
                 if (!c?.isChronic) return null;
                 return (
                   <div className="bg-amber-50 border border-amber-200 p-3 rounded-xl flex items-center gap-2 text-xs text-amber-900">
