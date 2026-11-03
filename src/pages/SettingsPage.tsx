@@ -53,7 +53,9 @@ import {
   fetchUsersSupabase,
   saveUserSupabase,
   deleteUserSupabase,
-  subscribeUsersSupabase
+  subscribeUsersSupabase,
+  migrateAllDataToSupabase,
+  type MigrationProgress
 } from '../utils/supabaseService';
 import {
   getSupabaseUrl,
@@ -353,6 +355,34 @@ export default function SettingsPage({ userRole = 'KAOPS' }: SettingsPageProps) 
       setSupabaseTestStatus({ success: false, message: err.message || 'Gagal menghubungi Supabase.' });
     } finally {
       setIsTestingSupabase(false);
+    }
+  };
+
+  // Data Migration to Supabase State & Action
+  const [isMigrating, setIsMigrating] = useState(false);
+  const [migrationProgress, setMigrationProgress] = useState<MigrationProgress | null>(null);
+
+  const handleStartMigration = async () => {
+    if (!isSupabaseConfigured()) {
+      showToast('Koneksi Supabase belum terkonfigurasi. Simpan URL dan Anon Key terlebih dahulu.', 'error');
+      return;
+    }
+    if (!window.confirm('Yakin ingin memigrasikan seluruh 2.043 data mesin dan rekap downtime ke database Supabase sekarang?')) {
+      return;
+    }
+
+    setIsMigrating(true);
+    setMigrationProgress({ step: 'Memulai proses migrasi...', percent: 0 });
+    try {
+      const res = await migrateAllDataToSupabase((p) => {
+        setMigrationProgress(p);
+      });
+      showToast(`Migrasi sukses! ${res.machinesCount} mesin dan ${res.uptimeCount} data bulanan kini aktif di Supabase.`, 'success');
+    } catch (err: any) {
+      showToast(err.message || 'Gagal melakukan migrasi data.', 'error');
+      setMigrationProgress(null);
+    } finally {
+      setIsMigrating(false);
     }
   };
 
@@ -1360,6 +1390,51 @@ export default function SettingsPage({ userRole = 'KAOPS' }: SettingsPageProps) 
                     <span>{isTestingSupabase ? 'Menguji...' : 'Uji Koneksi Saja'}</span>
                   </button>
                 </div>
+              </div>
+
+              {/* One-Click Data Migration Tool */}
+              <div className="p-4 md:p-5 rounded-xl border border-emerald-200 bg-emerald-50/40 space-y-3">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                  <div className="flex items-center gap-2.5">
+                    <div className="w-9 h-9 rounded-lg bg-emerald-600 text-white flex items-center justify-center shrink-0">
+                      <Database className="w-5 h-5" />
+                    </div>
+                    <div>
+                      <h4 className="text-xs font-bold text-slate-900">Migrasi Data Otomatis ke Supabase</h4>
+                      <p className="text-[11px] text-slate-500">
+                        Pindahkan seluruh 2.043 Master Mesin &amp; Rekap Downtime Bulanan langsung ke database cloud PostgreSQL
+                      </p>
+                    </div>
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={handleStartMigration}
+                    disabled={isMigrating || !isSupabaseConfigured()}
+                    className="px-4 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold shadow-xs cursor-pointer disabled:opacity-50 flex items-center gap-1.5 shrink-0"
+                  >
+                    {isMigrating ? <RefreshCw className="w-4 h-4 animate-spin" /> : <ArrowUp className="w-4 h-4 rotate-45" />}
+                    <span>{isMigrating ? 'Memproses Migrasi...' : 'Mulai Migrasi Data Sekarang'}</span>
+                  </button>
+                </div>
+
+                {migrationProgress && (
+                  <div className="p-3 bg-white rounded-lg border border-emerald-200 space-y-1.5">
+                    <div className="flex items-center justify-between text-xs font-semibold text-slate-700">
+                      <span>{migrationProgress.step}</span>
+                      <span className="text-emerald-700 font-bold">{migrationProgress.percent}%</span>
+                    </div>
+                    <div className="w-full bg-slate-100 rounded-full h-2 overflow-hidden">
+                      <div
+                        className="bg-emerald-600 h-2 rounded-full transition-all duration-300"
+                        style={{ width: `${migrationProgress.percent}%` }}
+                      />
+                    </div>
+                    {migrationProgress.details && (
+                      <p className="text-[10px] text-slate-500 font-mono">{migrationProgress.details}</p>
+                    )}
+                  </div>
+                )}
               </div>
 
               {/* Panduan Schema SQL */}

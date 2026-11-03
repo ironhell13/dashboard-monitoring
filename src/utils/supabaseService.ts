@@ -518,4 +518,145 @@ export function subscribeUsersSupabase(onUpdate: (users: AppUser[]) => void) {
   };
 }
 
+// ==============================================================================
+// 6. MIGRASI DATA LENGKAP (ONE-CLICK DATA SEEDER DARI SPREADSHEET / LOCAL KE SUPABASE)
+// ==============================================================================
+
+export interface MigrationProgress {
+  step: string;
+  percent: number;
+  details?: string;
+}
+
+export async function migrateAllDataToSupabase(
+  onProgress?: (p: MigrationProgress) => void
+): Promise<{
+  success: boolean;
+  message: string;
+  machinesCount: number;
+  uptimeCount: number;
+}> {
+  const client = getSupabase();
+  if (!client) {
+    throw new Error('Koneksi Supabase belum aktif. Pastikan URL dan Anon Key sudah disimpan.');
+  }
+
+  onProgress?.({ step: 'Membaca data master dari sistem...', percent: 5 });
+
+  // 1. Ambil data dari window/sample-data.json
+  let machines: any[] = (window as any).__EMONS_MACHINES__ || [];
+  if (!machines || machines.length === 0) {
+    try {
+      const res = await fetch('/sample-data.json');
+      if (res.ok) {
+        const sample = await res.json();
+        machines = sample.machines || sample.rawMasterData || [];
+      }
+    } catch (e) {
+      console.warn('Gagal fetch sample-data.json:', e);
+    }
+  }
+
+  if (!machines || machines.length === 0) {
+    throw new Error('Data mesin tidak ditemukan di memori atau sample-data.json.');
+  }
+
+  onProgress?.({
+    step: 'Menyiapkan Data Master Mesin...',
+    percent: 15,
+    details: `Ditemukan ${machines.length} mesin ATM/CRM`
+  });
+
+  // 2. Batch insert Master Mesin (200 records per batch)
+  const mBatchSize = 200;
+  for (let i = 0; i < machines.length; i += mBatchSize) {
+    const chunk = machines.slice(i, i + mBatchSize).map((m: any) => ({
+      wsid: String(m.wsid || '').trim().replace(/^0+/, '') || String(m.wsid || ''),
+      jenis_mesin: m.jenisMesin || m.jenis_mesin || 'ATM',
+      klien_status: m.klienStatus || m.klien_status || 'BCA',
+      sektor_bca: m.sektorBCA || m.sektor_bca || '',
+      wilayah_operasional: m.wilayahOperasional || m.wilayah_operasional || '',
+      lokasi: m.lokasi || '',
+      vendor: m.vendor || '',
+      tipe_mesin: m.tipeMesin || m.tipe_mesin || '',
+      status_aktif: m.statusAktif || m.status_aktif || 'AKTIF',
+      jam_operasional: String(m.jam || m.jam_operasional || '(00:00 - 24:00)'),
+      opr: Number(m.opr) || 43200,
+      updated_at: new Date().toISOString()
+    }));
+
+    const { error } = await client.from('machines').upsert(chunk, { onConflict: 'wsid' });
+    if (error) throw error;
+
+    const currentPercent = Math.min(50, Math.round(15 + (i / machines.length) * 35));
+    onProgress?.({
+      step: 'Mengirim Master Mesin ke Supabase...',
+      percent: currentPercent,
+      details: `${Math.min(i + mBatchSize, machines.length)} dari ${machines.length} mesin tersimpan`
+    });
+  }
+
+  // 3. Ekstraksi dan Batch insert Monthly Uptime
+  let allUptimes: any[] = [];
+  machines.forEach((m: any) => {
+    const wsid = String(m.wsid || '').trim().replace(/^0+/, '') || String(m.wsid || '');
+    if (Array.isArray(m.monthlyData)) {
+      m.monthlyData.forEach((d: any) => {
+        if (d && d.periode) {
+          allUptimes.push({
+            wsid,
+            periode: d.periode,
+            uh: Number(d.uh) || 0,
+            uh_frx: Number(d.uhFrx) || 0,
+            uh_dur: Number(d.uhDur) || 0,
+            um: Number(d.um || d.kom) || 0,
+            um_frx: Number(d.umFrx || d.komFrx) || 0,
+            um_dur: Number(d.umDur || d.komDur) || 0,
+            pm: Number(d.pm || d.hw) || 0,
+            pm_frx: Number(d.pmFrx || d.hwFrx) || 0,
+            pm_dur: Number(d.pmDur || d.hwDur) || 0,
+            total_downtime_dur: Number(d.total || d.durTotal) || 0,
+            target_sla: 98.50,
+            is_locked: true,
+            updated_at: new Date().toISOString()
+          });
+        }
+      });
+    }
+  });
+
+  onProgress?.({
+    step: 'Menyiapkan Rekap Downtime Bulanan...',
+    percent: 55,
+    details: `Menyiapkan ${allUptimes.length} catatan periode bulanan`
+  });
+
+  const uBatchSize = 250;
+  for (let j = 0; j < allUptimes.length; j += uBatchSize) {
+    const uChunk = allUptimes.slice(j, j + uBatchSize);
+    const { error } = await client.from('monthly_uptime').upsert(uChunk, { onConflict: 'wsid,periode' });
+    if (error) throw error;
+
+    const uPercent = Math.min(95, Math.round(55 + (j / allUptimes.length) * 40));
+    onProgress?.({
+      step: 'Mengirim Rekap Uptime Bulanan ke Supabase...',
+      percent: uPercent,
+      details: `${Math.min(j + uBatchSize, allUptimes.length)} dari ${allUptimes.length} catatan tersimpan`
+    });
+  }
+
+  onProgress?.({
+    step: 'Migrasi Sukses!',
+    percent: 100,
+    details: `${machines.length} Mesin dan ${allUptimes.length} data bulanan kini aktif di Supabase PostgreSQL.`
+  });
+
+  return {
+    success: true,
+    message: 'Migrasi data master & rekap bulanan ke Supabase berhasil diselesaikan!',
+    machinesCount: machines.length,
+    uptimeCount: allUptimes.length
+  };
+}
+
 
