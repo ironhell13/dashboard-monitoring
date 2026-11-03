@@ -1030,7 +1030,9 @@ export async function uploadIncidentsToSupabase(payload: {
         wilayah_operasional: 'Wilayah Operasional',
         sektor_bca: '-'
       }));
-      await client.from('machines').upsert(stubs, { onConflict: 'wsid', ignoreDuplicates: true }).catch(() => {});
+      try {
+        await client.from('machines').upsert(stubs, { onConflict: 'wsid', ignoreDuplicates: true });
+      } catch (_) {}
     }
 
     // 3. Siapkan payload tabel active_incidents: KHUSUS PROBLEM YANG BERSTATUS OPEN
@@ -1146,15 +1148,17 @@ export async function uploadIncidentsToSupabase(payload: {
 
     // 6. Catat upload log di chunk terakhir
     if (payload.chunkIndex === payload.totalChunks - 1) {
-      await client.from('upload_logs').insert([
-        {
-          file_name: payload.fileName,
-          file_type: 'DAILY_INCIDENT_OASE',
-          total_rows: payload.totalCsvLines,
-          uploaded_by: payload.uploaderName,
-          status: 'SUCCESS'
-        }
-      ]).catch(() => {});
+      try {
+        await client.from('upload_logs').insert([
+          {
+            file_name: payload.fileName,
+            file_type: 'DAILY_INCIDENT_OASE',
+            total_rows: payload.totalCsvLines,
+            uploaded_by: payload.uploaderName,
+            status: 'SUCCESS'
+          }
+        ]);
+      } catch (_) {}
     }
 
     return {
@@ -1205,18 +1209,20 @@ export async function saveIncidentActionSupabase(payload: {
     if (error) throw error;
 
     // Catat log tindakan ke incident_logs
-    await client.from('incident_logs').insert([
-      {
-        incident_key: payload.incidentKey,
-        wsid: payload.wsid,
-        problem: payload.eventCodeDesc,
-        action_taken: formattedAction,
-        action_by: payload.namaPetugas,
-        action_at: nowIso,
-        status: 'OPEN',
-        periode_bulan: payload.monthStr || nowIso.slice(0, 7)
-      }
-    ]).catch(() => {});
+    try {
+      await client.from('incident_logs').insert([
+        {
+          incident_key: payload.incidentKey,
+          wsid: payload.wsid,
+          problem: payload.eventCodeDesc,
+          action_taken: formattedAction,
+          action_by: payload.namaPetugas,
+          action_at: nowIso,
+          status: 'OPEN',
+          periode_bulan: payload.monthStr || nowIso.slice(0, 7)
+        }
+      ]);
+    } catch (_) {}
 
     return { success: true, message: 'Tindakan berhasil disimpan ke Supabase!' };
   } catch (err: any) {
@@ -1265,7 +1271,9 @@ export async function bulkSaveIncidentActionSupabase(payload: {
         status: 'OPEN',
         periode_bulan: it.monthStr || payload.monthStr || nowIso.slice(0, 7)
       }));
-      await client.from('incident_logs').insert(logs).catch(() => {});
+      try {
+        await client.from('incident_logs').insert(logs);
+      } catch (_) {}
     }
 
     return {
