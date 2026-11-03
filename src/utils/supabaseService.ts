@@ -853,7 +853,7 @@ export async function migrateDailyDataToSupabase(
       percent: progress
     });
 
-    await uploadIncidentsToSupabase({
+    const upRes = await uploadIncidentsToSupabase({
       uploaderName: 'Super Admin (Migrasi Database)',
       sumber: 'Migrasi Arsip Daily',
       fileName: 'Migrasi_Arsip_Daily_Sebelumnya.csv',
@@ -862,6 +862,9 @@ export async function migrateDailyDataToSupabase(
       totalChunks: totalChunks,
       rows: chunk
     });
+    if (!upRes.success) {
+      throw new Error(upRes.message || `Gagal mengunggah batch ${i + 1} ke Supabase`);
+    }
   }
 
   onProgress?.({ step: 'Migrasi data daily ke Supabase berhasil diselesaikan!', percent: 100 });
@@ -977,8 +980,8 @@ export async function uploadIncidentsToSupabase(payload: {
   if (!client) return { success: false, message: 'Supabase belum dikonfigurasi.' };
 
   try {
-    const rows = payload.rows || [];
-    if (rows.length === 0) {
+    const rawRows = payload.rows || [];
+    if (rawRows.length === 0) {
       return {
         success: true,
         stats: {
@@ -992,38 +995,34 @@ export async function uploadIncidentsToSupabase(payload: {
       };
     }
 
-    // 1. Siapkan active_incidents payload
-    const activePayload = rows.map((r: any) => {
-      const key = (r.incidentNumber && r.incidentNumber !== '-')
-        ? String(r.incidentNumber).trim().toUpperCase()
-        : `${(r.wsid || '').trim().toUpperCase()}|${(r.eventCodeDesc || '').trim().toUpperCase()}|${(r.startTime || '').trim()}`;
-
-      const wsidClean = cleanWsid(r.wsid) || String(r.wsid || '').trim();
-      const sTime = parseToIso(r.startTime);
-      const eTime = parseToIso(r.endTime);
-      const dur = Math.round(Number(r.durasiOpr || r.durationRaw || r.durasi || 0));
-
-      return {
-        incident_key: key,
-        wsid: wsidClean,
-        ticket_no: r.incidentNumber || r.ticketNo || '-',
-        problem: r.eventCodeDesc || r.problem || '-',
-        keterangan: r.detail || r.keterangan || '-',
-        status: r.status || (eTime ? 'CLOSED' : 'OPEN'),
-        start_time: sTime,
-        end_time: eTime,
-        duration_minutes: dur,
-        action_taken: (r.actionTerakhir && r.actionTerakhir !== '-') ? r.actionTerakhir : null,
-        action_by: (r.actionTerakhirOleh && r.actionTerakhirOleh !== '-') ? r.actionTerakhirOleh : null,
-        action_at: parseToIso(r.actionTerakhirWaktu),
-        updated_at: new Date().toISOString()
-      };
+    // 1. Bersihkan baris dari WSID korup (akibat multi-line comment CSV)
+    const validRows = rawRows.filter((r: any) => {
+      const rawW = (cleanWsid(r.wsid) || String(r.wsid || '').trim()).toUpperCase();
+      // WSID valid: 2 s/d 10 karakter alfanumerik murni
+      return rawW && rawW.length >= 2 && rawW.length <= 10 && rawW !== '-' && /^[A-Za-z0-9_-]+$/.test(rawW);
     });
 
-    // 2. Proteksi Foreign Key: pastikan WSID baru terdaftar di tabel machines
-    const uniqueWsids = Array.from(new Set(activePayload.map((p) => p.wsid).filter(Boolean)));
-    if (uniqueWsids.length > 0) {
-      const machineStubs = uniqueWsids.map((w) => ({
+    if (validRows.length === 0) {
+      return {
+        success: true,
+        stats: {
+          totalLines: payload.totalCsvLines,
+          matched: 0,
+          newCount: 0,
+          updatedCount: 0,
+          unchangedCount: 0,
+          skippedCount: rawRows.length
+        }
+      };
+    }
+
+    // 2. Proteksi Foreign Key: Daftarkan WSID yang belum ada di tabel machines (per batch 100)
+    const uniqueWsids = Array.from(new Set(
+      validRows.map((r: any) => (cleanWsid(r.wsid) || String(r.wsid || '').trim()).toUpperCase().slice(0, 10))
+    ));
+    for (let m = 0; m < uniqueWsids.length; m += 100) {
+      const wBatch = uniqueWsids.slice(m, m + 100);
+      const stubs = wBatch.map((w) => ({
         wsid: w,
         lokasi: '-',
         tipe_mesin: '-',
@@ -1031,72 +1030,118 @@ export async function uploadIncidentsToSupabase(payload: {
         wilayah_operasional: 'Wilayah Operasional',
         sektor_bca: '-'
       }));
-      await client.from('machines').upsert(machineStubs, { onConflict: 'wsid', ignoreDuplicates: true }).catch(() => {});
+      await client.from('machines').upsert(stubs, { onConflict: 'wsid', ignoreDuplicates: true }).catch(() => {});
     }
 
-    // 3. Pertahankan action_taken yang sudah diinput petugas sebelumnya jika CSV baru tidak membawa action
-    const keys = activePayload.map((p) => p.incident_key);
-    const { data: existingWithActions } = await client
-      .from('active_incidents')
-      .select('incident_key, action_taken, action_by, action_at')
-      .in('incident_key', keys)
-      .not('action_taken', 'is', null);
+    // 3. Siapkan payload tabel active_incidents: KHUSUS PROBLEM YANG BERSTATUS OPEN
+    const activePayload = validRows
+      .filter((r: any) => {
+        const eTime = parseToIso(r.endTime);
+        const st = String(r.status || '').toUpperCase();
+        return st === 'OPEN' || (!eTime && st !== 'CLOSED');
+      })
+      .map((r: any) => {
+        const wsidClean = (cleanWsid(r.wsid) || String(r.wsid || '').trim()).toUpperCase().slice(0, 10);
+        const rawKey = (r.incidentNumber && r.incidentNumber !== '-')
+          ? String(r.incidentNumber).trim().toUpperCase()
+          : `${wsidClean}|${String(r.eventCodeDesc || '').trim().toUpperCase()}|${String(r.startTime || '').trim()}`;
+        const key = rawKey.slice(0, 100);
 
-    if (existingWithActions && existingWithActions.length > 0) {
-      const existingActionMap = new Map(existingWithActions.map((x) => [x.incident_key, x]));
-      for (const item of activePayload) {
-        if (!item.action_taken) {
-          const prev = existingActionMap.get(item.incident_key);
-          if (prev) {
-            item.action_taken = prev.action_taken;
-            item.action_by = prev.action_by;
-            item.action_at = prev.action_at;
+        const sTime = parseToIso(r.startTime);
+        const eTime = parseToIso(r.endTime);
+        const dur = Math.round(Number(r.durasiOpr || r.durationRaw || r.durasi || 0));
+
+        return {
+          incident_key: key,
+          wsid: wsidClean,
+          ticket_no: String(r.incidentNumber || r.ticketNo || '-').slice(0, 100),
+          problem: String(r.eventCodeDesc || r.problem || '-'),
+          keterangan: String(r.detail || r.keterangan || '-'),
+          status: 'OPEN',
+          start_time: sTime,
+          end_time: eTime,
+          duration_minutes: isNaN(dur) ? 0 : dur,
+          action_taken: (r.actionTerakhir && r.actionTerakhir !== '-') ? String(r.actionTerakhir) : null,
+          action_by: (r.actionTerakhirOleh && r.actionTerakhirOleh !== '-') ? String(r.actionTerakhirOleh).slice(0, 100) : null,
+          action_at: parseToIso(r.actionTerakhirWaktu),
+          updated_at: new Date().toISOString()
+        };
+      });
+
+    // 4. Batch upsert active_incidents (100 per batch)
+    if (activePayload.length > 0) {
+      // Pertahankan action_taken yang sudah diinput petugas sebelumnya
+      const keys = activePayload.map((p) => p.incident_key);
+      const { data: existingWithActions } = await client
+        .from('active_incidents')
+        .select('incident_key, action_taken, action_by, action_at')
+        .in('incident_key', keys)
+        .not('action_taken', 'is', null);
+
+      if (existingWithActions && existingWithActions.length > 0) {
+        const existingActionMap = new Map(existingWithActions.map((x) => [x.incident_key, x]));
+        for (const item of activePayload) {
+          if (!item.action_taken) {
+            const prev = existingActionMap.get(item.incident_key);
+            if (prev) {
+              item.action_taken = prev.action_taken;
+              item.action_by = prev.action_by;
+              item.action_at = prev.action_at;
+            }
           }
+        }
+      }
+
+      const bSize = 100;
+      for (let i = 0; i < activePayload.length; i += bSize) {
+        const chunk = activePayload.slice(i, i + bSize);
+        const { error: actErr } = await client
+          .from('active_incidents')
+          .upsert(chunk, { onConflict: 'incident_key' });
+        if (actErr) {
+          console.error('Supabase active_incidents upsert error:', actErr);
+          throw new Error(`Gagal menyimpan ke active_incidents: ${actErr.message || JSON.stringify(actErr)}`);
         }
       }
     }
 
-    // 4. Batch upsert active_incidents (150 per batch)
-    const bSize = 150;
-    for (let i = 0; i < activePayload.length; i += bSize) {
-      const chunk = activePayload.slice(i, i + bSize);
-      const { error: actErr } = await client
-        .from('active_incidents')
-        .upsert(chunk, { onConflict: 'incident_key' });
-      if (actErr) console.warn('Supabase active_incidents upsert warning:', actErr);
-    }
-
-    // 5. Batch insert incident_logs (audit riwayat daily)
-    const logsPayload = rows.map((r: any) => {
-      const key = (r.incidentNumber && r.incidentNumber !== '-')
+    // 5. Batch insert incident_logs (Audit riwayat harian lengkap)
+    const logsPayload = validRows.map((r: any) => {
+      const wsidClean = (cleanWsid(r.wsid) || String(r.wsid || '').trim()).toUpperCase().slice(0, 10);
+      const rawKey = (r.incidentNumber && r.incidentNumber !== '-')
         ? String(r.incidentNumber).trim().toUpperCase()
-        : `${(r.wsid || '').trim().toUpperCase()}|${(r.eventCodeDesc || '').trim().toUpperCase()}|${(r.startTime || '').trim()}`;
-      const wsidClean = cleanWsid(r.wsid) || String(r.wsid || '').trim();
+        : `${wsidClean}|${String(r.eventCodeDesc || '').trim().toUpperCase()}|${String(r.startTime || '').trim()}`;
+      const key = rawKey.slice(0, 100);
+
       const sTime = parseToIso(r.startTime);
       const eTime = parseToIso(r.endTime);
       const dur = Math.round(Number(r.durasiOpr || r.durationRaw || r.durasi || 0));
-      const mStr = sTime ? sTime.slice(0, 7) : (r.dateStr ? r.dateStr.slice(0, 7) : null);
+      const mStr = sTime ? sTime.slice(0, 7) : (r.dateStr ? String(r.dateStr).slice(0, 7) : null);
 
       return {
         incident_key: key,
         wsid: wsidClean,
-        ticket_no: r.incidentNumber || r.ticketNo || '-',
-        problem: r.eventCodeDesc || r.problem || '-',
-        keterangan: r.detail || r.keterangan || '-',
-        status: r.status || (eTime ? 'CLOSED' : 'OPEN'),
+        ticket_no: String(r.incidentNumber || r.ticketNo || '-').slice(0, 100),
+        problem: String(r.eventCodeDesc || r.problem || '-'),
+        keterangan: String(r.detail || r.keterangan || '-'),
+        status: String(r.status || (eTime ? 'CLOSED' : 'OPEN')).slice(0, 30),
         start_time: sTime,
         end_time: eTime,
-        duration_minutes: dur,
-        action_taken: (r.actionTerakhir && r.actionTerakhir !== '-') ? r.actionTerakhir : null,
-        action_by: (r.actionTerakhirOleh && r.actionTerakhirOleh !== '-') ? r.actionTerakhirOleh : null,
+        duration_minutes: isNaN(dur) ? 0 : dur,
+        action_taken: (r.actionTerakhir && r.actionTerakhir !== '-') ? String(r.actionTerakhir) : null,
+        action_by: (r.actionTerakhirOleh && r.actionTerakhirOleh !== '-') ? String(r.actionTerakhirOleh).slice(0, 100) : null,
         action_at: parseToIso(r.actionTerakhirWaktu),
-        periode_bulan: mStr
+        periode_bulan: mStr ? mStr.slice(0, 7) : null
       };
     });
 
+    const bSize = 100;
     for (let j = 0; j < logsPayload.length; j += bSize) {
       const chunk = logsPayload.slice(j, j + bSize);
-      await client.from('incident_logs').insert(chunk).catch(() => {});
+      const { error: logErr } = await client.from('incident_logs').insert(chunk);
+      if (logErr) {
+        console.warn('incident_logs insert warning:', logErr);
+      }
     }
 
     // 6. Catat upload log di chunk terakhir
@@ -1116,15 +1161,16 @@ export async function uploadIncidentsToSupabase(payload: {
       success: true,
       stats: {
         totalLines: payload.totalCsvLines,
-        matched: rows.length,
-        newCount: rows.length,
+        matched: validRows.length,
+        newCount: activePayload.length,
         updatedCount: 0,
         unchangedCount: 0,
-        skippedCount: 0
+        skippedCount: rawRows.length - validRows.length
       },
       message: 'Insiden harian berhasil disimpan ke database Supabase!'
     };
   } catch (err: any) {
+    console.error('uploadIncidentsToSupabase fatal error:', err);
     return { success: false, message: err.message || 'Gagal menyimpan insiden ke Supabase.' };
   }
 }

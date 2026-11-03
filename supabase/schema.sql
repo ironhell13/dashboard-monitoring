@@ -86,7 +86,7 @@ CREATE INDEX IF NOT EXISTS idx_monthly_uptime_wsid ON public.monthly_uptime(wsid
 -- ==============================================================================
 CREATE TABLE IF NOT EXISTS public.active_incidents (
     incident_key VARCHAR(100) PRIMARY KEY,
-    wsid VARCHAR(10) NOT NULL REFERENCES public.machines(wsid) ON DELETE CASCADE,
+    wsid VARCHAR(10) NOT NULL,
     ticket_no VARCHAR(100),
     problem TEXT,
     keterangan TEXT,
@@ -106,6 +106,7 @@ CREATE TABLE IF NOT EXISTS public.active_incidents (
 CREATE INDEX IF NOT EXISTS idx_active_incidents_wsid ON public.active_incidents(wsid);
 CREATE INDEX IF NOT EXISTS idx_active_incidents_status ON public.active_incidents(status);
 CREATE INDEX IF NOT EXISTS idx_active_incidents_start ON public.active_incidents(start_time);
+ALTER TABLE public.active_incidents DROP CONSTRAINT IF EXISTS active_incidents_wsid_fkey;
 
 -- ==============================================================================
 -- 6. TABEL: INCIDENT_LOGS (Riwayat Seluruh Insiden dari Upload Daily)
