@@ -268,92 +268,24 @@ const INCIDENT_DATASET_KEY = 'incident_active_dataset';
 const INCIDENT_ACTIONS_KEY = 'incident_actions_cache';
 
 /**
- * Menyimpan dataset insiden aktif ke IndexedDB (kapasitas puluhan MB, tanpa limit 5MB LocalStorage)
+ * Menyimpan dataset insiden aktif (No-op: Supabase Cloud DB sebagai Single Source of Truth)
  */
-export async function saveActiveIncidentDataset(rows: any[]): Promise<boolean> {
-  try {
-    const db = await openIndexedDB();
-    await new Promise<void>((resolve, reject) => {
-      const tx = db.transaction(STORE_NAME, 'readwrite');
-      const store = tx.objectStore(STORE_NAME);
-      const req = store.put(rows, INCIDENT_DATASET_KEY);
-      req.onsuccess = () => resolve();
-      req.onerror = () => reject(req.error);
-      tx.oncomplete = () => resolve();
-    });
-    return true;
-  } catch (err) {
-    console.warn('Gagal menyimpan incident dataset ke IndexedDB:', err);
-    try {
-      localStorage.setItem('MONITORING_ACTIVE_DATASET', JSON.stringify(rows.slice(0, 500)));
-    } catch (e) {}
-    return false;
-  }
+export async function saveActiveIncidentDataset(_rows: any[]): Promise<boolean> {
+  return true;
 }
 
 /**
- * Mengambil dataset insiden aktif dari IndexedDB secara instan (< 30ms)
+ * Mengambil dataset insiden aktif dari IndexedDB (Dinonaktifkan agar Supabase menjadi Single Source of Truth)
  */
 export async function loadActiveIncidentDataset(): Promise<any[]> {
-  try {
-    const db = await openIndexedDB();
-    const rows = await new Promise<any[] | null>((resolve, reject) => {
-      const tx = db.transaction(STORE_NAME, 'readonly');
-      const store = tx.objectStore(STORE_NAME);
-      const req = store.get(INCIDENT_DATASET_KEY);
-      req.onsuccess = () => resolve(req.result || null);
-      req.onerror = () => reject(req.error);
-    });
-    if (rows && Array.isArray(rows) && rows.length > 0) {
-      return rows;
-    }
-  } catch (err) {
-    console.warn('Gagal membaca incident dataset dari IndexedDB:', err);
-  }
-
-  // Fallback ke LocalStorage
-  try {
-    const raw = localStorage.getItem('MONITORING_ACTIVE_DATASET');
-    if (raw) {
-      const parsed = JSON.parse(raw);
-      if (Array.isArray(parsed) && parsed.length > 0) {
-        return parsed;
-      }
-    }
-  } catch (e) {}
-
   return [];
 }
 
 /**
- * Menyimpan riwayat tindakan (action) insiden secara lokal di IndexedDB
+ * Menyimpan riwayat tindakan (action) insiden (No-op: langsung disimpan ke Supabase Cloud DB)
  */
-export async function saveLocalAction(action: any): Promise<boolean> {
-  try {
-    const db = await openIndexedDB();
-    const existing: any[] = await new Promise((resolve) => {
-      const tx = db.transaction(STORE_NAME, 'readonly');
-      const store = tx.objectStore(STORE_NAME);
-      const req = store.get(INCIDENT_ACTIONS_KEY);
-      req.onsuccess = () => resolve(req.result || []);
-      req.onerror = () => resolve([]);
-    });
-
-    const updated = [action, ...existing.filter((a) => a.logId !== action.logId)];
-
-    await new Promise<void>((resolve, reject) => {
-      const tx = db.transaction(STORE_NAME, 'readwrite');
-      const store = tx.objectStore(STORE_NAME);
-      const req = store.put(updated, INCIDENT_ACTIONS_KEY);
-      req.onsuccess = () => resolve();
-      req.onerror = () => reject(req.error);
-      tx.oncomplete = () => resolve();
-    });
-    return true;
-  } catch (err) {
-    console.warn('Gagal menyimpan local action ke IndexedDB:', err);
-    return false;
-  }
+export async function saveLocalAction(_action: any): Promise<boolean> {
+  return true;
 }
 
 /**
@@ -395,97 +327,61 @@ const MONITORING_LS_SNAPSHOT = 'MONITORING_SNAPSHOT_FALLBACK';
 /**
  * Menyimpan snapshot monitoring ke IndexedDB agar kunjungan berikutnya instan (< 10ms)
  */
-export async function saveMonitoringSnapshot(snapshot: MonitoringSnapshot): Promise<boolean> {
-  try {
-    const db = await openIndexedDB();
-
-    // Pastikan jika array di snapshot baru kosong, jangan menimpa data cache lama yang sudah ada
-    const existing: MonitoringSnapshot | null = await new Promise((resolve) => {
-      try {
-        const tx = db.transaction(STORE_NAME, 'readonly');
-        const store = tx.objectStore(STORE_NAME);
-        const req = store.get(MONITORING_SNAPSHOT_KEY);
-        req.onsuccess = () => resolve(req.result || null);
-        req.onerror = () => resolve(null);
-      } catch (e) {
-        resolve(null);
-      }
-    });
-
-    const safeSnapshot: MonitoringSnapshot = {
-      openIncidents:
-        snapshot.openIncidents && snapshot.openIncidents.length > 0
-          ? snapshot.openIncidents
-          : existing?.openIncidents || [],
-      allDailyIncidents:
-        snapshot.allDailyIncidents && snapshot.allDailyIncidents.length > 0
-          ? snapshot.allDailyIncidents
-          : existing?.allDailyIncidents || [],
-      historyResults:
-        snapshot.historyResults && snapshot.historyResults.length > 0
-          ? snapshot.historyResults
-          : existing?.historyResults || [],
-      lastSyncTime: snapshot.lastSyncTime || Date.now()
-    };
-
-    await new Promise<void>((resolve, reject) => {
-      const tx = db.transaction(STORE_NAME, 'readwrite');
-      const store = tx.objectStore(STORE_NAME);
-      const req = store.put(safeSnapshot, MONITORING_SNAPSHOT_KEY);
-      req.onsuccess = () => resolve();
-      req.onerror = () => reject(req.error);
-      tx.oncomplete = () => resolve();
-    });
-    return true;
-  } catch (err) {
-    console.warn('Gagal menyimpan monitoring snapshot ke IndexedDB:', err);
-    try {
-      localStorage.setItem(
-        MONITORING_LS_SNAPSHOT,
-        JSON.stringify({
-          openIncidents: snapshot.openIncidents,
-          allDailyIncidents: (snapshot.allDailyIncidents || []).slice(0, 500),
-          lastSyncTime: snapshot.lastSyncTime
-        })
-      );
-    } catch (e) {}
-    return false;
-  }
+export async function saveMonitoringSnapshot(_snapshot: MonitoringSnapshot): Promise<boolean> {
+  return true;
 }
 
 /**
- * Memuat snapshot monitoring dari IndexedDB secara instan (< 10ms)
- * Problem Open, History, dan Frekuensi langsung tampil tanpa menunggu Apps Script
+ * Membersihkan seluruh cache monitoring & incident dari IndexedDB dan LocalStorage
  */
-export async function loadMonitoringSnapshot(): Promise<MonitoringSnapshot | null> {
+export async function clearMonitoringCache(): Promise<boolean> {
   try {
     const db = await openIndexedDB();
-    const snapshot = await new Promise<MonitoringSnapshot | null>((resolve, reject) => {
-      const tx = db.transaction(STORE_NAME, 'readonly');
-      const store = tx.objectStore(STORE_NAME);
-      const req = store.get(MONITORING_SNAPSHOT_KEY);
-      req.onsuccess = () => resolve(req.result || null);
-      req.onerror = () => reject(req.error);
+    await new Promise<void>((resolve) => {
+      try {
+        const tx = db.transaction(STORE_NAME, 'readwrite');
+        const store = tx.objectStore(STORE_NAME);
+        store.delete(MONITORING_SNAPSHOT_KEY);
+        store.delete(INCIDENT_DATASET_KEY);
+        store.delete(INCIDENT_ACTIONS_KEY);
+        tx.oncomplete = () => resolve();
+        tx.onerror = () => resolve();
+      } catch (_) {
+        resolve();
+      }
     });
+  } catch (_) {}
 
-    if (snapshot && (snapshot.openIncidents?.length > 0 || snapshot.allDailyIncidents?.length > 0)) {
-      return snapshot;
-    }
-  } catch (err) {
-    console.warn('Gagal membaca monitoring snapshot dari IndexedDB:', err);
+  // Bersihkan key legacy dari LocalStorage
+  const keysToRemove = [
+    'MONITORING_ACTIVE_DATASET',
+    'MONITORING_INCIDENTS_LOCAL',
+    'MONITORING_OPEN_CACHE',
+    'MONITORING_ACTIONS_LOCAL',
+    'MONITORING_ACTIONS',
+    'MONITORING_UPLOAD_LOGS',
+    'MONITORING_DAILY_SNAPSHOT',
+    'MONITORING_LAST_SYNC',
+    'MONITORING_INCIDENTS',
+    'MONITORING_SNAPSHOT_FALLBACK',
+    'LOCAL_STORAGE_INCIDENTS',
+    'LOCAL_STORAGE_ACTIONS',
+    'LOCAL_STORAGE_OPEN_CACHE',
+    'LOCAL_STORAGE_ACTIVE_DATA'
+  ];
+  for (const k of keysToRemove) {
+    try {
+      localStorage.removeItem(k);
+    } catch (_) {}
   }
 
-  // Fallback ke LocalStorage
-  try {
-    const raw = localStorage.getItem(MONITORING_LS_SNAPSHOT);
-    if (raw) {
-      const parsed = JSON.parse(raw);
-      if (parsed && (parsed.openIncidents?.length > 0 || parsed.allDailyIncidents?.length > 0)) {
-        return parsed as MonitoringSnapshot;
-      }
-    }
-  } catch (e) {}
+  return true;
+}
 
+/**
+ * Memuat snapshot monitoring dari IndexedDB (Dinonaktifkan agar Supabase menjadi Single Source of Truth)
+ */
+export async function loadMonitoringSnapshot(): Promise<MonitoringSnapshot | null> {
   return null;
 }
 

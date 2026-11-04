@@ -1001,7 +1001,7 @@ function parseToIso(dateStr?: any): string | null {
   return null;
 }
 
-function getMachineMetadata(wsid?: string): any {
+export function getMachineMetadata(wsid?: string): any {
   if (!wsid) return null;
   try {
     const list = useDataStore.getState().machines || [];
@@ -1020,7 +1020,131 @@ function getMachineMetadata(wsid?: string): any {
   return null;
 }
 
-function mapRowToOpenIncident(row: any, machine?: any): OpenIncidentItem {
+export function extractDateStrFromRaw(rawDate: any): string {
+  if (!rawDate || rawDate === '-' || rawDate === 'N/A') return '-';
+  const str = String(rawDate).trim();
+
+  // Jika sudah ada tanda slash: DD/MM/YYYY atau DD/MM/YYYY HH:mm:ss
+  if (str.includes('/')) {
+    const dPart = str.split(' ')[0];
+    const parts = dPart.split('/');
+    if (parts.length === 3) {
+      const d = parts[0].padStart(2, '0');
+      const m = parts[1].padStart(2, '0');
+      const y = parts[2].length === 2 ? `20${parts[2]}` : parts[2];
+      return `${d}/${m}/${y}`;
+    }
+  }
+
+  // Jika berformat YYYY-MM-DD atau ISO 8601 (2026-10-01T... atau 2026-10-01 ...)
+  if (str.includes('-')) {
+    const dPart = str.split('T')[0].split(' ')[0];
+    const parts = dPart.split('-');
+    if (parts.length === 3 && parts[0].length === 4) {
+      const y = parts[0];
+      const m = parts[1].padStart(2, '0');
+      const d = parts[2].padStart(2, '0');
+      return `${d}/${m}/${y}`;
+    }
+  }
+
+  // Fallback via Date object
+  try {
+    const dt = new Date(str);
+    if (!isNaN(dt.getTime())) {
+      const d = String(dt.getDate()).padStart(2, '0');
+      const m = String(dt.getMonth() + 1).padStart(2, '0');
+      const y = dt.getFullYear();
+      return `${d}/${m}/${y}`;
+    }
+  } catch (_) {}
+
+  return '-';
+}
+
+export function mapRowToDailyIncidentRow(row: any, machine?: any): DailyIncidentRow {
+  const m = machine || row.machines || getMachineMetadata(row.wsid) || {};
+  const sRaw = row.start_time;
+  const eRaw = row.end_time;
+
+  const dateStr = extractDateStrFromRaw(sRaw) !== '-'
+    ? extractDateStrFromRaw(sRaw)
+    : (extractDateStrFromRaw(row.tanggal) !== '-' ? extractDateStrFromRaw(row.tanggal) : '-');
+
+  let hourStr = '00:00';
+  let hourNumber = 0;
+  let formattedStartTime = '-';
+  let formattedEndTime = '-';
+
+  if (sRaw && sRaw !== '-') {
+    const sStr = String(sRaw).trim();
+    if (sStr.includes('T')) {
+      const parts = sStr.split('T');
+      const timePart = parts[1]?.slice(0, 8) || '00:00:00';
+      const h = parseInt(timePart.split(':')[0] || '0', 10);
+      hourNumber = isNaN(h) ? 0 : h;
+      hourStr = `${String(hourNumber).padStart(2, '0')}:00`;
+      formattedStartTime = `${dateStr} ${timePart}`;
+    } else if (sStr.includes(' ')) {
+      const parts = sStr.split(' ');
+      const timePart = parts[1] || '00:00:00';
+      const h = parseInt(timePart.split(':')[0] || '0', 10);
+      hourNumber = isNaN(h) ? 0 : h;
+      hourStr = `${String(hourNumber).padStart(2, '0')}:00`;
+      formattedStartTime = `${dateStr} ${timePart}`;
+    } else {
+      formattedStartTime = dateStr;
+    }
+  }
+
+  if (eRaw && eRaw !== '-') {
+    const eStr = String(eRaw).trim();
+    const eDate = extractDateStrFromRaw(eRaw);
+    if (eStr.includes('T')) {
+      const timePart = eStr.split('T')[1]?.slice(0, 8) || '00:00:00';
+      formattedEndTime = `${eDate} ${timePart}`;
+    } else if (eStr.includes(' ')) {
+      const timePart = eStr.split(' ')[1] || '00:00:00';
+      formattedEndTime = `${eDate} ${timePart}`;
+    } else {
+      formattedEndTime = eDate;
+    }
+  }
+
+  const sp = m.service_point || row.service_point || '-';
+  const sek = m.sektor_bca || row.sektor || '-';
+  const spSek = (sp !== '-' && sek !== '-') ? `${sp} - ${sek}` : (sp !== '-' ? sp : (sek !== '-' ? sek : '-'));
+  const dur = Math.round(Number(row.duration_minutes || row.durasi || row.durationRaw || 0));
+
+  return {
+    incidentNumber: row.ticket_no || row.incident_number || '-',
+    wsid: row.wsid,
+    lokasi: m.lokasi || row.lokasi || '-',
+    servicePoint: sp,
+    sektor: sek,
+    servicePointSektor: spSek,
+    typeMesin: m.tipe_mesin || row.type_mesin || '-',
+    vendorMesin: m.vendor || row.vendor || '-',
+    startTime: formattedStartTime,
+    endTime: formattedEndTime,
+    dateStr,
+    hourStr,
+    hourNumber,
+    durasi: isNaN(dur) ? 0 : dur,
+    rawDuration: isNaN(dur) ? 0 : dur,
+    eventCodeDesc: row.problem || row.event_code_desc || '-',
+    eventCode: row.event_code || '-',
+    detail: row.keterangan || row.detail || '-',
+    actionTerakhir: (row.action_taken && row.action_taken !== '-') ? row.action_taken : '-',
+    actionTerakhirOleh: (row.action_by && row.action_by !== '-') ? row.action_by : '-',
+    actionTerakhirWaktu: row.action_at ? new Date(row.action_at).toISOString().replace('T', ' ').slice(0, 19) : '-',
+    jumlahAction: row.action_taken ? 1 : 0,
+    closeSource: row.close_source || (formattedEndTime !== '-' ? 'OASE' : '-'),
+    monthStr: row.periode_bulan || (dateStr.length >= 10 ? `${dateStr.slice(6, 10)}-${dateStr.slice(3, 5)}` : '2026-10')
+  };
+}
+
+export function mapRowToOpenIncident(row: any, machine?: any): OpenIncidentItem {
   const m = machine || row.machines || getMachineMetadata(row.wsid) || {};
   return {
     incidentKey: row.incident_key,
@@ -1652,7 +1776,7 @@ export async function fetchDailyIncidentsFromDbSupabase(payload?: {
       if (data.length < chunkSize) break;
     }
 
-    const rows = allData.map((row: any) => mapRowToOpenIncident(row, getMachineMetadata(row.wsid)));
+    const rows = allData.map((row: any) => mapRowToDailyIncidentRow(row, getMachineMetadata(row.wsid)));
 
     return {
       success: true,

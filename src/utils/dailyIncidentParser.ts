@@ -923,8 +923,24 @@ export function aggregateByWsidProblemDate(
     const cleanW = cleanWsid(r.wsid);
     if (!cleanW) continue;
     const key = `${cleanW}__${r.eventCodeDesc}`;
-    if (r.dateStr && r.dateStr !== '-') {
-      datesSet.add(r.dateStr);
+
+    // Normalisasi tanggal agar selalu berformat DD/MM/YYYY (mendukung ISO & legacy)
+    let d = r.dateStr;
+    if (!d || d === '-' || d === 'N/A') {
+      const alt = (r as any).tanggal || r.startTime;
+      if (alt && alt !== '-') {
+        d = String(alt).trim().split(' ')[0];
+      }
+    }
+    if (d && d.includes('-') && d.split('-')[0].length === 4) {
+      const parts = d.split('T')[0].split(' ')[0].split('-');
+      if (parts.length === 3) {
+        d = `${parts[2].padStart(2, '0')}/${parts[1].padStart(2, '0')}/${parts[0]}`;
+      }
+    }
+
+    if (d && d !== '-') {
+      datesSet.add(d);
     }
 
     if (!map[key]) {
@@ -942,7 +958,6 @@ export function aggregateByWsidProblemDate(
     }
 
     const cur = map[key];
-    const d = r.dateStr;
     if (d && d !== '-') {
       cur.dateCounts[d] = (cur.dateCounts[d] || 0) + 1;
     }

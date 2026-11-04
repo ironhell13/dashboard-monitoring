@@ -241,7 +241,16 @@ END;
 $$;
 
 -- ==============================================================================
--- 12. ENABLE ROW LEVEL SECURITY (RLS) & PUBLIC ACCESS POLICIES
+-- 11b. HIGH-PERFORMANCE INDEXES UNTUK REAL-TIME & FILTER QUERY
+-- ==============================================================================
+CREATE INDEX IF NOT EXISTS idx_active_incidents_status_start ON public.active_incidents(status, start_time DESC);
+CREATE INDEX IF NOT EXISTS idx_active_incidents_wsid ON public.active_incidents(wsid);
+CREATE INDEX IF NOT EXISTS idx_incident_logs_periode_start ON public.incident_logs(periode_bulan, start_time DESC);
+CREATE INDEX IF NOT EXISTS idx_incident_logs_wsid_start ON public.incident_logs(wsid, start_time DESC);
+CREATE INDEX IF NOT EXISTS idx_incident_logs_incident_key ON public.incident_logs(incident_key);
+
+-- ==============================================================================
+-- 12. ENABLE ROW LEVEL SECURITY (RLS) & IDEMPOTENT POLICIES (CHROME & INCOGNITO)
 -- ==============================================================================
 ALTER TABLE public.app_users ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.machines ENABLE ROW LEVEL SECURITY;
@@ -253,24 +262,68 @@ ALTER TABLE public.quick_chips ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.app_config ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.upload_logs ENABLE ROW LEVEL SECURITY;
 
--- Kebijakan Akses Penuh untuk Anon Key / Frontend Dashboard
-CREATE POLICY "Public full access to app_users" ON public.app_users FOR ALL USING (true) WITH CHECK (true);
-CREATE POLICY "Public full access to machines" ON public.machines FOR ALL USING (true) WITH CHECK (true);
-CREATE POLICY "Public full access to monthly_uptime" ON public.monthly_uptime FOR ALL USING (true) WITH CHECK (true);
-CREATE POLICY "Public full access to active_incidents" ON public.active_incidents FOR ALL USING (true) WITH CHECK (true);
-CREATE POLICY "Public full access to incident_logs" ON public.incident_logs FOR ALL USING (true) WITH CHECK (true);
-CREATE POLICY "Public full access to follow_up_tickets" ON public.follow_up_tickets FOR ALL USING (true) WITH CHECK (true);
-CREATE POLICY "Public full access to quick_chips" ON public.quick_chips FOR ALL USING (true) WITH CHECK (true);
-CREATE POLICY "Public full access to app_config" ON public.app_config FOR ALL USING (true) WITH CHECK (true);
-CREATE POLICY "Public full access to upload_logs" ON public.upload_logs FOR ALL USING (true) WITH CHECK (true);
+DO $$
+BEGIN
+  -- Kebijakan Akses Penuh untuk Anon Key / Frontend Dashboard (Chrome & Incognito)
+  DROP POLICY IF EXISTS "Public full access to app_users" ON public.app_users;
+  CREATE POLICY "Public full access to app_users" ON public.app_users FOR ALL TO public USING (true) WITH CHECK (true);
+
+  DROP POLICY IF EXISTS "Public full access to machines" ON public.machines;
+  CREATE POLICY "Public full access to machines" ON public.machines FOR ALL TO public USING (true) WITH CHECK (true);
+
+  DROP POLICY IF EXISTS "Public full access to monthly_uptime" ON public.monthly_uptime;
+  CREATE POLICY "Public full access to monthly_uptime" ON public.monthly_uptime FOR ALL TO public USING (true) WITH CHECK (true);
+
+  DROP POLICY IF EXISTS "Public full access to active_incidents" ON public.active_incidents;
+  CREATE POLICY "Public full access to active_incidents" ON public.active_incidents FOR ALL TO public USING (true) WITH CHECK (true);
+
+  DROP POLICY IF EXISTS "Public full access to incident_logs" ON public.incident_logs;
+  CREATE POLICY "Public full access to incident_logs" ON public.incident_logs FOR ALL TO public USING (true) WITH CHECK (true);
+
+  DROP POLICY IF EXISTS "Public full access to follow_up_tickets" ON public.follow_up_tickets;
+  CREATE POLICY "Public full access to follow_up_tickets" ON public.follow_up_tickets FOR ALL TO public USING (true) WITH CHECK (true);
+
+  DROP POLICY IF EXISTS "Public full access to quick_chips" ON public.quick_chips;
+  CREATE POLICY "Public full access to quick_chips" ON public.quick_chips FOR ALL TO public USING (true) WITH CHECK (true);
+
+  DROP POLICY IF EXISTS "Public full access to app_config" ON public.app_config;
+  CREATE POLICY "Public full access to app_config" ON public.app_config FOR ALL TO public USING (true) WITH CHECK (true);
+
+  DROP POLICY IF EXISTS "Public full access to upload_logs" ON public.upload_logs;
+  CREATE POLICY "Public full access to upload_logs" ON public.upload_logs FOR ALL TO public USING (true) WITH CHECK (true);
+END $$;
 
 -- ==============================================================================
--- 13. ENABLE SUPABASE REALTIME REPLICATION (MULTI-PC INSTANT SYNC)
+-- 13. ENABLE SUPABASE REALTIME REPLICATION & REPLICA IDENTITY FULL
 -- ==============================================================================
-ALTER PUBLICATION supabase_realtime ADD TABLE public.app_users;
-ALTER PUBLICATION supabase_realtime ADD TABLE public.quick_chips;
-ALTER PUBLICATION supabase_realtime ADD TABLE public.active_incidents;
-ALTER PUBLICATION supabase_realtime ADD TABLE public.follow_up_tickets;
+-- REPLICA IDENTITY FULL memastikan payload.old memuat data lengkap pada event UPDATE & DELETE
+ALTER TABLE public.active_incidents REPLICA IDENTITY FULL;
+ALTER TABLE public.incident_logs REPLICA IDENTITY FULL;
+ALTER TABLE public.follow_up_tickets REPLICA IDENTITY FULL;
+
+DO $$
+BEGIN
+  BEGIN
+    ALTER PUBLICATION supabase_realtime ADD TABLE public.app_users;
+  EXCEPTION WHEN duplicate_object THEN NULL;
+  END;
+  BEGIN
+    ALTER PUBLICATION supabase_realtime ADD TABLE public.quick_chips;
+  EXCEPTION WHEN duplicate_object THEN NULL;
+  END;
+  BEGIN
+    ALTER PUBLICATION supabase_realtime ADD TABLE public.active_incidents;
+  EXCEPTION WHEN duplicate_object THEN NULL;
+  END;
+  BEGIN
+    ALTER PUBLICATION supabase_realtime ADD TABLE public.incident_logs;
+  EXCEPTION WHEN duplicate_object THEN NULL;
+  END;
+  BEGIN
+    ALTER PUBLICATION supabase_realtime ADD TABLE public.follow_up_tickets;
+  EXCEPTION WHEN duplicate_object THEN NULL;
+  END;
+END $$;
 
 -- ==============================================================================
 -- 14. INITIAL SEED: PENGGUNA DEFAULT (SUPER ADMIN, KAOPS, KAWIL, MONITORING)

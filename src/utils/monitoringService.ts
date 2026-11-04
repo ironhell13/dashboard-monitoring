@@ -10,8 +10,23 @@ import {
   fetchWsidPenangananHistorySupabase,
   searchIncidentsSupabase,
   fetchDailyIncidentsFromDbSupabase,
-  fetchUploadLogsSupabase
+  fetchUploadLogsSupabase,
+  subscribeActiveIncidentsSupabase,
+  mapRowToOpenIncident,
+  mapRowToDailyIncidentRow,
+  extractDateStrFromRaw,
+  getMachineMetadata,
+  type RealtimeIncidentPayload
 } from './supabaseService';
+
+export {
+  subscribeActiveIncidentsSupabase,
+  mapRowToOpenIncident,
+  mapRowToDailyIncidentRow,
+  extractDateStrFromRaw,
+  getMachineMetadata,
+  type RealtimeIncidentPayload
+};
 
 export interface OpenIncidentItem {
   incidentKey: string;
@@ -128,7 +143,7 @@ export const loginKaOpsApi = async (password: string): Promise<{
 export const logoutKaOpsApi = async (_token?: string): Promise<{ success: boolean }> => {
   try {
     sessionStorage.removeItem('KAOPS_TOKEN');
-  } catch (e) {}
+  } catch (e) { }
   return { success: true };
 };
 
@@ -153,7 +168,7 @@ export const loginKaWilApi = async (password: string): Promise<{
 export const logoutKaWilApi = async (_token?: string): Promise<{ success: boolean }> => {
   try {
     sessionStorage.removeItem('KAWIL_TOKEN');
-  } catch (e) {}
+  } catch (e) { }
   return { success: true };
 };
 
@@ -189,7 +204,7 @@ export const setIncidentDbIdApi = async (
 };
 
 /**
- * 3. Monitoring Problem Open
+ * 3. Monitoring Problem Open (Single Source of Truth: Supabase)
  */
 export const getOpenIncidentsApi = async (filters?: { forceSync?: boolean }): Promise<{
   success: boolean;
@@ -197,48 +212,27 @@ export const getOpenIncidentsApi = async (filters?: { forceSync?: boolean }): Pr
   totalOpen?: number;
   message?: string;
 }> => {
-  if (isSupabaseConfigured()) {
-    try {
-      const res = await fetchOpenIncidentsSupabase(filters);
-      if (res && res.success && res.incidents && res.incidents.length > 0) {
-        try {
-          localStorage.setItem(LOCAL_STORAGE_INCIDENTS, JSON.stringify(res.incidents));
-        } catch (_) {}
-        return res;
-      }
-    } catch (err: any) {
-      console.warn('Supabase getOpenIncidents failed, falling back:', err);
-    }
+  if (!isSupabaseConfigured()) {
+    return {
+      success: false,
+      incidents: [],
+      totalOpen: 0,
+      message: 'Supabase belum dikonfigurasi. Silakan atur URL dan Anon Key di menu Settings.'
+    };
   }
 
-  // Local fallback: Coba ambil dari localStorage
   try {
-    const raw = localStorage.getItem(LOCAL_STORAGE_INCIDENTS);
-    const list: OpenIncidentItem[] = raw ? JSON.parse(raw) : [];
-    const openList = list.filter((r) => r.status === 'OPEN' || !r.endTime || r.endTime === '-');
-    if (openList.length > 0) {
-      return { success: true, incidents: openList, totalOpen: openList.length };
-    }
-  } catch (e: any) {}
-
-  // Fallback ke bundled seed (/daily-incidents-seed.json) jika storage masih kosong
-  try {
-    const resp = await fetch('/daily-incidents-seed.json');
-    if (resp.ok) {
-      const seedData = await resp.json();
-      if (Array.isArray(seedData) && seedData.length > 0) {
-        const seedOpen = seedData.filter((r: any) => r.status === 'OPEN' || !r.endTime || r.endTime === '-');
-        if (seedOpen.length > 0) {
-          try {
-            localStorage.setItem(LOCAL_STORAGE_INCIDENTS, JSON.stringify(seedOpen));
-          } catch (_) {}
-          return { success: true, incidents: seedOpen, totalOpen: seedOpen.length };
-        }
-      }
-    }
-  } catch (_) {}
-
-  return { success: true, incidents: [], totalOpen: 0 };
+    const res = await fetchOpenIncidentsSupabase(filters);
+    return res;
+  } catch (err: any) {
+    console.error('Supabase getOpenIncidents failed:', err);
+    return {
+      success: false,
+      incidents: [],
+      totalOpen: 0,
+      message: err.message || 'Gagal memuat insiden aktif dari Supabase.'
+    };
+  }
 };
 
 /**
@@ -252,24 +246,13 @@ export const getIncidentHistoryApi = async (
   history: IncidentHistoryItem[];
   message?: string;
 }> => {
-  if (isSupabaseConfigured()) {
-    try {
-      const res = await fetchIncidentHistorySupabase(incidentKey, monthStr);
-      if (res && res.success && res.history && res.history.length > 0) {
-        return res;
-      }
-    } catch (err: any) {
-      console.warn('Supabase getIncidentHistory failed, falling back:', err);
-    }
+  if (!isSupabaseConfigured()) {
+    return { success: false, history: [], message: 'Supabase belum dikonfigurasi.' };
   }
-
   try {
-    const raw = localStorage.getItem(LOCAL_STORAGE_ACTIONS);
-    const list: IncidentHistoryItem[] = raw ? JSON.parse(raw) : [];
-    const filtered = list.filter((a) => a.incidentKey === incidentKey);
-    return { success: true, history: filtered };
-  } catch (e: any) {
-    return { success: false, history: [], message: e.message };
+    return await fetchIncidentHistorySupabase(incidentKey, monthStr);
+  } catch (err: any) {
+    return { success: false, history: [], message: err.message };
   }
 };
 
@@ -286,92 +269,13 @@ export const saveIncidentActionApi = async (payload: {
   message?: string;
   action?: any;
 }> => {
-  if (isSupabaseConfigured()) {
-    try {
-      const res = await saveIncidentActionSupabase(payload);
-      if (res && res.success) {
-        // Sync local cache
-        try {
-          const raw = localStorage.getItem(LOCAL_STORAGE_ACTIONS);
-          const list: IncidentHistoryItem[] = raw ? JSON.parse(raw) : [];
-          const kategori = payload.kategori || 'UPDATE';
-          const formattedAction = payload.isiAction.startsWith('[') ? payload.isiAction : `[${kategori}] ${payload.isiAction}`;
-          const newAction: IncidentHistoryItem = {
-            logId: 'ACT_' + Date.now(),
-            waktu: new Date().toISOString().replace('T', ' ').slice(0, 19),
-            incidentKey: payload.incidentKey,
-            wsid: payload.wsid,
-            eventCodeDesc: payload.eventCodeDesc,
-            tipe: kategori,
-            isiAction: payload.isiAction,
-            namaPetugas: payload.namaPetugas,
-            statusSebelum: 'OPEN',
-            statusSesudah: 'OPEN',
-            catatan: '-'
-          };
-          list.unshift(newAction);
-          localStorage.setItem(LOCAL_STORAGE_ACTIONS, JSON.stringify(list));
-
-          const rawInc = localStorage.getItem(LOCAL_STORAGE_INCIDENTS);
-          if (rawInc) {
-            const incList: OpenIncidentItem[] = JSON.parse(rawInc);
-            const found = incList.find((r) => r.incidentKey === payload.incidentKey);
-            if (found) {
-              found.actionTerakhir = formattedAction;
-              found.actionTerakhirOleh = payload.namaPetugas;
-              found.actionTerakhirWaktu = newAction.waktu;
-              found.jumlahAction = (found.jumlahAction || 0) + 1;
-              localStorage.setItem(LOCAL_STORAGE_INCIDENTS, JSON.stringify(incList));
-            }
-          }
-        } catch (_) {}
-
-        return res;
-      }
-    } catch (err: any) {
-      console.warn('Supabase saveIncidentAction failed, falling back:', err);
-    }
+  if (!isSupabaseConfigured()) {
+    return { success: false, message: 'Supabase belum dikonfigurasi.' };
   }
-
   try {
-    const raw = localStorage.getItem(LOCAL_STORAGE_ACTIONS);
-    const list: IncidentHistoryItem[] = raw ? JSON.parse(raw) : [];
-    const kategori = payload.kategori || 'UPDATE';
-    const formattedAction = payload.isiAction.startsWith('[') ? payload.isiAction : `[${kategori}] ${payload.isiAction}`;
-
-    const newAction: IncidentHistoryItem = {
-      logId: 'ACT_' + Date.now(),
-      waktu: new Date().toISOString().replace('T', ' ').slice(0, 19),
-      incidentKey: payload.incidentKey,
-      wsid: payload.wsid,
-      eventCodeDesc: payload.eventCodeDesc,
-      tipe: kategori,
-      isiAction: payload.isiAction,
-      namaPetugas: payload.namaPetugas,
-      statusSebelum: 'OPEN',
-      statusSesudah: 'OPEN',
-      catatan: '-'
-    };
-    list.unshift(newAction);
-    localStorage.setItem(LOCAL_STORAGE_ACTIONS, JSON.stringify(list));
-
-    // Update incident in local
-    const rawInc = localStorage.getItem(LOCAL_STORAGE_INCIDENTS);
-    if (rawInc) {
-      const incList: OpenIncidentItem[] = JSON.parse(rawInc);
-      const found = incList.find((r) => r.incidentKey === payload.incidentKey);
-      if (found) {
-        found.actionTerakhir = formattedAction;
-        found.actionTerakhirOleh = payload.namaPetugas;
-        found.actionTerakhirWaktu = newAction.waktu;
-        found.jumlahAction = (found.jumlahAction || 0) + 1;
-        localStorage.setItem(LOCAL_STORAGE_INCIDENTS, JSON.stringify(incList));
-      }
-    }
-
-    return { success: true, message: 'Action berhasil disimpan (Local).' };
-  } catch (e: any) {
-    return { success: false, message: e.message };
+    return await saveIncidentActionSupabase(payload);
+  } catch (err: any) {
+    return { success: false, message: err.message };
   }
 };
 
@@ -385,83 +289,26 @@ export const bulkSaveIncidentActionApi = async (payload: {
   updatedCount?: number;
   message?: string;
 }> => {
-  if (isSupabaseConfigured()) {
-    try {
-      const incidentKeys = payload.items.map((it) => it.incidentKey);
-      const res = await bulkSaveIncidentActionSupabase({
-        incidentKeys,
-        items: payload.items,
-        monthStr: payload.items[0]?.monthStr || '',
-        isiAction: payload.isiAction,
-        namaPetugas: payload.namaPetugas,
-        kategori: payload.kategori
-      });
-      if (res && res.success) {
-        // Sync local cache
-        try {
-          const nowWib = new Date().toISOString().replace('T', ' ').slice(0, 19);
-          const raw = localStorage.getItem(LOCAL_STORAGE_ACTIONS);
-          const list: IncidentHistoryItem[] = raw ? JSON.parse(raw) : [];
-          const kategori = payload.kategori || 'UPDATE';
-          payload.items.forEach((it, idx) => {
-            list.unshift({
-              logId: 'BULK_' + Date.now() + '_' + idx,
-              waktu: nowWib,
-              incidentKey: it.incidentKey,
-              wsid: it.wsid,
-              eventCodeDesc: it.eventCodeDesc,
-              tipe: kategori,
-              isiAction: payload.isiAction,
-              namaPetugas: payload.namaPetugas,
-              statusSebelum: 'OPEN',
-              statusSesudah: 'OPEN',
-              catatan: '-'
-            });
-          });
-          localStorage.setItem(LOCAL_STORAGE_ACTIONS, JSON.stringify(list));
-        } catch (_) {}
-
-        return {
-          success: true,
-          updatedCount: res.count || payload.items.length,
-          message: res.message
-        };
-      }
-    } catch (err: any) {
-      console.warn('Supabase bulkSaveIncidentAction failed, falling back:', err);
-    }
+  if (!isSupabaseConfigured()) {
+    return { success: false, message: 'Supabase belum dikonfigurasi.' };
   }
-
   try {
-    const nowWib = new Date().toISOString().replace('T', ' ').slice(0, 19);
-    const raw = localStorage.getItem(LOCAL_STORAGE_ACTIONS);
-    const list: IncidentHistoryItem[] = raw ? JSON.parse(raw) : [];
-    const kategori = payload.kategori || 'UPDATE';
-
-    payload.items.forEach((it, idx) => {
-      list.unshift({
-        logId: 'BULK_' + Date.now() + '_' + idx,
-        waktu: nowWib,
-        incidentKey: it.incidentKey,
-        wsid: it.wsid,
-        eventCodeDesc: it.eventCodeDesc,
-        tipe: kategori,
-        isiAction: payload.isiAction,
-        namaPetugas: payload.namaPetugas,
-        statusSebelum: 'OPEN',
-        statusSesudah: 'OPEN',
-        catatan: '-'
-      });
+    const incidentKeys = payload.items.map((it) => it.incidentKey);
+    const res = await bulkSaveIncidentActionSupabase({
+      incidentKeys,
+      items: payload.items,
+      monthStr: payload.items[0]?.monthStr || '',
+      isiAction: payload.isiAction,
+      namaPetugas: payload.namaPetugas,
+      kategori: payload.kategori
     });
-    localStorage.setItem(LOCAL_STORAGE_ACTIONS, JSON.stringify(list));
-
     return {
-      success: true,
-      updatedCount: payload.items.length,
-      message: `Berhasil update ${payload.items.length} insiden (Local).`
+      success: res.success,
+      updatedCount: res.count || payload.items.length,
+      message: res.message
     };
-  } catch (e: any) {
-    return { success: false, message: e.message };
+  } catch (err: any) {
+    return { success: false, message: err.message };
   }
 };
 
@@ -476,25 +323,13 @@ export const getWsidPenangananHistoryApi = async (
   history: IncidentHistoryItem[];
   message?: string;
 }> => {
-  if (isSupabaseConfigured()) {
-    try {
-      const res = await fetchWsidPenangananHistorySupabase(wsid, monthStr);
-      if (res && res.success && res.history && res.history.length > 0) {
-        return res;
-      }
-    } catch (err: any) {
-      console.warn('Supabase getWsidPenangananHistory failed, falling back:', err);
-    }
+  if (!isSupabaseConfigured()) {
+    return { success: false, history: [], message: 'Supabase belum dikonfigurasi.' };
   }
-
   try {
-    const raw = localStorage.getItem(LOCAL_STORAGE_ACTIONS);
-    const list: IncidentHistoryItem[] = raw ? JSON.parse(raw) : [];
-    const targetWsid = wsid.trim().toUpperCase();
-    const filtered = list.filter((a) => (a.wsid || '').trim().toUpperCase() === targetWsid);
-    return { success: true, history: filtered };
-  } catch (e: any) {
-    return { success: false, history: [], message: e.message };
+    return await fetchWsidPenangananHistorySupabase(wsid, monthStr);
+  } catch (err: any) {
+    return { success: false, history: [], message: err.message };
   }
 };
 
@@ -512,49 +347,24 @@ export const searchIncidentsApi = async (filters: {
   totalCount?: number;
   message?: string;
 }> => {
-  if (isSupabaseConfigured()) {
-    try {
-      const res = await searchIncidentsSupabase(filters);
-      if (res && res.success && res.incidents && res.incidents.length > 0) {
-        return {
-          success: true,
-          incidents: res.incidents,
-          totalCount: res.totalCount
-        };
-      }
-    } catch (err: any) {
-      console.warn('Supabase searchIncidents failed, falling back:', err);
-    }
+  if (!isSupabaseConfigured()) {
+    return { success: false, incidents: [], message: 'Supabase belum dikonfigurasi.' };
   }
-
   try {
-    const raw = localStorage.getItem(LOCAL_STORAGE_INCIDENTS);
-    let list: OpenIncidentItem[] = raw ? JSON.parse(raw) : [];
-
-    if (filters.status && filters.status !== 'ALL') {
-      list = list.filter((r) => r.status === filters.status);
-    }
-    if (filters.eventCodeDesc && filters.eventCodeDesc !== 'ALL') {
-      list = list.filter((r) => r.eventCodeDesc === filters.eventCodeDesc);
-    }
-    if (filters.query) {
-      const q = filters.query.toLowerCase();
-      list = list.filter(
-        (r) =>
-          r.wsid.toLowerCase().includes(q) ||
-          r.lokasi.toLowerCase().includes(q) ||
-          r.eventCodeDesc.toLowerCase().includes(q)
-      );
-    }
-
-    return { success: true, incidents: list, totalCount: list.length };
-  } catch (e: any) {
-    return { success: false, incidents: [], message: e.message };
+    const res = await searchIncidentsSupabase(filters);
+    return {
+      success: res.success,
+      incidents: res.incidents,
+      totalCount: res.totalCount,
+      message: res.message
+    };
+  } catch (err: any) {
+    return { success: false, incidents: [], message: err.message };
   }
 };
 
 /**
- * 6. Upload CSV Chunks ke Database
+ * 6. Upload CSV Chunks ke Database (Supabase)
  */
 export const uploadIncidentChunkApi = async (payload: {
   uploaderName: string;
@@ -576,84 +386,13 @@ export const uploadIncidentChunkApi = async (payload: {
   };
   message?: string;
 }> => {
-  if (isSupabaseConfigured()) {
-    try {
-      const res = await uploadIncidentsToSupabase(payload);
-      if (res && res.success) {
-        return res;
-      }
-    } catch (err: any) {
-      console.error('Supabase uploadIncidentChunk failed:', err);
-    }
+  if (!isSupabaseConfigured()) {
+    return { success: false, message: 'Supabase belum dikonfigurasi.' };
   }
-
-  // Local fallback
   try {
-    const raw = localStorage.getItem(LOCAL_STORAGE_INCIDENTS);
-    const existing: OpenIncidentItem[] = raw ? JSON.parse(raw) : [];
-    const map = new Map<string, OpenIncidentItem>();
-    existing.forEach((r) => map.set(r.incidentKey, r));
-
-    let newCount = 0;
-    let updatedCount = 0;
-    let unchangedCount = 0;
-
-    payload.rows.forEach((r) => {
-      const key = r.incidentNumber || `${r.wsid}|${r.eventCodeDesc}|${r.startTime}`;
-      if (!map.has(key)) {
-        map.set(key, {
-          incidentKey: key,
-          incidentNumber: r.incidentNumber || '-',
-          wsid: r.wsid,
-          lokasi: r.lokasi || '-',
-          servicePoint: r.servicePoint || '-',
-          sektor: r.sektor || '-',
-          typeMesin: r.typeMesin || '-',
-          vendor: r.vendorMesin || '-',
-          eventCode: r.eventCode || '-',
-          eventCodeDesc: r.eventCodeDesc,
-          detail: r.detail || '-',
-          startTime: r.startTime,
-          endTime: r.endTime || '-',
-          tanggal: r.dateStr || '-',
-          jam: r.hourStr || '00:00',
-          durationRaw: r.rawDuration || 0,
-          durasiOpr: r.durasi || 0,
-          status: r.endTime && r.endTime !== '-' ? 'CLOSED' : 'OPEN',
-          actionTerakhir: '-',
-          actionTerakhirOleh: '-',
-          actionTerakhirWaktu: '-',
-          jumlahAction: 0,
-          monthStr: '2026-10'
-        });
-        newCount++;
-      } else {
-        const item = map.get(key)!;
-        if (r.endTime && r.endTime !== '-' && item.endTime === '-') {
-          item.endTime = r.endTime;
-          item.status = 'CLOSED';
-          updatedCount++;
-        } else {
-          unchangedCount++;
-        }
-      }
-    });
-
-    localStorage.setItem(LOCAL_STORAGE_INCIDENTS, JSON.stringify(Array.from(map.values())));
-
-    return {
-      success: true,
-      stats: {
-        totalLines: payload.totalCsvLines,
-        matched: payload.rows.length,
-        newCount,
-        updatedCount,
-        unchangedCount,
-        skippedCount: payload.totalCsvLines - payload.rows.length
-      }
-    };
-  } catch (e: any) {
-    return { success: false, message: e.message };
+    return await uploadIncidentsToSupabase(payload);
+  } catch (err: any) {
+    return { success: false, message: err.message };
   }
 };
 
@@ -665,28 +404,18 @@ export const getUploadLogApi = async (): Promise<{
   logs: UploadLogItem[];
   message?: string;
 }> => {
-  if (isSupabaseConfigured()) {
-    try {
-      const res = await fetchUploadLogsSupabase();
-      if (res && res.success && res.logs && res.logs.length > 0) {
-        return { success: true, logs: res.logs };
-      }
-    } catch (err: any) {
-      console.warn('Supabase getUploadLog failed, falling back:', err);
-    }
+  if (!isSupabaseConfigured()) {
+    return { success: false, logs: [], message: 'Supabase belum dikonfigurasi.' };
   }
-
   try {
-    const raw = localStorage.getItem(LOCAL_STORAGE_UPLOAD_LOGS);
-    const list: UploadLogItem[] = raw ? JSON.parse(raw) : [];
-    return { success: true, logs: list };
-  } catch (e: any) {
-    return { success: false, logs: [], message: e.message };
+    return await fetchUploadLogsSupabase();
+  } catch (err: any) {
+    return { success: false, logs: [], message: err.message };
   }
 };
 
 /**
- * 8. Ka Ops Cek Daily - Read from Database
+ * 8. Ka Ops Cek Daily - Read from Database Supabase
  */
 export const getDailyIncidentsFromDbApi = async (payload?: {
   token?: string;
@@ -703,96 +432,43 @@ export const getDailyIncidentsFromDbApi = async (payload?: {
   availableMonths?: string[];
   message?: string;
 }> => {
-  if (isSupabaseConfigured()) {
-    try {
-      const res = await fetchDailyIncidentsFromDbSupabase(payload);
-      if (res && res.success && res.rows && res.rows.length > 0) {
-        return {
-          success: true,
-          rows: res.rows,
-          totalCount: res.totalCount,
-          lastUploadInfo: {
-            waktu: new Date().toISOString().replace('T', ' ').slice(0, 19),
-            uploader: 'Supabase Cloud DB',
-            sumber: 'PostgreSQL',
-            namaFile: 'incident_logs'
-          }
-        };
-      }
-    } catch (err: any) {
-      console.warn('Supabase getDailyIncidentsFromDb failed, falling back:', err);
-    }
+  if (!isSupabaseConfigured()) {
+    return {
+      success: false,
+      rows: [],
+      totalCount: 0,
+      message: 'Supabase belum dikonfigurasi.'
+    };
   }
 
-  // Fallback 1: LocalStorage MONITORING_ACTIVE_DATASET
   try {
-    const rawActive = localStorage.getItem('MONITORING_ACTIVE_DATASET');
-    if (rawActive) {
-      try {
-        const parsed = JSON.parse(rawActive);
-        if (Array.isArray(parsed) && parsed.length > 0) {
-          return {
-            success: true,
-            rows: parsed,
-            totalCount: parsed.length,
-            lastUploadInfo: {
-              waktu: new Date().toISOString().replace('T', ' ').slice(0, 19),
-              uploader: 'Ka Ops',
-              sumber: 'Monitoring Dataset',
-              namaFile: 'Active_Incidents.csv'
-            }
-          };
+    const res = await fetchDailyIncidentsFromDbSupabase(payload);
+    if (res && res.success) {
+      return {
+        success: true,
+        rows: res.rows || [],
+        totalCount: res.totalCount || 0,
+        lastUploadInfo: {
+          waktu: new Date().toISOString().replace('T', ' ').slice(0, 19),
+          uploader: 'Supabase Cloud DB',
+          sumber: 'PostgreSQL',
+          namaFile: 'incident_logs'
         }
-      } catch (e) {}
+      };
     }
-  } catch (_) {}
-
-  // Fallback 2: Bundled seed (/daily-incidents-seed.json) dari Edge CDN (Instan < 50ms)
-  try {
-    const resp = await fetch('/daily-incidents-seed.json');
-    if (resp.ok) {
-      const seedData = await resp.json();
-      if (Array.isArray(seedData) && seedData.length > 0) {
-        try {
-          localStorage.setItem('MONITORING_ACTIVE_DATASET', JSON.stringify(seedData));
-        } catch (_) {}
-        return {
-          success: true,
-          rows: seedData,
-          totalCount: seedData.length,
-          lastUploadInfo: {
-            waktu: new Date().toISOString().replace('T', ' ').slice(0, 19),
-            uploader: 'Sistem (Seed Dataset)',
-            sumber: 'OASE Daily Dataset',
-            namaFile: 'Report_Incident_Seed.csv'
-          }
-        };
-      }
-    }
-  } catch (_) {}
-
-  // Fallback 3: LOCAL_STORAGE_INCIDENTS
-  try {
-    const raw = localStorage.getItem(LOCAL_STORAGE_INCIDENTS);
-    const list: OpenIncidentItem[] = raw ? JSON.parse(raw) : [];
     return {
-      success: true,
-      rows: list.map((r) => ({
-        ...r,
-        vendorMesin: r.vendor,
-        dateStr: r.tanggal,
-        hourStr: r.jam,
-        durasi: r.durasiOpr
-      })),
-      totalCount: list.length,
-      lastUploadInfo: {
-        waktu: new Date().toISOString().replace('T', ' ').slice(0, 19),
-        uploader: 'Ka Ops',
-        sumber: 'Monitoring',
-        namaFile: 'Report_Incident.csv'
-      }
+      success: false,
+      rows: [],
+      totalCount: 0,
+      message: res.message || 'Gagal memuat riwayat harian dari Supabase.'
     };
-  } catch (e: any) {
-    return { success: false, rows: [], message: e.message };
+  } catch (err: any) {
+    console.error('Supabase getDailyIncidentsFromDb failed:', err);
+    return {
+      success: false,
+      rows: [],
+      totalCount: 0,
+      message: err.message || 'Gagal memuat insiden dari Supabase.'
+    };
   }
 };

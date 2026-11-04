@@ -110,19 +110,17 @@ import {
   type DailyIncidentRow,
   type WsidProblemDateAggregation
 } from '../utils/dailyIncidentParser';
-import {
-  saveActiveIncidentDataset,
-  loadActiveIncidentDataset,
-  saveLocalAction,
-  loadLocalActions,
-  saveMonitoringSnapshot,
-  loadMonitoringSnapshot
-} from '../utils/dbCache';
+import { loadLocalActions } from '../utils/dbCache';
 import { useDataStore } from '../store/useDataStore';
 import FollowUpPage from './FollowUpPage';
 import { useQuickChips } from '../utils/quickChipsService';
 import { isSupabaseConfigured } from '../utils/supabaseClient';
-import { subscribeActiveIncidentsSupabase } from '../utils/supabaseService';
+import {
+  subscribeActiveIncidentsSupabase,
+  mapRowToOpenIncident,
+  getMachineMetadata,
+  type RealtimeIncidentPayload
+} from '../utils/supabaseService';
 
 interface MonitoringPageProps {
   onLogout?: () => void;
@@ -132,8 +130,6 @@ interface MonitoringPageProps {
 
 export type MonitoringTab = 'OPEN' | 'FREKUENSI' | 'GRAFIK_FREKUENSI' | 'GRAFIK_24JAM' | 'TIKET' | 'HISTORY' | 'UPLOAD';
 
-const LOCAL_STORAGE_ACTIVE_DATA = 'MONITORING_ACTIVE_DATASET';
-const LOCAL_STORAGE_OPEN_CACHE = 'MONITORING_OPEN_CACHE';
 const LOCAL_STORAGE_PETUGAS = 'MONITORING_PETUGAS_NAME';
 const LOCAL_STORAGE_ACTIONS = 'MONITORING_LOCAL_ACTIONS';
 
@@ -542,8 +538,8 @@ export function enrichOpenWithDailyData(
 
       // Cari enrichment data dari dailyRows jika tersedia
       const d = (itemKey1 ? dailyByIncNum.get(itemKey1) : undefined) ||
-                (item.incidentKey ? dailyByKey.get(item.incidentKey) : undefined) ||
-                dailyByWsidEv.get(itemKey3);
+        (item.incidentKey ? dailyByKey.get(item.incidentKey) : undefined) ||
+        dailyByWsidEv.get(itemKey3);
 
       if (d) {
         const sTime = formatStartProblemTime(d.startTime) !== '-' ? formatStartProblemTime(d.startTime) : (formatStartProblemTime(item.startTime) !== '-' ? formatStartProblemTime(item.startTime) : getDisplayStartTime(item));
@@ -792,7 +788,7 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
     try {
       const saved = sessionStorage.getItem('USER_ROLE');
       if (saved === 'KAWIL' || saved === 'KAOPS' || saved === 'MONITORING') return saved;
-    } catch (e) {}
+    } catch (e) { }
     return isKaOps ? 'KAOPS' : 'MONITORING';
   }, [userRole, isKaOps]);
 
@@ -817,7 +813,7 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
     try {
       const saved = localStorage.getItem(LOCAL_STORAGE_PETUGAS);
       if (saved) return saved;
-    } catch (e) {}
+    } catch (e) { }
     if (effectiveRole === 'KAWIL') return 'Ka Wil';
     if (effectiveRole === 'KAOPS') return 'Ka Ops';
     return '';
@@ -844,29 +840,15 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
   const [countdownSeconds, setCountdownSeconds] = useState(15);
   const [currentLiveTime, setCurrentLiveTime] = useState<Date>(() => new Date());
 
-  const [allDailyIncidents, setAllDailyIncidents] = useState<DailyIncidentRow[]>(() => {
-    try {
-      const raw = localStorage.getItem(LOCAL_STORAGE_ACTIVE_DATA);
-      return raw ? JSON.parse(raw) : [];
-    } catch (e) {
-      return [];
-    }
-  });
+  const [allDailyIncidents, setAllDailyIncidents] = useState<DailyIncidentRow[]>([]);
 
   const [syncStatusBanner, setSyncStatusBanner] = useState<{
     type: 'syncing' | 'success' | 'error';
     text: string;
   } | null>(null);
 
-  // 3. Tab 1: Problem Open State
-  const [openIncidents, setOpenIncidents] = useState<OpenIncidentItem[]>(() => {
-    try {
-      const raw = localStorage.getItem(LOCAL_STORAGE_OPEN_CACHE);
-      return raw ? JSON.parse(raw) : [];
-    } catch (e) {
-      return [];
-    }
-  });
+  // 3. Tab 1: Problem Open State (Single Source of Truth: Supabase Cloud DB)
+  const [openIncidents, setOpenIncidents] = useState<OpenIncidentItem[]>([]);
   const [isLoadingOpen, setIsLoadingOpen] = useState(false);
   const [openCardFilter, setOpenCardFilter] = useState<
     'ALL' | 'OVER_60' | 'OVER_180' | 'CHRONIC' | 'CHRONIC_3X_SEHARI' | 'CHRONIC_3X_5HARI' | 'NO_ACTION'
@@ -1056,7 +1038,7 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
     setPetugasName(name);
     try {
       localStorage.setItem(LOCAL_STORAGE_PETUGAS, name);
-    } catch (e) {}
+    } catch (e) { }
   };
 
   const openDutyModal = () => {
@@ -1131,23 +1113,13 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
       });
   };
 
-  // Simpan cache lokal open incidents
-  useEffect(() => {
-    if (openIncidents.length > 0) {
-      try {
-        localStorage.setItem(LOCAL_STORAGE_OPEN_CACHE, JSON.stringify(openIncidents.slice(0, 300)));
-      } catch (e) {}
-    }
-  }, [openIncidents]);
-
-  // Tarik dataset lengkap insiden bulanan (100+ insiden) dari database spreadsheet
+  // Tarik dataset lengkap insiden bulanan (100+ insiden) dari Supabase Cloud DB
   const fetchDailyIncidentsFromDb = async (month: string = 'ALL') => {
     setIsLoadingDailyFromDb(true);
     try {
       const res = await getDailyIncidentsFromDbApi({ monthStr: month });
       if (res.success && res.rows && res.rows.length > 0) {
         setAllDailyIncidents(res.rows);
-        saveActiveIncidentDataset(res.rows);
 
         // Langsung perbarui cache riwayat problem bulanan
         const mappedHistory = res.rows.map((r) => {
@@ -1207,20 +1179,12 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
         // Langsung perbaiki Problem Open dengan data tanggal & jam asli dari database
         setOpenIncidents((prev) => {
           let enriched = enrichOpenWithDailyData(prev, res.rows);
-          // Safety Net: Jika enriched kosong tetapi ada baris di database yang belum ada End Time,
-          // ekstrak langsung agar tidak ada open problem yang terlewat
           if (enriched.length === 0 && res.rows.length > 0) {
             const fallbackExtracted = extractOpenFromRows(res.rows);
             if (fallbackExtracted.length > 0) {
               enriched = fallbackExtracted;
             }
           }
-          saveMonitoringSnapshot({
-            openIncidents: enriched,
-            allDailyIncidents: res.rows,
-            historyResults: mappedHistory,
-            lastSyncTime: Date.now()
-          });
           return enriched;
         });
 
@@ -1230,38 +1194,13 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
         });
         setTimeout(() => setSyncStatusBanner(null), 4000);
       } else if (!res.success) {
-        // Fallback cerdas: Coba pulihkan data dari IndexedDB snapshot
-        const cached = await loadActiveIncidentDataset();
-        if (cached && cached.length > 0) {
-          setAllDailyIncidents(cached);
-          setSyncStatusBanner({
-            type: 'warning',
-            text: `Server database sedang memproses data besar. Menggunakan data offline lokal (${cached.length.toLocaleString()} insiden).`
-          });
-          setTimeout(() => setSyncStatusBanner(null), 6000);
-        } else {
-          setSyncStatusBanner({
-            type: 'error',
-            text: `Sinkronisasi database gagal: ${res.message || 'Koneksi database terputus'}`
-          });
-        }
+        setSyncStatusBanner({
+          type: 'error',
+          text: `Sinkronisasi database gagal: ${res.message || 'Koneksi database terputus'}`
+        });
       }
     } catch (err: any) {
       console.warn('Gagal memuat daily incidents dari DB:', err);
-      // Fallback cerdas saat timeout atau koneksi lambat
-      try {
-        const cached = await loadActiveIncidentDataset();
-        if (cached && cached.length > 0) {
-          setAllDailyIncidents(cached);
-          setSyncStatusBanner({
-            type: 'warning',
-            text: `Koneksi database lambat. Menggunakan data offline lokal (${cached.length.toLocaleString()} insiden).`
-          });
-          setTimeout(() => setSyncStatusBanner(null), 6000);
-          return;
-        }
-      } catch (ce) {}
-
       setSyncStatusBanner({
         type: 'error',
         text: `Koneksi database terganggu: ${err?.message || String(err)}`
@@ -1301,73 +1240,13 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
     }
   };
 
-  // Muat dataset insiden aktif dari IndexedDB di awal (< 15ms)
-  useEffect(() => {
-    let isMounted = true;
-    async function loadCache() {
-      let hasDailyData = false;
-      try {
-        const snap = await loadMonitoringSnapshot();
-        if (isMounted && snap) {
-          const daily = snap.allDailyIncidents || [];
-          if (daily.length > 0) {
-            setAllDailyIncidents(daily);
-            hasDailyData = true;
-          }
-          if (snap.openIncidents && snap.openIncidents.length > 0) {
-            const enriched = daily.length > 0 ? enrichOpenWithDailyData(snap.openIncidents, daily) : snap.openIncidents;
-            setOpenIncidents(enriched);
-          } else if (daily.length > 0) {
-            setOpenIncidents(extractOpenFromRows(daily));
-          }
-          if (snap.historyResults && snap.historyResults.length > 0) {
-            setHistoryResults(snap.historyResults);
-            historyCacheRef.current[historyMonth] = snap.historyResults;
-          }
-        }
-      } catch (e) {}
-
-      if (!hasDailyData) {
-        try {
-          const cachedRows = await loadActiveIncidentDataset();
-          if (isMounted && cachedRows && cachedRows.length > 0) {
-            setAllDailyIncidents(cachedRows);
-            hasDailyData = true;
-            setOpenIncidents((prev) => (prev.length > 0 ? enrichOpenWithDailyData(prev, cachedRows) : extractOpenFromRows(cachedRows)));
-          }
-        } catch (e) {}
-      }
-
-      if (!hasDailyData) {
-        try {
-          const raw = localStorage.getItem(LOCAL_STORAGE_ACTIVE_DATA);
-          if (raw) {
-            const parsed = JSON.parse(raw);
-            if (isMounted && parsed && parsed.length > 0) {
-              setAllDailyIncidents((prev) => (prev.length > 0 ? prev : parsed));
-              hasDailyData = true;
-              setOpenIncidents((prev) => (prev.length > 0 ? enrichOpenWithDailyData(prev, parsed) : extractOpenFromRows(parsed)));
-            }
-          }
-        } catch (e) {}
-      }
-
-      // Hanya tarik otomatis dari database jika di cache lokal belum ada data sama sekali
-      if (!hasDailyData) {
-        fetchDailyIncidentsFromDb('ALL');
-      }
-    }
-
-    loadCache();
-  }, []);
-
   // Tarik update terbaru di latar belakang (non-blocking)
   const fetchOpenIncidents = async (forceSync = false) => {
     setIsLoadingOpen(true);
     try {
       const res = await getOpenIncidentsApi({ forceSync });
       const rawServerIncidents = (res && res.success && Array.isArray(res.incidents)) ? res.incidents : [];
-      
+
       const cleanIncidents: OpenIncidentItem[] = rawServerIncidents
         .filter((it) => !isEndTimeFilled(it.endTime))
         .map((it) => {
@@ -1412,34 +1291,97 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
           }
         }
 
-        try {
-          localStorage.setItem(LOCAL_STORAGE_OPEN_CACHE, JSON.stringify(finalEnriched.slice(0, 300)));
-        } catch (e) {}
-
         return finalEnriched;
       });
     } catch (err) {
-      console.warn('Gagal memuat open incidents dari server, memakai data lokal:', err);
+      console.warn('Gagal memuat open incidents dari server:', err);
     } finally {
       setIsLoadingOpen(false);
       setCountdownSeconds(15);
     }
   };
 
+  // Muat data awal langsung dari database Supabase
   useEffect(() => {
     fetchOpenIncidents(true);
+    fetchDailyIncidentsFromDb('ALL');
   }, []);
 
-  // Supabase Realtime Listener untuk sinkronisasi multi-device instan antar PC
+  // Supabase Realtime Delta Listener untuk sinkronisasi multi-device instan antar PC (0ms)
   useEffect(() => {
-    if (isSupabaseConfigured()) {
-      const unsubscribe = subscribeActiveIncidentsSupabase(() => {
-        fetchOpenIncidents(true);
-      });
-      return () => {
-        unsubscribe();
-      };
-    }
+    if (!isSupabaseConfigured()) return;
+
+    const unsubscribe = subscribeActiveIncidentsSupabase((payload: RealtimeIncidentPayload) => {
+      const { eventType, new: newRow, old: oldRow } = payload;
+
+      if (eventType === 'INSERT') {
+        if (!newRow || newRow.status !== 'OPEN' || isEndTimeFilled(newRow.end_time)) return;
+        const newItem = mapRowToOpenIncident(newRow, getMachineMetadata(newRow.wsid));
+        setOpenIncidents((prev) => {
+          const exists = prev.some((it) => it.incidentKey === newItem.incidentKey || (it.wsid === newItem.wsid && it.incidentNumber === newItem.incidentNumber));
+          if (exists) {
+            return prev.map((it) => (it.incidentKey === newItem.incidentKey || (it.wsid === newItem.wsid && it.incidentNumber === newItem.incidentNumber)) ? newItem : it);
+          }
+          return [newItem, ...prev];
+        });
+      } else if (eventType === 'UPDATE') {
+        if (!newRow) return;
+        const isClosed = newRow.status === 'CLOSED' || isEndTimeFilled(newRow.end_time);
+
+        if (isClosed) {
+          // Jika status CLOSED atau end_time terisi, keluarkan dari list Problem Open
+          setOpenIncidents((prev) =>
+            prev.filter(
+              (it) =>
+                it.incidentKey !== newRow.incident_key &&
+                (it as any).id !== newRow.id &&
+                !(newRow.ticket_no && it.incidentNumber === newRow.ticket_no)
+            )
+          );
+        } else {
+          // Perbarui item in-place jika status masih OPEN
+          const updatedItem = mapRowToOpenIncident(newRow, getMachineMetadata(newRow.wsid));
+          setOpenIncidents((prev) =>
+            prev.map((it) => {
+              const isMatch =
+                it.incidentKey === newRow.incident_key ||
+                (it as any).id === newRow.id ||
+                (newRow.ticket_no && newRow.ticket_no !== '-' && it.incidentNumber === newRow.ticket_no);
+              return isMatch ? { ...it, ...updatedItem } : it;
+            })
+          );
+        }
+
+        // Jika modal detail sedang terbuka pada insiden ini, sinkronkan real-time
+        setActiveIncidentDetail((cur) => {
+          if (!cur) return null;
+          const isMatch =
+            cur.incidentKey === newRow.incident_key ||
+            (newRow.ticket_no && newRow.ticket_no !== '-' && cur.incidentNumber === newRow.ticket_no);
+          if (isMatch) {
+            const mapped = mapRowToOpenIncident(newRow, getMachineMetadata(newRow.wsid));
+            return { ...cur, ...mapped };
+          }
+          return cur;
+        });
+      } else if (eventType === 'DELETE') {
+        const targetKey = oldRow?.incident_key;
+        const targetId = oldRow?.id;
+        const targetTicket = oldRow?.ticket_no;
+        setOpenIncidents((prev) =>
+          prev.filter(
+            (it) =>
+              it.incidentKey !== targetKey &&
+              (it as any).id !== targetId &&
+              !(targetTicket && it.incidentNumber === targetTicket)
+          )
+        );
+      }
+    });
+
+    return () => {
+      unsubscribe();
+    };
   }, []);
 
   // Countdown timer simulation (15 seconds auto-refresh loop) & Live Clock
@@ -1467,28 +1409,60 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
   // BASIS DATA FREKUENSI & DETEKSI PROBLEM CHRONIC
   // =========================================================================
   const frequencyDataset = useMemo(() => {
-    if (allDailyIncidents.length > 0) return allDailyIncidents;
-    const src = historyResults.length > 0 ? historyResults : openIncidents;
-    return src.map((r) => ({
-      incidentNumber: r.incidentNumber,
-      wsid: r.wsid,
-      lokasi: r.lokasi,
-      servicePointSektor: `${r.servicePoint} - ${r.sektor}`,
-      servicePoint: r.servicePoint,
-      sektor: r.sektor,
-      typeMesin: r.typeMesin,
-      vendorMesin: r.vendor,
-      startTime: getDisplayStartTime(r),
-      endTime: formatStartProblemTime(r.endTime),
-      dateStr: r.tanggal,
-      hourStr: r.jam,
-      hourNumber: 0,
-      durasi: r.durasiOpr,
-      rawDuration: r.durationRaw,
-      eventCodeDesc: r.eventCodeDesc,
-      eventCode: r.eventCode,
-      detail: r.detail
-    }));
+    const sourceRows =
+      allDailyIncidents.length > 0
+        ? allDailyIncidents
+        : historyResults.length > 0
+          ? historyResults
+          : openIncidents;
+
+    return sourceRows.map((r: any) => {
+      // Normalisasi dateStr menjadi format DD/MM/YYYY (mendukung input ISO, DB, maupun CSV)
+      let dStr = r.dateStr;
+      if (!dStr || dStr === '-' || dStr === 'N/A') {
+        const rawDate = r.tanggal || r.dateStr || r.startTime;
+        if (rawDate && rawDate !== '-') {
+          const dateOnly = String(rawDate).trim().split(' ')[0];
+          if (dateOnly.includes('-')) {
+            const parts = dateOnly.split('-');
+            if (parts.length === 3 && parts[0].length === 4) {
+              dStr = `${parts[2].padStart(2, '0')}/${parts[1].padStart(2, '0')}/${parts[0]}`;
+            }
+          } else if (dateOnly.includes('/')) {
+            dStr = dateOnly;
+          }
+        }
+      } else if (dStr.includes('-') && dStr.split('-')[0].length === 4) {
+        const parts = dStr.split('-');
+        dStr = `${parts[2].padStart(2, '0')}/${parts[1].padStart(2, '0')}/${parts[0]}`;
+      }
+
+      const sp = r.servicePoint || (r.servicePointSektor ? r.servicePointSektor.split('-')[0].trim() : '-');
+      const sek = r.sektor || (r.servicePointSektor ? r.servicePointSektor.split('-')[1]?.trim() : '-');
+      const spSek = r.servicePointSektor || ((sp !== '-' && sek !== '-') ? `${sp} - ${sek}` : (sp !== '-' ? sp : sek));
+
+      return {
+        ...r,
+        incidentNumber: r.incidentNumber || r.ticket_no || '-',
+        wsid: r.wsid,
+        lokasi: r.lokasi || '-',
+        servicePoint: sp,
+        sektor: sek,
+        servicePointSektor: spSek,
+        typeMesin: r.typeMesin || r.type_mesin || '-',
+        vendorMesin: r.vendorMesin || r.vendor || '-',
+        startTime: r.startTime ? (typeof getDisplayStartTime === 'function' ? getDisplayStartTime(r) : r.startTime) : '-',
+        endTime: r.endTime ? (typeof formatStartProblemTime === 'function' ? formatStartProblemTime(r.endTime) : r.endTime) : '-',
+        dateStr: dStr || '-',
+        hourStr: r.hourStr || (r.jam ? r.jam.slice(0, 5) : '00:00'),
+        hourNumber: typeof r.hourNumber === 'number' ? r.hourNumber : 0,
+        durasi: r.durasi ?? r.durasiOpr ?? r.durationRaw ?? 0,
+        rawDuration: r.rawDuration ?? r.durationRaw ?? 0,
+        eventCodeDesc: r.eventCodeDesc || r.problem || '-',
+        eventCode: r.eventCode || r.event_code || '-',
+        detail: r.detail || r.keterangan || '-'
+      };
+    });
   }, [allDailyIncidents, historyResults, openIncidents]);
 
   const chronicInfoMap = useMemo(() => {
@@ -1497,8 +1471,8 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
       allDailyIncidents.length > 0
         ? allDailyIncidents
         : historyResults.length > 0
-        ? historyResults
-        : (openIncidents as any[]);
+          ? historyResults
+          : (openIncidents as any[]);
 
     const groupMap = new Map<string, { dateStr: string; normDate: string; epoch: number | null }[]>();
 
@@ -1518,10 +1492,10 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
         r.dateStr && r.dateStr !== '-'
           ? r.dateStr
           : r.tanggal && r.tanggal !== '-'
-          ? r.tanggal.split(' ')[0]
-          : r.startTime && r.startTime !== '-'
-          ? r.startTime.split(' ')[0]
-          : '';
+            ? r.tanggal.split(' ')[0]
+            : r.startTime && r.startTime !== '-'
+              ? r.startTime.split(' ')[0]
+              : '';
       const normDate = normalizeDateStr(rawDate);
       const epoch = parseDateStrToEpochDay(rawDate);
       list.push({ dateStr: rawDate, normDate, epoch });
@@ -1588,8 +1562,8 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
         inc.tanggal && inc.tanggal !== '-'
           ? inc.tanggal.split(' ')[0]
           : inc.startTime && inc.startTime !== '-'
-          ? inc.startTime.split(' ')[0]
-          : '';
+            ? inc.startTime.split(' ')[0]
+            : '';
       const normIncDate = normalizeDateStr(rawIncDate);
       const cacheKey = `${groupKey}|||${normIncDate}`;
       const cached = evalCache.get(cacheKey);
@@ -2605,25 +2579,32 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
       catatan: '-'
     };
 
+    // Snapshot state untuk rollback jika update ke Supabase gagal
+    const previousHistory = [...incidentHistory];
+    const previousDetail = activeIncidentDetail ? { ...activeIncidentDetail } : null;
+    const previousOpen = [...openIncidents];
+    const previousDaily = [...allDailyIncidents];
+
+    // Optimistic UI Update
     setIncidentHistory((prev) => [newActionItem, ...prev]);
 
     setActiveIncidentDetail((prev) =>
       prev
         ? {
-            ...prev,
-            actionTerakhir: actionText,
-            actionTerakhirOleh: petugas,
-            actionTerakhirWaktu: nowTimeStr,
-            jumlahAction: (prev.jumlahAction || 0) + 1
-          }
+          ...prev,
+          actionTerakhir: actionText,
+          actionTerakhirOleh: petugas,
+          actionTerakhirWaktu: nowTimeStr,
+          jumlahAction: (prev.jumlahAction || 0) + 1
+        }
         : null
     );
 
     setOpenIncidents((prev) =>
       prev.map((item) => {
         const isMatch = (item.incidentKey === incKey) ||
-                        (activeIncidentDetail.incidentNumber && activeIncidentDetail.incidentNumber !== '-' && item.incidentNumber === activeIncidentDetail.incidentNumber) ||
-                        (item.wsid === activeIncidentDetail.wsid && item.eventCodeDesc === activeIncidentDetail.eventCodeDesc);
+          (activeIncidentDetail.incidentNumber && activeIncidentDetail.incidentNumber !== '-' && item.incidentNumber === activeIncidentDetail.incidentNumber) ||
+          (item.wsid === activeIncidentDetail.wsid && item.eventCodeDesc === activeIncidentDetail.eventCodeDesc);
         if (isMatch) {
           return {
             ...item,
@@ -2641,8 +2622,8 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
       const next = prev.map((item) => {
         const key = item.incidentNumber || `${item.wsid}|${item.eventCodeDesc}|${item.startTime}`;
         const isMatch = (item.incidentNumber && item.incidentNumber !== '-' && item.incidentNumber === incKey) ||
-                        key === incKey ||
-                        (activeIncidentDetail && item.wsid === activeIncidentDetail.wsid && item.eventCodeDesc === activeIncidentDetail.eventCodeDesc);
+          key === incKey ||
+          (activeIncidentDetail && item.wsid === activeIncidentDetail.wsid && item.eventCodeDesc === activeIncidentDetail.eventCodeDesc);
         if (isMatch) {
           return {
             ...item,
@@ -2655,30 +2636,7 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
         return item;
       });
       allDailyIncidentsRef.current = next;
-      saveActiveIncidentDataset(next);
       return next;
-    });
-
-    saveLocalAction(newActionItem);
-    saveMonitoringSnapshot({
-      openIncidents: openIncidents.map((item) => {
-        const isMatch = (item.incidentKey === incKey) ||
-                        (activeIncidentDetail.incidentNumber && activeIncidentDetail.incidentNumber !== '-' && item.incidentNumber === activeIncidentDetail.incidentNumber) ||
-                        (item.wsid === activeIncidentDetail.wsid && item.eventCodeDesc === activeIncidentDetail.eventCodeDesc);
-        if (isMatch) {
-          return {
-            ...item,
-            actionTerakhir: actionText,
-            actionTerakhirOleh: petugas,
-            actionTerakhirWaktu: nowTimeStr,
-            jumlahAction: (item.jumlahAction || 0) + 1
-          };
-        }
-        return item;
-      }),
-      allDailyIncidents,
-      historyResults,
-      lastSyncTime: Date.now()
     });
 
     setSingleActionText('');
@@ -2686,21 +2644,31 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
     setTimeout(() => setActionSaveSuccess(false), 3000);
 
     const mStr = extractMonthStr(activeIncidentDetail.tanggal || activeIncidentDetail.startTime || activeIncidentDetail.monthStr, historyMonth);
-    saveIncidentActionApi({
-      incidentKey: incKey,
-      monthStr: mStr,
-      wsid: activeIncidentDetail.wsid,
-      eventCodeDesc: activeIncidentDetail.eventCodeDesc,
-      isiAction: rawActionText,
-      kategori: actionCategory,
-      namaPetugas: petugas
-    }).then((res) => {
-      if (res && res.success) {
-        fetchOpenIncidents();
+    try {
+      const res = await saveIncidentActionApi({
+        incidentKey: incKey,
+        monthStr: mStr,
+        wsid: activeIncidentDetail.wsid,
+        eventCodeDesc: activeIncidentDetail.eventCodeDesc,
+        isiAction: rawActionText,
+        kategori: actionCategory,
+        namaPetugas: petugas
+      });
+
+      if (!res || !res.success) {
+        throw new Error(res?.message || 'Gagal menyimpan catatan ke database Supabase');
       }
-    }).catch((err) => {
-      console.warn('Sync server background terkendala, tetap tersimpan aman di browser:', err);
-    });
+    } catch (err: any) {
+      console.error('Update tindakan Supabase gagal, rollback state:', err);
+      // Rollback Optimistic Update
+      setIncidentHistory(previousHistory);
+      setActiveIncidentDetail(previousDetail);
+      setOpenIncidents(previousOpen);
+      setAllDailyIncidents(previousDaily);
+      allDailyIncidentsRef.current = previousDaily;
+      setSingleActionText(rawActionText);
+      alert(`Gagal menyimpan tindakan ke database: ${err?.message || 'Koneksi bermasalah'}. Data telah dikembalikan.`);
+    }
   };
 
   // =========================================================================
@@ -2740,16 +2708,22 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
     const pad = (n: number) => String(n).padStart(2, '0');
     const nowTimeStr = `${pad(now.getDate())}/${pad(now.getMonth() + 1)}/${now.getFullYear()} ${pad(now.getHours())}:${pad(now.getMinutes())}:${pad(now.getSeconds())}`;
 
+    // Snapshot state untuk rollback jika Supabase gagal
+    const previousOpen = [...openIncidents];
+    const previousDaily = [...allDailyIncidents];
+    const prevSelectedKeys = new Set(selectedIncidentKeys);
+
+    // Optimistic UI Update
     setOpenIncidents((prev) =>
       prev.map((item) =>
         selectedIncidentKeys.has(item.incidentKey)
           ? {
-              ...item,
-              actionTerakhir: actionText,
-              actionTerakhirOleh: petugas,
-              actionTerakhirWaktu: nowTimeStr,
-              jumlahAction: (item.jumlahAction || 0) + 1
-            }
+            ...item,
+            actionTerakhir: actionText,
+            actionTerakhirOleh: petugas,
+            actionTerakhirWaktu: nowTimeStr,
+            jumlahAction: (item.jumlahAction || 0) + 1
+          }
           : item
       )
     );
@@ -2770,7 +2744,6 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
         return item;
       });
       allDailyIncidentsRef.current = next;
-      saveActiveIncidentDataset(next);
       return next;
     });
 
@@ -2787,18 +2760,26 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
     setBulkActionText('');
     setSelectedIncidentKeys(new Set());
 
-    bulkSaveIncidentActionApi({
-      items: itemsToUpdate,
-      isiAction: rawActionText,
-      kategori: bulkActionCategory,
-      namaPetugas: petugas
-    }).then((res) => {
-      if (res && res.success) {
-        fetchOpenIncidents();
+    try {
+      const res = await bulkSaveIncidentActionApi({
+        items: itemsToUpdate,
+        isiAction: rawActionText,
+        kategori: bulkActionCategory,
+        namaPetugas: petugas
+      });
+
+      if (!res || !res.success) {
+        throw new Error(res?.message || 'Gagal menyimpan bulk action ke database Supabase');
       }
-    }).catch((err) => {
-      console.warn('Sync bulk action ke spreadsheet terkendala, tetap tersimpan lokal:', err);
-    });
+    } catch (err: any) {
+      console.error('Sync bulk action ke Supabase gagal, rollback state:', err);
+      // Rollback Optimistic Update
+      setOpenIncidents(previousOpen);
+      setAllDailyIncidents(previousDaily);
+      allDailyIncidentsRef.current = previousDaily;
+      setSelectedIncidentKeys(prevSelectedKeys);
+      alert(`Gagal menyimpan tindakan massal ke database: ${err?.message || 'Koneksi terganggu'}. Data telah dikembalikan.`);
+    }
   };
 
   // =========================================================================
@@ -3075,7 +3056,7 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
           }
         });
       }
-    } catch (e) {}
+    } catch (e) { }
 
     return map;
   }, [allDailyIncidents, incidentHistory]);
@@ -3143,7 +3124,6 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
       catatan: modalPenangananDate ? `Penanganan problem tanggal ${modalPenangananDate}` : '-'
     };
 
-    saveLocalAction(newHistoryItem);
     setFreqDetailHistory((prev) => [newHistoryItem, ...prev]);
 
     setAllDailyIncidents((prev) => {
@@ -3162,7 +3142,6 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
         }
         return item;
       });
-      saveActiveIncidentDataset(next);
       return next;
     });
 
@@ -3205,7 +3184,7 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
       const act = (h.isiAction || '').trim();
       if (!act || act === '-') return;
       const dMatch = (h.catatan || '').match(/\b\d{1,2}[-/]\d{1,2}(?:[-/]\d{2,4})?\b/) ||
-                     (h.waktu || '').match(/\b\d{1,2}[-/]\d{1,2}(?:[-/]\d{2,4})?\b/);
+        (h.waktu || '').match(/\b\d{1,2}[-/]\d{1,2}(?:[-/]\d{2,4})?\b/);
       if (dMatch) {
         const d = dMatch[0];
         map.set(d, (map.get(d) || 0) + 1);
@@ -3531,13 +3510,6 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
         });
         historyCacheRef.current[historyMonth] = clean;
         setHistoryResults(clean);
-
-        saveMonitoringSnapshot({
-          openIncidents: openIncidentsRef.current,
-          allDailyIncidents: allDailyIncidentsRef.current,
-          historyResults: clean,
-          lastSyncTime: Date.now()
-        });
       } else {
         setHistoryResults([]);
       }
@@ -4052,7 +4024,7 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
       if (res.success && res.logs) {
         setUploadLogs(res.logs);
       }
-    } catch (e) {}
+    } catch (e) { }
   };
 
   useEffect(() => {
@@ -4132,8 +4104,8 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
           const st = (prev.startTime || '').trim();
 
           const isStillInOase = (incNum && incomingIncNums.has(incNum)) ||
-                                incomingCompositeKeys.has(`${w}|${ev}|${st}`) ||
-                                incomingWsidEventKeys.has(`${w}|${ev}`);
+            incomingCompositeKeys.has(`${w}|${ev}|${st}`) ||
+            incomingWsidEventKeys.has(`${w}|${ev}`);
 
           if (!isStillInOase) {
             const startDate = parseDateTime(prev.startTime);
@@ -4203,21 +4175,10 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
 
       const mergedAllRows = Array.from(datasetMap.values());
       setAllDailyIncidents(mergedAllRows);
-      saveActiveIncidentDataset(mergedAllRows);
-      try {
-        localStorage.setItem(LOCAL_STORAGE_ACTIVE_DATA, JSON.stringify(mergedAllRows.slice(0, 200)));
-      } catch (ce) {}
 
       const extractedOpen = extractOpenFromRows(mergedAllRows);
       setOpenIncidents(extractedOpen);
       isLocalDataActivated = true;
-
-      saveMonitoringSnapshot({
-        openIncidents: extractedOpen,
-        allDailyIncidents: mergedAllRows,
-        historyResults,
-        lastSyncTime: Date.now()
-      });
 
       const rowsToUpload = [...parsed.rows, ...autoClosedRows];
       setUploadProgress(40);
@@ -4420,8 +4381,8 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
       let sp = (r.servicePoint && r.servicePoint !== '-')
         ? r.servicePoint
         : (r.servicePointSektor && r.servicePointSektor.includes(' - '))
-        ? r.servicePointSektor.split(' - ')[0]
-        : 'Others';
+          ? r.servicePointSektor.split(' - ')[0]
+          : 'Others';
       sp = sp.trim().toUpperCase();
       spMap[sp] = (spMap[sp] || 0) + 1;
     });
@@ -4511,8 +4472,8 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
       let sp = (r.servicePoint && r.servicePoint !== '-')
         ? r.servicePoint
         : (r.servicePointSektor && r.servicePointSektor.includes(' - '))
-        ? r.servicePointSektor.split(' - ')[0]
-        : 'Others';
+          ? r.servicePointSektor.split(' - ')[0]
+          : 'Others';
       sp = sp.trim().toUpperCase();
       map[sp] = (map[sp] || 0) + 1;
     });
@@ -4754,42 +4715,37 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
   // RENDER JSX (CLEAN, SIMPLE, PURITY OPERATIONAL SLATE AESTHETICS)
   // =========================================================================
   return (
-    <div className={`w-full text-[#0D1C2E] flex flex-col font-sans antialiased selection:bg-blue-100 ${
-      isSupervisorRole ? 'bg-transparent min-h-0' : 'min-h-screen bg-[#F5F7FB]'
-    }`}>
+    <div className={`w-full text-[#0D1C2E] flex flex-col font-sans antialiased selection:bg-blue-100 ${isSupervisorRole ? 'bg-transparent min-h-0' : 'min-h-screen bg-[#F5F7FB]'
+      }`}>
       {/* ==================================================== */}
       {/* 1. TOP HEADER (44px COMPACT ENTERPRISE DENSITY)      */}
       {/* ==================================================== */}
-      <header className={`w-full bg-white/95 backdrop-blur-md transition-all ${
-        isSupervisorRole
+      <header className={`w-full bg-white/95 backdrop-blur-md transition-all ${isSupervisorRole
           ? 'rounded-lg border border-[#E5EAF2] shadow-2xs mb-3 sticky top-0 z-20'
           : 'sticky top-0 z-40 h-11 shadow-2xs border-b border-[#E5EAF2]'
-      }`}>
-        <div className={`w-full h-full flex items-center justify-between gap-3 ${
-          isSupervisorRole ? 'px-3 sm:px-4' : 'max-w-[1440px] mx-auto px-3 sm:px-6'
         }`}>
+        <div className={`w-full h-full flex items-center justify-between gap-3 ${isSupervisorRole ? 'px-3 sm:px-4' : 'max-w-[1440px] mx-auto px-3 sm:px-6'
+          }`}>
           {/* Brand Logo & Title */}
           <div className="flex items-center gap-2.5 shrink-0">
-            <div className={`w-7 h-7 rounded-md flex items-center justify-center font-bold shadow-2xs ${
-              effectiveRole === 'KAWIL'
+            <div className={`w-7 h-7 rounded-md flex items-center justify-center font-bold shadow-2xs ${effectiveRole === 'KAWIL'
                 ? 'bg-indigo-100 text-indigo-700'
                 : effectiveRole === 'KAOPS'
-                ? 'bg-teal-100 text-blue-600'
-                : 'bg-blue-50 text-blue-600'
-            }`}>
+                  ? 'bg-teal-100 text-blue-600'
+                  : 'bg-blue-50 text-blue-600'
+              }`}>
               <Server size={15} />
             </div>
             <div className="flex items-center gap-1.5">
               <span className="font-bold text-xs sm:text-sm text-[#0D1C2E] tracking-tight">
                 {isSupervisorRole ? 'Cek Daily Incident' : 'Mons Monitoring'}
               </span>
-              <span className={`px-1.5 py-0.2 rounded text-[9px] font-bold tracking-wider uppercase ${
-                effectiveRole === 'KAWIL'
+              <span className={`px-1.5 py-0.2 rounded text-[9px] font-bold tracking-wider uppercase ${effectiveRole === 'KAWIL'
                   ? 'bg-indigo-100 text-indigo-800'
                   : effectiveRole === 'KAOPS'
-                  ? 'bg-teal-100 text-teal-800'
-                  : 'bg-[#EFF4FF] text-[#555F71]'
-              }`}>
+                    ? 'bg-teal-100 text-teal-800'
+                    : 'bg-[#EFF4FF] text-[#555F71]'
+                }`}>
                 {effectiveRole === 'KAWIL' ? 'Ka Wil' : effectiveRole === 'KAOPS' ? 'Ka Ops' : 'Monitoring'}
               </span>
             </div>
@@ -4799,11 +4755,10 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
           <nav className="hidden md:flex items-center gap-4 h-full">
             <button
               onClick={() => setActiveTab('OPEN')}
-              className={`inline-flex items-center gap-1.5 h-11 px-2 border-b-2 transition-all text-xs font-semibold cursor-pointer ${
-                activeTab === 'OPEN'
+              className={`inline-flex items-center gap-1.5 h-11 px-2 border-b-2 transition-all text-xs font-semibold cursor-pointer ${activeTab === 'OPEN'
                   ? 'border-blue-600 text-blue-600'
                   : 'border-transparent text-[#555F71] hover:text-[#0D1C2E]'
-              }`}
+                }`}
             >
               <span>Problem Open</span>
               <span className="px-1.5 py-0.2 rounded-full bg-[#FFDAD6] text-[#BA1A1A] text-[9px] font-bold">
@@ -4816,11 +4771,10 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
               <button
                 type="button"
                 onClick={() => setIsFrekuensiMenuOpen((prev) => !prev)}
-                className={`inline-flex items-center gap-1.5 h-11 px-2 border-b-2 transition-all text-xs font-semibold cursor-pointer ${
-                  activeTab === 'FREKUENSI' || activeTab === 'GRAFIK_FREKUENSI' || activeTab === 'GRAFIK_24JAM'
+                className={`inline-flex items-center gap-1.5 h-11 px-2 border-b-2 transition-all text-xs font-semibold cursor-pointer ${activeTab === 'FREKUENSI' || activeTab === 'GRAFIK_FREKUENSI' || activeTab === 'GRAFIK_24JAM'
                     ? 'border-blue-600 text-blue-600'
                     : 'border-transparent text-[#555F71] hover:text-[#0D1C2E]'
-                }`}
+                  }`}
               >
                 {activeTab === 'GRAFIK_FREKUENSI' ? (
                   <>
@@ -4842,9 +4796,8 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
                 )}
                 <ChevronDown
                   size={12}
-                  className={`transition-transform duration-200 ${
-                    isFrekuensiMenuOpen ? 'rotate-180 text-blue-600' : 'text-slate-400'
-                  }`}
+                  className={`transition-transform duration-200 ${isFrekuensiMenuOpen ? 'rotate-180 text-blue-600' : 'text-slate-400'
+                    }`}
                 />
               </button>
 
@@ -4861,11 +4814,10 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
                       setActiveTab('FREKUENSI');
                       setIsFrekuensiMenuOpen(false);
                     }}
-                    className={`w-full px-3 py-2 text-left flex items-start gap-2.5 transition-colors cursor-pointer ${
-                      activeTab === 'FREKUENSI'
+                    className={`w-full px-3 py-2 text-left flex items-start gap-2.5 transition-colors cursor-pointer ${activeTab === 'FREKUENSI'
                         ? 'bg-blue-50/50 text-blue-600'
                         : 'hover:bg-slate-50 text-slate-700'
-                    }`}
+                      }`}
                   >
                     <div className="p-1.5 rounded-md bg-slate-100 text-slate-600 mt-0.5">
                       <Table size={14} />
@@ -4889,11 +4841,10 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
                       setActiveTab('GRAFIK_FREKUENSI');
                       setIsFrekuensiMenuOpen(false);
                     }}
-                    className={`w-full px-3 py-2 text-left flex items-start gap-2.5 transition-colors cursor-pointer ${
-                      activeTab === 'GRAFIK_FREKUENSI'
+                    className={`w-full px-3 py-2 text-left flex items-start gap-2.5 transition-colors cursor-pointer ${activeTab === 'GRAFIK_FREKUENSI'
                         ? 'bg-blue-50/50 text-blue-600'
                         : 'hover:bg-slate-50 text-slate-700'
-                    }`}
+                      }`}
                   >
                     <div className="p-1.5 rounded-md bg-blue-50 text-blue-600 mt-0.5">
                       <TrendingUp size={14} />
@@ -4919,11 +4870,10 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
                       setActiveTab('GRAFIK_24JAM');
                       setIsFrekuensiMenuOpen(false);
                     }}
-                    className={`w-full px-3 py-1.5 text-left flex items-start gap-2.5 transition-colors cursor-pointer ${
-                      activeTab === 'GRAFIK_24JAM'
+                    className={`w-full px-3 py-1.5 text-left flex items-start gap-2.5 transition-colors cursor-pointer ${activeTab === 'GRAFIK_24JAM'
                         ? 'bg-blue-50/50 text-blue-600'
                         : 'hover:bg-slate-50 text-slate-700'
-                    }`}
+                      }`}
                   >
                     <div className="p-1.5 rounded-md bg-indigo-50 text-indigo-600 mt-0.5">
                       <BarChart3 size={14} />
@@ -4944,11 +4894,10 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
             {/* TAB BARU: TIKET REQ MONITORING */}
             <button
               onClick={() => setActiveTab('TIKET')}
-              className={`inline-flex items-center gap-1.5 h-11 px-2 border-b-2 transition-all text-xs font-semibold cursor-pointer ${
-                activeTab === 'TIKET'
+              className={`inline-flex items-center gap-1.5 h-11 px-2 border-b-2 transition-all text-xs font-semibold cursor-pointer ${activeTab === 'TIKET'
                   ? 'border-blue-600 text-blue-600'
                   : 'border-transparent text-[#555F71] hover:text-[#0D1C2E]'
-              }`}
+                }`}
             >
               <Ticket size={14} className={activeTab === 'TIKET' ? 'text-blue-600' : 'text-slate-400'} />
               <span>Tiket Req</span>
@@ -4965,22 +4914,20 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
 
             <button
               onClick={() => setActiveTab('HISTORY')}
-              className={`inline-flex items-center gap-1.5 h-11 px-2 border-b-2 transition-all text-xs font-semibold cursor-pointer ${
-                activeTab === 'HISTORY'
+              className={`inline-flex items-center gap-1.5 h-11 px-2 border-b-2 transition-all text-xs font-semibold cursor-pointer ${activeTab === 'HISTORY'
                   ? 'border-blue-600 text-blue-600'
                   : 'border-transparent text-[#555F71] hover:text-[#0D1C2E]'
-              }`}
+                }`}
             >
               <span>Riwayat</span>
             </button>
 
             <button
               onClick={() => setActiveTab('UPLOAD')}
-              className={`inline-flex items-center gap-1.5 h-11 px-2 border-b-2 transition-all text-xs font-semibold cursor-pointer ${
-                activeTab === 'UPLOAD'
+              className={`inline-flex items-center gap-1.5 h-11 px-2 border-b-2 transition-all text-xs font-semibold cursor-pointer ${activeTab === 'UPLOAD'
                   ? 'border-blue-600 text-blue-600'
                   : 'border-transparent text-[#555F71] hover:text-[#0D1C2E]'
-              }`}
+                }`}
             >
               <span>Upload CSV</span>
             </button>
@@ -4991,11 +4938,10 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
             {/* Petugas Capsule */}
             <button
               onClick={openDutyModal}
-              className={`flex items-center gap-1.5 px-2.5 h-7 rounded-md text-xs font-medium transition-all cursor-pointer border border-[#E5EAF2] ${
-                !petugasName.trim() || petugasInputHighlight
+              className={`flex items-center gap-1.5 px-2.5 h-7 rounded-md text-xs font-medium transition-all cursor-pointer border border-[#E5EAF2] ${!petugasName.trim() || petugasInputHighlight
                   ? 'bg-rose-100 text-rose-800 ring-1 ring-rose-300 animate-pulse font-bold'
                   : 'bg-white hover:bg-slate-50 text-[#0D1C2E]'
-              }`}
+                }`}
               title="Klik untuk mengubah petugas jaga"
             >
               <User size={12} className={!petugasName.trim() ? 'text-rose-600' : 'text-blue-600'} />
@@ -5007,27 +4953,25 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
             <button
               type="button"
               onClick={() => setActiveTab('TIKET')}
-              className={`relative flex items-center gap-1.5 px-2.5 h-7 rounded-md text-xs font-semibold transition-all cursor-pointer shadow-2xs border ${
-                activeTab === 'TIKET'
+              className={`relative flex items-center gap-1.5 px-2.5 h-7 rounded-md text-xs font-semibold transition-all cursor-pointer shadow-2xs border ${activeTab === 'TIKET'
                   ? 'bg-blue-50 text-blue-700 border-blue-300 ring-1 ring-blue-300'
                   : reOpenTicketsCount > 0
-                  ? 'bg-rose-600 text-white border-rose-700 animate-pulse'
-                  : reqCloseTicketsCount > 0 && isSupervisorRole
-                  ? 'bg-purple-600 text-white border-purple-700'
-                  : activeTickets.length > 0
-                  ? 'bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border-indigo-200'
-                  : 'bg-white hover:bg-slate-50 text-slate-700 border-[#E5EAF2]'
-              }`}
+                    ? 'bg-rose-600 text-white border-rose-700 animate-pulse'
+                    : reqCloseTicketsCount > 0 && isSupervisorRole
+                      ? 'bg-purple-600 text-white border-purple-700'
+                      : activeTickets.length > 0
+                        ? 'bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border-indigo-200'
+                        : 'bg-white hover:bg-slate-50 text-slate-700 border-[#E5EAF2]'
+                }`}
               title="Buka Dashboard Tiket Follow Up"
             >
               <Ticket size={13} />
               <span>Tiket Follow Up</span>
               {activeTickets.length > 0 && (
-                <span className={`px-1.5 py-0.2 rounded-full text-[10px] font-black ${
-                  reOpenTicketsCount > 0 || (reqCloseTicketsCount > 0 && isSupervisorRole)
+                <span className={`px-1.5 py-0.2 rounded-full text-[10px] font-black ${reOpenTicketsCount > 0 || (reqCloseTicketsCount > 0 && isSupervisorRole)
                     ? 'bg-white text-rose-700'
                     : 'bg-indigo-600 text-white'
-                }`}>
+                  }`}>
                   {reOpenTicketsCount > 0 ? `! ${reOpenTicketsCount}` : activeTickets.length}
                 </span>
               )}
@@ -5058,9 +5002,8 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
 
       {/* Warning banner jika Nama Petugas belum diisi */}
       {!petugasName.trim() && (
-        <div className={`border-b border-amber-200 py-2 flex items-center justify-between text-xs text-amber-900 animate-in fade-in duration-200 ${
-          isSupervisorRole ? 'bg-[#FFF8E1] rounded-2xl border border-amber-200 mb-3 px-4 w-full' : 'bg-[#FFF8E1] px-4 sm:px-8'
-        }`}>
+        <div className={`border-b border-amber-200 py-2 flex items-center justify-between text-xs text-amber-900 animate-in fade-in duration-200 ${isSupervisorRole ? 'bg-[#FFF8E1] rounded-2xl border border-amber-200 mb-3 px-4 w-full' : 'bg-[#FFF8E1] px-4 sm:px-8'
+          }`}>
           <div className={`flex items-center gap-2 w-full ${isSupervisorRole ? '' : 'max-w-[1440px] mx-auto'}`}>
             <AlertTriangle size={15} className="text-amber-600 shrink-0" />
             <span>
@@ -5078,24 +5021,20 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
 
       {/* BANNER TIKET FOLLOW UP AKTIF */}
       {activeTickets.length > 0 && (
-        <div className={`py-2.5 px-4 text-xs font-medium flex items-center justify-between transition-all animate-in fade-in duration-200 ${
-          isSupervisorRole ? 'rounded-2xl border mb-3 shadow-xs w-full' : 'px-4 sm:px-8 border-b'
-        } ${
-          reOpenTicketsCount > 0
+        <div className={`py-2.5 px-4 text-xs font-medium flex items-center justify-between transition-all animate-in fade-in duration-200 ${isSupervisorRole ? 'rounded-2xl border mb-3 shadow-xs w-full' : 'px-4 sm:px-8 border-b'
+          } ${reOpenTicketsCount > 0
             ? 'bg-rose-50 text-rose-950 border-rose-300'
             : reqCloseTicketsCount > 0 && isSupervisorRole
-            ? 'bg-purple-50 text-purple-950 border-purple-300'
-            : 'bg-indigo-50 text-indigo-950 border-indigo-200'
-        }`}>
+              ? 'bg-purple-50 text-purple-950 border-purple-300'
+              : 'bg-indigo-50 text-indigo-950 border-indigo-200'
+          }`}>
           <div className={`w-full flex items-center justify-between ${isSupervisorRole ? '' : 'max-w-[1440px] mx-auto'}`}>
             <div className="flex items-center gap-2.5">
               <span className="relative flex h-2.5 w-2.5 shrink-0">
-                <span className={`animate-ping absolute inline-flex h-full w-full rounded-full opacity-75 ${
-                  reOpenTicketsCount > 0 ? 'bg-rose-500' : 'bg-indigo-500'
-                }`}></span>
-                <span className={`relative inline-flex rounded-full h-2.5 w-2.5 ${
-                  reOpenTicketsCount > 0 ? 'bg-rose-600' : 'bg-indigo-600'
-                }`}></span>
+                <span className={`animate-ping absolute inline-flex h-full w-full rounded-full opacity-75 ${reOpenTicketsCount > 0 ? 'bg-rose-500' : 'bg-indigo-500'
+                  }`}></span>
+                <span className={`relative inline-flex rounded-full h-2.5 w-2.5 ${reOpenTicketsCount > 0 ? 'bg-rose-600' : 'bg-indigo-600'
+                  }`}></span>
               </span>
               <div>
                 {reOpenTicketsCount > 0 ? (
@@ -5119,13 +5058,12 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
             <button
               type="button"
               onClick={() => setActiveTab('TIKET')}
-              className={`px-3 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer shadow-2xs shrink-0 flex items-center gap-1.5 ml-3 ${
-                reOpenTicketsCount > 0
+              className={`px-3 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer shadow-2xs shrink-0 flex items-center gap-1.5 ml-3 ${reOpenTicketsCount > 0
                   ? 'bg-rose-600 hover:bg-rose-700 text-white'
                   : reqCloseTicketsCount > 0 && isSupervisorRole
-                  ? 'bg-purple-600 hover:bg-purple-700 text-white'
-                  : 'bg-indigo-600 hover:bg-indigo-700 text-white'
-              }`}
+                    ? 'bg-purple-600 hover:bg-purple-700 text-white'
+                    : 'bg-indigo-600 hover:bg-indigo-700 text-white'
+                }`}
             >
               <span>Buka Dashboard Tiket &rarr;</span>
             </button>
@@ -5136,15 +5074,13 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
       {/* Sync Status Banner */}
       {syncStatusBanner && (
         <div
-          className={`py-2.5 text-xs font-medium flex items-center justify-between transition-all ${
-            isSupervisorRole ? 'rounded-2xl border mb-3 px-4 shadow-xs w-full' : 'px-4 sm:px-8 border-b'
-          } ${
-            syncStatusBanner.type === 'syncing'
+          className={`py-2.5 text-xs font-medium flex items-center justify-between transition-all ${isSupervisorRole ? 'rounded-2xl border mb-3 px-4 shadow-xs w-full' : 'px-4 sm:px-8 border-b'
+            } ${syncStatusBanner.type === 'syncing'
               ? 'bg-blue-50 text-blue-800 border-blue-200'
               : syncStatusBanner.type === 'success'
-              ? 'bg-emerald-50 text-emerald-800 border-emerald-200'
-              : 'bg-rose-50 text-rose-800 border-rose-200'
-          }`}
+                ? 'bg-emerald-50 text-emerald-800 border-emerald-200'
+                : 'bg-rose-50 text-rose-800 border-rose-200'
+            }`}
         >
           <div className={`w-full flex items-center justify-between ${isSupervisorRole ? '' : 'max-w-[1440px] mx-auto'}`}>
             <div className="flex items-center gap-2">
@@ -5170,9 +5106,8 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
       {/* ==================================================== */}
       {/* 2. MAIN VIEWPORT (FULL WIDTH FOR SUPERVISOR DASHBOARD) */}
       {/* ==================================================== */}
-      <main className={`w-full flex-1 transition-all ${
-        isSupervisorRole ? 'pt-0 pb-16' : 'max-w-[1440px] mx-auto px-4 sm:px-8 pt-4 pb-28'
-      }`}>
+      <main className={`w-full flex-1 transition-all ${isSupervisorRole ? 'pt-0 pb-16' : 'max-w-[1440px] mx-auto px-4 sm:px-8 pt-4 pb-28'
+        }`}>
         {/* ==================================================== */}
         {/* TAB 1: PROBLEM OPEN (UTAMA)                          */}
         {/* ==================================================== */}
@@ -5218,11 +5153,10 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
                 <button
                   type="button"
                   onClick={() => setIsSimulasiAman((prev) => !prev)}
-                  className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-medium border transition-all cursor-pointer ${
-                    isSimulasiAman
+                  className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-medium border transition-all cursor-pointer ${isSimulasiAman
                       ? 'bg-emerald-100 text-emerald-800 border-emerald-300 font-bold'
                       : 'bg-white shadow-2xs hover:bg-[#EFF4FF] text-[#555F71] hover:text-[#0D1C2E] border-[#EFF4FF]'
-                  }`}
+                    }`}
                   title="Simulasikan tampilan ketika seluruh mesin beroperasi 100% normal"
                 >
                   <Eye size={14} className={isSimulasiAman ? 'text-emerald-700' : 'text-[#555F71]'} />
@@ -5236,11 +5170,10 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
               {/* Card 1: Total Open */}
               <div
                 onClick={() => handleCardFilterClick('ALL')}
-                className={`cursor-pointer bg-white p-3 rounded-lg shadow-2xs flex items-center justify-between transition-all select-none border min-h-[92px] max-h-[102px] ${
-                  openCardFilter === 'ALL'
+                className={`cursor-pointer bg-white p-3 rounded-lg shadow-2xs flex items-center justify-between transition-all select-none border min-h-[92px] max-h-[102px] ${openCardFilter === 'ALL'
                     ? 'border-blue-600 bg-blue-50/30 ring-1 ring-blue-500'
                     : 'border-[#E5EAF2] hover:border-slate-300'
-                }`}
+                  }`}
               >
                 <div className="flex flex-col min-w-0">
                   <span className="text-[11px] font-semibold text-blue-600 uppercase tracking-wider truncate">
@@ -5263,11 +5196,10 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
               {/* Card 2: Lebih dari 60 Menit */}
               <div
                 onClick={() => handleCardFilterClick('OVER_60')}
-                className={`cursor-pointer bg-white p-3 rounded-lg shadow-2xs flex items-center justify-between transition-all select-none border group min-h-[92px] max-h-[102px] ${
-                  openCardFilter === 'OVER_60'
+                className={`cursor-pointer bg-white p-3 rounded-lg shadow-2xs flex items-center justify-between transition-all select-none border group min-h-[92px] max-h-[102px] ${openCardFilter === 'OVER_60'
                     ? 'border-rose-400 bg-rose-50/40 ring-1 ring-rose-400'
                     : 'border-[#E5EAF2] hover:border-rose-200'
-                }`}
+                  }`}
               >
                 <div className="flex flex-col min-w-0">
                   <span className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider truncate group-hover:text-rose-600">
@@ -5290,11 +5222,10 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
               {/* Card 3: Chronic 3x Sehari */}
               <div
                 onClick={() => handleCardFilterClick('CHRONIC_3X_SEHARI')}
-                className={`cursor-pointer bg-white p-3 rounded-lg shadow-2xs flex items-center justify-between transition-all select-none border group min-h-[92px] max-h-[102px] ${
-                  openCardFilter === 'CHRONIC_3X_SEHARI'
+                className={`cursor-pointer bg-white p-3 rounded-lg shadow-2xs flex items-center justify-between transition-all select-none border group min-h-[92px] max-h-[102px] ${openCardFilter === 'CHRONIC_3X_SEHARI'
                     ? 'border-amber-400 bg-amber-50/40 ring-1 ring-amber-400'
                     : 'border-[#E5EAF2] hover:border-amber-200'
-                }`}
+                  }`}
               >
                 <div className="flex flex-col min-w-0">
                   <span className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider truncate group-hover:text-amber-700">
@@ -5317,11 +5248,10 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
               {/* Card 4: Chronic 3x dalam 5 Hari */}
               <div
                 onClick={() => handleCardFilterClick('CHRONIC_3X_5HARI')}
-                className={`cursor-pointer bg-white p-3 rounded-lg shadow-2xs flex items-center justify-between transition-all select-none border group min-h-[92px] max-h-[102px] ${
-                  openCardFilter === 'CHRONIC_3X_5HARI'
+                className={`cursor-pointer bg-white p-3 rounded-lg shadow-2xs flex items-center justify-between transition-all select-none border group min-h-[92px] max-h-[102px] ${openCardFilter === 'CHRONIC_3X_5HARI'
                     ? 'border-indigo-400 bg-indigo-50/40 ring-1 ring-indigo-400'
                     : 'border-[#E5EAF2] hover:border-slate-300'
-                }`}
+                  }`}
               >
                 <div className="flex flex-col min-w-0">
                   <span className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider truncate group-hover:text-slate-800">
@@ -5344,11 +5274,10 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
               {/* Card 5: Belum Di-update */}
               <div
                 onClick={() => handleCardFilterClick('NO_ACTION')}
-                className={`cursor-pointer bg-white p-3 rounded-lg shadow-2xs flex items-center justify-between transition-all select-none border group col-span-2 md:col-span-1 min-h-[92px] max-h-[102px] ${
-                  openCardFilter === 'NO_ACTION'
+                className={`cursor-pointer bg-white p-3 rounded-lg shadow-2xs flex items-center justify-between transition-all select-none border group col-span-2 md:col-span-1 min-h-[92px] max-h-[102px] ${openCardFilter === 'NO_ACTION'
                     ? 'border-blue-400 bg-blue-50/40 ring-1 ring-blue-400'
                     : 'border-[#E5EAF2] hover:border-slate-300'
-                }`}
+                  }`}
               >
                 <div className="flex flex-col min-w-0">
                   <span className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider truncate group-hover:text-blue-700">
@@ -5458,11 +5387,10 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
                   <button
                     type="button"
                     onClick={() => setIsEventCodeDropdownOpenOpen((prev) => !prev)}
-                    className={`inline-flex items-center gap-1 h-8 px-2.5 rounded-md text-xs font-medium transition-colors shrink-0 border cursor-pointer ${
-                      selectedEventCodesOpen.length > 0
+                    className={`inline-flex items-center gap-1 h-8 px-2.5 rounded-md text-xs font-medium transition-colors shrink-0 border cursor-pointer ${selectedEventCodesOpen.length > 0
                         ? 'bg-blue-50 text-blue-600 border-blue-600 font-semibold'
                         : 'bg-white hover:bg-slate-50 text-slate-700 border-[#E5EAF2]'
-                    }`}
+                      }`}
                   >
                     <SlidersHorizontal size={12} className={selectedEventCodesOpen.length > 0 ? 'text-blue-600' : 'text-slate-400'} />
                     <span className="text-slate-500">Event:</span>
@@ -5470,8 +5398,8 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
                       {selectedEventCodesOpen.length === 0
                         ? `Semua (${openAvailableEvents.length})`
                         : selectedEventCodesOpen.length === 1
-                        ? selectedEventCodesOpen[0]
-                        : `${selectedEventCodesOpen.length} Dipilih`}
+                          ? selectedEventCodesOpen[0]
+                          : `${selectedEventCodesOpen.length} Dipilih`}
                     </span>
                     <ChevronDown size={12} className="text-slate-400" />
                   </button>
@@ -5533,9 +5461,8 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
                             return (
                               <label
                                 key={code}
-                                className={`flex items-start justify-between gap-2 px-2 py-1.5 rounded cursor-pointer text-xs transition-colors ${
-                                  isChecked ? 'bg-blue-50 text-blue-600 font-semibold' : 'hover:bg-slate-50 text-slate-700'
-                                }`}
+                                className={`flex items-start justify-between gap-2 px-2 py-1.5 rounded cursor-pointer text-xs transition-colors ${isChecked ? 'bg-blue-50 text-blue-600 font-semibold' : 'hover:bg-slate-50 text-slate-700'
+                                  }`}
                               >
                                 <div className="flex items-start gap-1.5">
                                   <input
@@ -5572,11 +5499,10 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
                       setIsVendorDropdownOpenOpen(false);
                       setIsTipeDropdownOpenOpen(false);
                     }}
-                    className={`inline-flex items-center gap-1 h-8 px-2.5 rounded-md text-xs font-medium transition-colors shrink-0 border cursor-pointer ${
-                      selectedOpenSPs.length > 0
+                    className={`inline-flex items-center gap-1 h-8 px-2.5 rounded-md text-xs font-medium transition-colors shrink-0 border cursor-pointer ${selectedOpenSPs.length > 0
                         ? 'bg-blue-50 text-blue-600 border-blue-600 font-semibold'
                         : 'bg-white hover:bg-slate-50 text-slate-700 border-[#E5EAF2]'
-                    }`}
+                      }`}
                   >
                     <MapPin size={12} className={selectedOpenSPs.length > 0 ? 'text-blue-600' : 'text-slate-400'} />
                     <span className="text-slate-500">SP:</span>
@@ -5584,8 +5510,8 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
                       {selectedOpenSPs.length === 0
                         ? `Semua (${openAvailableSPs.length})`
                         : selectedOpenSPs.length === 1
-                        ? selectedOpenSPs[0]
-                        : `${selectedOpenSPs.length} Dipilih`}
+                          ? selectedOpenSPs[0]
+                          : `${selectedOpenSPs.length} Dipilih`}
                     </span>
                     <ChevronDown size={12} className="text-slate-400" />
                   </button>
@@ -5649,9 +5575,8 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
                             return (
                               <label
                                 key={sp}
-                                className={`flex items-start justify-between gap-2 px-2 py-1.5 rounded cursor-pointer text-xs transition-colors ${
-                                  isChecked ? 'bg-blue-50 text-blue-600 font-semibold' : 'hover:bg-slate-50 text-slate-700'
-                                }`}
+                                className={`flex items-start justify-between gap-2 px-2 py-1.5 rounded cursor-pointer text-xs transition-colors ${isChecked ? 'bg-blue-50 text-blue-600 font-semibold' : 'hover:bg-slate-50 text-slate-700'
+                                  }`}
                               >
                                 <div className="flex items-start gap-1.5">
                                   <input
@@ -5688,11 +5613,10 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
                       setIsVendorDropdownOpenOpen(false);
                       setIsTipeDropdownOpenOpen(false);
                     }}
-                    className={`inline-flex items-center gap-1 h-8 px-2.5 rounded-md text-xs font-medium transition-colors shrink-0 border cursor-pointer ${
-                      selectedOpenSektors.length > 0
+                    className={`inline-flex items-center gap-1 h-8 px-2.5 rounded-md text-xs font-medium transition-colors shrink-0 border cursor-pointer ${selectedOpenSektors.length > 0
                         ? 'bg-blue-50 text-blue-600 border-blue-600 font-semibold'
                         : 'bg-white hover:bg-slate-50 text-slate-700 border-[#E5EAF2]'
-                    }`}
+                      }`}
                   >
                     <Layers size={12} className={selectedOpenSektors.length > 0 ? 'text-blue-600' : 'text-slate-400'} />
                     <span className="text-slate-500">Sektor:</span>
@@ -5700,8 +5624,8 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
                       {selectedOpenSektors.length === 0
                         ? `Semua (${openAvailableSektors.length})`
                         : selectedOpenSektors.length === 1
-                        ? selectedOpenSektors[0]
-                        : `${selectedOpenSektors.length} Dipilih`}
+                          ? selectedOpenSektors[0]
+                          : `${selectedOpenSektors.length} Dipilih`}
                     </span>
                     <ChevronDown size={12} className="text-slate-400" />
                   </button>
@@ -5763,9 +5687,8 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
                             return (
                               <label
                                 key={sk}
-                                className={`flex items-start justify-between gap-2 px-2 py-1.5 rounded cursor-pointer text-xs transition-colors ${
-                                  isChecked ? 'bg-blue-50 text-blue-600 font-semibold' : 'hover:bg-slate-50 text-slate-700'
-                                }`}
+                                className={`flex items-start justify-between gap-2 px-2 py-1.5 rounded cursor-pointer text-xs transition-colors ${isChecked ? 'bg-blue-50 text-blue-600 font-semibold' : 'hover:bg-slate-50 text-slate-700'
+                                  }`}
                               >
                                 <div className="flex items-start gap-1.5">
                                   <input
@@ -5802,11 +5725,10 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
                       setIsSektorDropdownOpenOpen(false);
                       setIsTipeDropdownOpenOpen(false);
                     }}
-                    className={`inline-flex items-center gap-1 h-8 px-2.5 rounded-md text-xs font-medium transition-colors shrink-0 border cursor-pointer ${
-                      selectedOpenVendors.length > 0
+                    className={`inline-flex items-center gap-1 h-8 px-2.5 rounded-md text-xs font-medium transition-colors shrink-0 border cursor-pointer ${selectedOpenVendors.length > 0
                         ? 'bg-blue-50 text-blue-600 border-blue-600 font-semibold'
                         : 'bg-white hover:bg-slate-50 text-slate-700 border-[#E5EAF2]'
-                    }`}
+                      }`}
                   >
                     <Wrench size={12} className={selectedOpenVendors.length > 0 ? 'text-blue-600' : 'text-slate-400'} />
                     <span className="text-slate-500">Vendor:</span>
@@ -5814,8 +5736,8 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
                       {selectedOpenVendors.length === 0
                         ? `Semua (${openAvailableVendors.length})`
                         : selectedOpenVendors.length === 1
-                        ? selectedOpenVendors[0]
-                        : `${selectedOpenVendors.length} Dipilih`}
+                          ? selectedOpenVendors[0]
+                          : `${selectedOpenVendors.length} Dipilih`}
                     </span>
                     <ChevronDown size={12} className="text-slate-400" />
                   </button>
@@ -5877,9 +5799,8 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
                             return (
                               <label
                                 key={vd}
-                                className={`flex items-start justify-between gap-2 px-2 py-1.5 rounded cursor-pointer text-xs transition-colors ${
-                                  isChecked ? 'bg-blue-50 text-blue-600 font-semibold' : 'hover:bg-slate-50 text-slate-700'
-                                }`}
+                                className={`flex items-start justify-between gap-2 px-2 py-1.5 rounded cursor-pointer text-xs transition-colors ${isChecked ? 'bg-blue-50 text-blue-600 font-semibold' : 'hover:bg-slate-50 text-slate-700'
+                                  }`}
                               >
                                 <div className="flex items-start gap-1.5">
                                   <input
@@ -5916,11 +5837,10 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
                       setIsSektorDropdownOpenOpen(false);
                       setIsVendorDropdownOpenOpen(false);
                     }}
-                    className={`inline-flex items-center gap-1 h-8 px-2.5 rounded-md text-xs font-medium transition-colors shrink-0 border cursor-pointer ${
-                      selectedOpenTipes.length > 0
+                    className={`inline-flex items-center gap-1 h-8 px-2.5 rounded-md text-xs font-medium transition-colors shrink-0 border cursor-pointer ${selectedOpenTipes.length > 0
                         ? 'bg-blue-50 text-blue-600 border-blue-600 font-semibold'
                         : 'bg-white hover:bg-slate-50 text-slate-700 border-[#E5EAF2]'
-                    }`}
+                      }`}
                   >
                     <Cpu size={12} className={selectedOpenTipes.length > 0 ? 'text-blue-600' : 'text-slate-400'} />
                     <span className="text-slate-500">Tipe:</span>
@@ -5928,8 +5848,8 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
                       {selectedOpenTipes.length === 0
                         ? 'Semua'
                         : selectedOpenTipes.length === 1
-                        ? selectedOpenTipes[0]
-                        : `${selectedOpenTipes.length} Dipilih`}
+                          ? selectedOpenTipes[0]
+                          : `${selectedOpenTipes.length} Dipilih`}
                     </span>
                     <ChevronDown size={12} className="text-slate-400" />
                   </button>
@@ -5969,9 +5889,8 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
                           return (
                             <label
                               key={tipe}
-                              className={`flex items-center justify-between gap-2 px-2 py-1.5 rounded cursor-pointer text-xs transition-colors ${
-                                isChecked ? 'bg-blue-50 text-blue-600 font-semibold' : 'hover:bg-slate-50 text-slate-700'
-                              }`}
+                              className={`flex items-center justify-between gap-2 px-2 py-1.5 rounded cursor-pointer text-xs transition-colors ${isChecked ? 'bg-blue-50 text-blue-600 font-semibold' : 'hover:bg-slate-50 text-slate-700'
+                                }`}
                             >
                               <div className="flex items-center gap-1.5">
                                 <input
@@ -6005,11 +5924,10 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
                       setOpenDurationFilter(e.target.value as any);
                       setCurrentPageOpen(1);
                     }}
-                    className={`h-8 px-2.5 pr-6 rounded-md text-xs font-medium border outline-none cursor-pointer appearance-none ${
-                      openDurationFilter !== 'ALL'
+                    className={`h-8 px-2.5 pr-6 rounded-md text-xs font-medium border outline-none cursor-pointer appearance-none ${openDurationFilter !== 'ALL'
                         ? 'bg-[#FFDAD6] text-[#BA1A1A] border-[#BA1A1A]/40 font-semibold'
                         : 'bg-white hover:bg-slate-50 text-slate-700 border-[#E5EAF2]'
-                    }`}
+                      }`}
                   >
                     <option value="ALL">Durasi: Semua</option>
                     <option value="OVER_45">Durasi: &gt; 45 Menit</option>
@@ -6027,11 +5945,10 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
                       setOpenActionFilter(e.target.value as any);
                       setCurrentPageOpen(1);
                     }}
-                    className={`h-8 px-2.5 pr-6 rounded-md text-xs font-medium border outline-none cursor-pointer appearance-none ${
-                      openActionFilter !== 'ALL'
+                    className={`h-8 px-2.5 pr-6 rounded-md text-xs font-medium border outline-none cursor-pointer appearance-none ${openActionFilter !== 'ALL'
                         ? 'bg-blue-50 text-blue-600 border-blue-600 font-semibold'
                         : 'bg-white hover:bg-slate-50 text-slate-700 border-[#E5EAF2]'
-                    }`}
+                      }`}
                   >
                     <option value="ALL">Tindakan: Semua</option>
                     <option value="NO_ACTION">Belum Ada Action</option>
@@ -6343,13 +6260,12 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
                         return (
                           <tr
                             key={r.incidentKey}
-                            className={`h-10 hover:bg-[#F8F9FF] transition-colors ${
-                              isDrawerActive
+                            className={`h-10 hover:bg-[#F8F9FF] transition-colors ${isDrawerActive
                                 ? 'bg-blue-50/50 ring-1 ring-blue-400/40'
                                 : isSelected
-                                ? 'bg-[#EFF4FF]/70'
-                                : ''
-                            }`}
+                                  ? 'bg-[#EFF4FF]/70'
+                                  : ''
+                              }`}
                           >
                             <td className="pl-3 pr-2 text-center">
                               <input
@@ -6377,13 +6293,12 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
                                         setSelectedTicketForDetail(t);
                                         setShowTicketCenterModal(true);
                                       }}
-                                      className={`inline-flex items-center gap-1 px-1.5 py-0.2 rounded-md text-[10px] font-bold border transition-all cursor-pointer ${
-                                        isReopen
+                                      className={`inline-flex items-center gap-1 px-1.5 py-0.2 rounded-md text-[10px] font-bold border transition-all cursor-pointer ${isReopen
                                           ? 'bg-rose-100 text-rose-800 border-rose-300 animate-pulse font-black'
                                           : isReqClose
-                                          ? 'bg-purple-100 text-purple-800 border-purple-300'
-                                          : 'bg-amber-100 text-amber-800 border-amber-300'
-                                      }`}
+                                            ? 'bg-purple-100 text-purple-800 border-purple-300'
+                                            : 'bg-amber-100 text-amber-800 border-amber-300'
+                                        }`}
                                       title={`Tiket #${t.ticketId} (${t.status}): Klik untuk melihat & tindak lanjut`}
                                     >
                                       <Ticket size={10} />
@@ -6409,13 +6324,12 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
                             <td className="px-3 py-1.5">
                               <div className="flex items-center gap-1.5">
                                 <span
-                                  className={`w-2 h-2 rounded-full shrink-0 ${
-                                    r.durasiOpr >= 180
+                                  className={`w-2 h-2 rounded-full shrink-0 ${r.durasiOpr >= 180
                                       ? 'bg-[#BA1A1A]'
                                       : r.durasiOpr >= 60
-                                      ? 'bg-amber-500'
-                                      : 'bg-blue-600'
-                                  }`}
+                                        ? 'bg-amber-500'
+                                        : 'bg-blue-600'
+                                    }`}
                                 />
                                 <span className="text-[#0D1C2E] font-medium truncate max-w-[200px]" title={r.eventCodeDesc}>
                                   {r.eventCodeDesc}
@@ -6432,13 +6346,12 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
                             <td className="px-3 py-1.5 whitespace-nowrap">
                               <span
                                 title={`Durasi Berjalan: ${r.durasiOpr} menit (sejak ${getDisplayStartTime(r)} s/d ${currentLiveTime.toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })} WIB, sesuai jam kerja operasional WSID)`}
-                                className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold font-mono tracking-tight cursor-help ${
-                                  r.durasiOpr >= 180
+                                className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold font-mono tracking-tight cursor-help ${r.durasiOpr >= 180
                                     ? 'bg-[#FFDAD6] text-[#BA1A1A] animate-pulse font-extrabold'
                                     : r.durasiOpr >= 60
-                                    ? 'bg-amber-100 text-amber-900 border border-amber-300'
-                                    : 'bg-[#EFF4FF] text-[#555F71]'
-                                }`}
+                                      ? 'bg-amber-100 text-amber-900 border border-amber-300'
+                                      : 'bg-[#EFF4FF] text-[#555F71]'
+                                  }`}
                               >
                                 {formatDurationHuman(r.durasiOpr)}
                               </span>
@@ -6470,9 +6383,9 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
                             {/* 7. Update Terakhir (Menampilkan Isi Keterangannya) */}
                             <td className="px-3 py-1.5">
                               {r.actionTerakhir &&
-                              r.actionTerakhir !== '-' &&
-                              !isTechnicalMachineLog(r.actionTerakhir) &&
-                              r.actionTerakhirOleh !== 'CSV' ? (
+                                r.actionTerakhir !== '-' &&
+                                !isTechnicalMachineLog(r.actionTerakhir) &&
+                                r.actionTerakhirOleh !== 'CSV' ? (
                                 <div className="flex flex-col gap-0.5 max-w-[240px]" title={`${r.actionTerakhir} (${r.actionTerakhirOleh || '-'} • ${formatStartProblemTime(r.actionTerakhirWaktu) !== '-' ? formatStartProblemTime(r.actionTerakhirWaktu) : (r.actionTerakhirWaktu || '-')})`}>
                                   <span className="text-xs font-semibold text-[#0D1C2E] truncate">
                                     {r.actionTerakhir}
@@ -6625,11 +6538,10 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
                   <button
                     type="button"
                     onClick={() => setIsEventCodeDropdownOpenFreq((prev) => !prev)}
-                    className={`h-9 px-3 rounded-xl text-xs font-medium border flex items-center gap-1.5 cursor-pointer ${
-                      selectedEventCodesFreq.length > 0
+                    className={`h-9 px-3 rounded-xl text-xs font-medium border flex items-center gap-1.5 cursor-pointer ${selectedEventCodesFreq.length > 0
                         ? 'bg-blue-50 text-blue-600 border-blue-600'
                         : 'bg-[#F8F9FF] hover:bg-[#EFF4FF] text-[#0D1C2E] border-[#EFF4FF]'
-                    }`}
+                      }`}
                   >
                     <SlidersHorizontal size={13} className="text-blue-600" />
                     <span className="truncate max-w-[160px]">
@@ -6682,9 +6594,8 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
                             return (
                               <label
                                 key={code}
-                                className={`flex items-start gap-2.5 px-2 py-1.5 rounded-lg cursor-pointer text-xs transition-colors ${
-                                  isChecked ? 'bg-blue-50 text-blue-600 font-semibold' : 'hover:bg-slate-50 text-slate-700'
-                                }`}
+                                className={`flex items-start gap-2.5 px-2 py-1.5 rounded-lg cursor-pointer text-xs transition-colors ${isChecked ? 'bg-blue-50 text-blue-600 font-semibold' : 'hover:bg-slate-50 text-slate-700'
+                                  }`}
                               >
                                 <input
                                   type="checkbox"
@@ -6856,11 +6767,10 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
                           <th
                             key={date}
                             onClick={() => handleSortFreq(date)}
-                            className={`py-2 px-2 text-center whitespace-nowrap min-w-[70px] cursor-pointer select-none transition-all ${
-                              isSorted
+                            className={`py-2 px-2 text-center whitespace-nowrap min-w-[70px] cursor-pointer select-none transition-all ${isSorted
                                 ? 'bg-blue-50 text-blue-600 border-x border-blue-200 font-bold'
                                 : 'hover:bg-slate-100 text-[#555F71]'
-                            }`}
+                              }`}
                           >
                             <div className="flex items-center justify-center gap-1">
                               <span>{date.slice(0, 5)}</span>
@@ -6935,23 +6845,21 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
                               return (
                                 <td
                                   key={date}
-                                  className={`py-1 px-2 text-center font-mono transition-colors ${
-                                    isSorted ? 'bg-blue-50/40 border-x border-blue-100' : ''
-                                  }`}
+                                  className={`py-1 px-2 text-center font-mono transition-colors ${isSorted ? 'bg-blue-50/40 border-x border-blue-100' : ''
+                                    }`}
                                 >
                                   {count > 0 ? (
                                     <button
                                       type="button"
                                       onClick={() => handleOpenFreqDetail(item, date)}
-                                      className={`inline-block px-2 py-0.5 rounded font-bold text-[11px] cursor-pointer hover:scale-105 transition-all ${
-                                        isSorted
+                                      className={`inline-block px-2 py-0.5 rounded font-bold text-[11px] cursor-pointer hover:scale-105 transition-all ${isSorted
                                           ? 'bg-blue-600 text-white shadow-2xs'
                                           : count >= 5
-                                          ? 'bg-rose-100 text-rose-800 font-extrabold border border-rose-300'
-                                          : count >= 3
-                                          ? 'bg-amber-100 text-amber-800 border border-amber-300'
-                                          : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
-                                      }`}
+                                            ? 'bg-rose-100 text-rose-800 font-extrabold border border-rose-300'
+                                            : count >= 3
+                                              ? 'bg-amber-100 text-amber-800 border border-amber-300'
+                                              : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+                                        }`}
                                       title={`Terjadi ${count}x pada tgl ${date}. Klik untuk membuka detail penanganan tanggal ini.`}
                                     >
                                       {count}
@@ -6981,11 +6889,10 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
                                     <button
                                       type="button"
                                       onClick={() => handleOpenFreqDetail(item)}
-                                      className={`inline-flex items-center gap-1.5 px-2 py-1 rounded-lg text-[11px] font-bold transition-all shadow-2xs cursor-pointer ${
-                                        pCount > 0
+                                      className={`inline-flex items-center gap-1.5 px-2 py-1 rounded-lg text-[11px] font-bold transition-all shadow-2xs cursor-pointer ${pCount > 0
                                           ? 'bg-blue-50 hover:bg-[#cbfbf0] text-blue-600 border border-blue-200 hover:scale-[1.02]'
                                           : 'bg-[#F8F9FF] hover:bg-[#EFF4FF] text-[#555F71] border border-[#EFF4FF]'
-                                      }`}
+                                        }`}
                                       title="Klik untuk melihat detail penanganan tiap tanggal kejadian"
                                     >
                                       <Wrench size={12} className={pCount > 0 ? 'text-blue-600' : 'text-slate-400'} />
@@ -7158,11 +7065,10 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
                         setGfMode('SINGLE');
                         fetchGfData('SINGLE', gfSingleMonth, gfStartMonth, gfEndMonth);
                       }}
-                      className={`px-3 py-1.5 rounded-lg transition-all cursor-pointer ${
-                        gfMode === 'SINGLE'
+                      className={`px-3 py-1.5 rounded-lg transition-all cursor-pointer ${gfMode === 'SINGLE'
                           ? 'bg-white text-blue-600 shadow-xs font-bold'
                           : 'text-slate-600 hover:text-slate-900'
-                      }`}
+                        }`}
                     >
                       1 Bulan Penuh
                     </button>
@@ -7172,11 +7078,10 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
                         setGfMode('RANGE');
                         fetchGfData('RANGE', gfSingleMonth, gfStartMonth, gfEndMonth);
                       }}
-                      className={`px-3 py-1.5 rounded-lg transition-all cursor-pointer ${
-                        gfMode === 'RANGE'
+                      className={`px-3 py-1.5 rounded-lg transition-all cursor-pointer ${gfMode === 'RANGE'
                           ? 'bg-white text-blue-600 shadow-xs font-bold'
                           : 'text-slate-600 hover:text-slate-900'
-                      }`}
+                        }`}
                     >
                       Periode Rentang Bulan
                     </button>
@@ -7296,11 +7201,10 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
                               setGfSelectedProblems([]);
                               setIsGfProblemOpen(false);
                             }}
-                            className={`w-full px-2.5 py-1.5 rounded-lg text-left text-xs font-semibold flex items-center justify-between cursor-pointer ${
-                              gfSelectedProblems.length === 0
+                            className={`w-full px-2.5 py-1.5 rounded-lg text-left text-xs font-semibold flex items-center justify-between cursor-pointer ${gfSelectedProblems.length === 0
                                 ? 'bg-blue-50 text-blue-600'
                                 : 'hover:bg-slate-50 text-slate-700'
-                            }`}
+                              }`}
                           >
                             <span>Semua Problem</span>
                             {gfSelectedProblems.length === 0 && <Check size={14} className="text-blue-600" />}
@@ -7319,11 +7223,10 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
                                       prev.includes(p) ? prev.filter((x) => x !== p) : [...prev, p]
                                     );
                                   }}
-                                  className={`w-full px-2.5 py-1.5 rounded-lg text-left text-xs flex items-center justify-between cursor-pointer ${
-                                    isChecked
+                                  className={`w-full px-2.5 py-1.5 rounded-lg text-left text-xs flex items-center justify-between cursor-pointer ${isChecked
                                       ? 'bg-blue-50/75 text-blue-600 font-bold'
                                       : 'hover:bg-slate-50 text-slate-700'
-                                  }`}
+                                    }`}
                                 >
                                   <span className="truncate pr-2">{p}</span>
                                   {isChecked && <Check size={14} className="text-blue-600 shrink-0" />}
@@ -7515,18 +7418,16 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
                       <button
                         type="button"
                         onClick={() => setGfTrendGrouping('daily')}
-                        className={`px-2.5 py-1 rounded-md transition-all cursor-pointer ${
-                          gfTrendGrouping === 'daily' ? 'bg-white text-blue-600 font-bold shadow-2xs' : 'text-slate-600'
-                        }`}
+                        className={`px-2.5 py-1 rounded-md transition-all cursor-pointer ${gfTrendGrouping === 'daily' ? 'bg-white text-blue-600 font-bold shadow-2xs' : 'text-slate-600'
+                          }`}
                       >
                         Harian
                       </button>
                       <button
                         type="button"
                         onClick={() => setGfTrendGrouping('monthly')}
-                        className={`px-2.5 py-1 rounded-md transition-all cursor-pointer ${
-                          gfTrendGrouping === 'monthly' ? 'bg-white text-blue-600 font-bold shadow-2xs' : 'text-slate-600'
-                        }`}
+                        className={`px-2.5 py-1 rounded-md transition-all cursor-pointer ${gfTrendGrouping === 'monthly' ? 'bg-white text-blue-600 font-bold shadow-2xs' : 'text-slate-600'
+                          }`}
                       >
                         Bulanan
                       </button>
@@ -7537,11 +7438,10 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
                   <button
                     type="button"
                     onClick={() => setGfCumulative((prev) => !prev)}
-                    className={`px-2.5 py-1 rounded-lg text-[11px] font-semibold border transition-all cursor-pointer ${
-                      gfCumulative
+                    className={`px-2.5 py-1 rounded-lg text-[11px] font-semibold border transition-all cursor-pointer ${gfCumulative
                         ? 'bg-blue-50 border-blue-600 text-blue-600 font-bold'
                         : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-50'
-                    }`}
+                      }`}
                   >
                     {gfCumulative ? 'Akumulasi (ON)' : 'Kumulatif'}
                   </button>
@@ -7551,27 +7451,24 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
                     <button
                       type="button"
                       onClick={() => setGfChartType('area')}
-                      className={`px-2.5 py-1 rounded-md transition-all cursor-pointer ${
-                        gfChartType === 'area' ? 'bg-white text-blue-600 font-bold shadow-2xs' : 'text-slate-600'
-                      }`}
+                      className={`px-2.5 py-1 rounded-md transition-all cursor-pointer ${gfChartType === 'area' ? 'bg-white text-blue-600 font-bold shadow-2xs' : 'text-slate-600'
+                        }`}
                     >
                       Area
                     </button>
                     <button
                       type="button"
                       onClick={() => setGfChartType('bar')}
-                      className={`px-2.5 py-1 rounded-md transition-all cursor-pointer ${
-                        gfChartType === 'bar' ? 'bg-white text-blue-600 font-bold shadow-2xs' : 'text-slate-600'
-                      }`}
+                      className={`px-2.5 py-1 rounded-md transition-all cursor-pointer ${gfChartType === 'bar' ? 'bg-white text-blue-600 font-bold shadow-2xs' : 'text-slate-600'
+                        }`}
                     >
                       Bar
                     </button>
                     <button
                       type="button"
                       onClick={() => setGfChartType('line')}
-                      className={`px-2.5 py-1 rounded-md transition-all cursor-pointer ${
-                        gfChartType === 'line' ? 'bg-white text-blue-600 font-bold shadow-2xs' : 'text-slate-600'
-                      }`}
+                      className={`px-2.5 py-1 rounded-md transition-all cursor-pointer ${gfChartType === 'line' ? 'bg-white text-blue-600 font-bold shadow-2xs' : 'text-slate-600'
+                        }`}
                     >
                       Line
                     </button>
@@ -7919,13 +7816,12 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
                               </span>
                             </td>
                             <td className="py-3 px-3.5 text-center">
-                              <span className={`px-2.5 py-1 rounded-full text-xs font-black ${
-                                item.totalFrekuensi >= 5
+                              <span className={`px-2.5 py-1 rounded-full text-xs font-black ${item.totalFrekuensi >= 5
                                   ? 'bg-rose-100 text-rose-700'
                                   : item.totalFrekuensi >= 3
-                                  ? 'bg-amber-100 text-amber-800'
-                                  : 'bg-[#EFF4FF] text-blue-600'
-                              }`}>
+                                    ? 'bg-amber-100 text-amber-800'
+                                    : 'bg-[#EFF4FF] text-blue-600'
+                                }`}>
                                 {item.totalFrekuensi}x
                               </span>
                             </td>
@@ -8129,11 +8025,10 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
                             setIsGrafik24SektorOpen(false);
                             setGrafik24CurrentPage(1);
                           }}
-                          className={`w-full px-2.5 py-1.5 rounded-lg text-left flex items-center justify-between transition-colors cursor-pointer ${
-                            grafik24Sektor === 'ALL'
+                          className={`w-full px-2.5 py-1.5 rounded-lg text-left flex items-center justify-between transition-colors cursor-pointer ${grafik24Sektor === 'ALL'
                               ? 'bg-blue-50 text-blue-600 font-bold'
                               : 'text-slate-700 hover:bg-[#F8F9FF]'
-                          }`}
+                            }`}
                         >
                           <span>Semua Sektor</span>
                           {grafik24Sektor === 'ALL' && <Check size={13} />}
@@ -8152,11 +8047,10 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
                                   setIsGrafik24SektorOpen(false);
                                   setGrafik24CurrentPage(1);
                                 }}
-                                className={`w-full px-2.5 py-1.5 rounded-lg text-left flex items-center justify-between transition-colors cursor-pointer ${
-                                  isSelected
+                                className={`w-full px-2.5 py-1.5 rounded-lg text-left flex items-center justify-between transition-colors cursor-pointer ${isSelected
                                     ? 'bg-blue-50 text-blue-600 font-bold'
                                     : 'text-slate-700 hover:bg-[#F8F9FF]'
-                                }`}
+                                  }`}
                               >
                                 <span className="truncate">{sk}</span>
                                 {isSelected && <Check size={13} />}
@@ -8167,10 +8061,10 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
                         {grafik24AvailableSektors.filter((sk) =>
                           sk.toLowerCase().includes(grafik24SektorSearch.toLowerCase())
                         ).length === 0 && (
-                          <div className="py-4 text-center text-slate-400 text-xs">
-                            Tidak ada sektor ditemukan
-                          </div>
-                        )}
+                            <div className="py-4 text-center text-slate-400 text-xs">
+                              Tidak ada sektor ditemukan
+                            </div>
+                          )}
                       </div>
                     </div>
                   )}
@@ -8241,11 +8135,10 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
                             setIsGrafik24ProblemOpen(false);
                             setGrafik24CurrentPage(1);
                           }}
-                          className={`w-full px-2.5 py-1.5 rounded-lg text-left flex items-center justify-between transition-colors cursor-pointer ${
-                            grafik24Problem === 'ALL'
+                          className={`w-full px-2.5 py-1.5 rounded-lg text-left flex items-center justify-between transition-colors cursor-pointer ${grafik24Problem === 'ALL'
                               ? 'bg-blue-50 text-blue-600 font-bold'
                               : 'text-slate-700 hover:bg-[#F8F9FF]'
-                          }`}
+                            }`}
                         >
                           <span>Semua Jenis Problem ({grafik24AvailableProblems.length})</span>
                           {grafik24Problem === 'ALL' && <Check size={13} />}
@@ -8264,11 +8157,10 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
                                   setIsGrafik24ProblemOpen(false);
                                   setGrafik24CurrentPage(1);
                                 }}
-                                className={`w-full px-2.5 py-1.5 rounded-lg text-left flex items-center justify-between transition-colors cursor-pointer ${
-                                  isSelected
+                                className={`w-full px-2.5 py-1.5 rounded-lg text-left flex items-center justify-between transition-colors cursor-pointer ${isSelected
                                     ? 'bg-blue-50 text-blue-600 font-bold'
                                     : 'text-slate-700 hover:bg-[#F8F9FF]'
-                                }`}
+                                  }`}
                               >
                                 <span className="truncate pr-2 font-medium">{prob}</span>
                                 {isSelected && <Check size={13} className="shrink-0 text-blue-600" />}
@@ -8279,10 +8171,10 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
                         {grafik24AvailableProblems.filter((p) =>
                           p.toLowerCase().includes(grafik24ProblemSearch.toLowerCase())
                         ).length === 0 && (
-                          <div className="py-4 text-center text-slate-400 text-xs">
-                            Tidak ada problem yang cocok
-                          </div>
-                        )}
+                            <div className="py-4 text-center text-slate-400 text-xs">
+                              Tidak ada problem yang cocok
+                            </div>
+                          )}
                       </div>
                     </div>
                   )}
@@ -8397,9 +8289,8 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
                           }}
                           onMouseEnter={() => setHoveredHour24(b.hour)}
                           onMouseLeave={() => setHoveredHour24(null)}
-                          className={`flex-1 flex flex-col items-center justify-end h-full relative cursor-pointer group transition-all z-10 ${
-                            isSelected ? 'scale-105' : 'hover:scale-102'
-                          }`}
+                          className={`flex-1 flex flex-col items-center justify-end h-full relative cursor-pointer group transition-all z-10 ${isSelected ? 'scale-105' : 'hover:scale-102'
+                            }`}
                         >
                           {/* Floating Badge PEAK di atas batang */}
                           {b.isPeak && (
@@ -8458,30 +8349,28 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
                           )}
 
                           {/* Count text di atas bar */}
-                          <span className={`text-[10px] font-bold font-mono mb-1 transition-colors ${
-                            b.isPeak
+                          <span className={`text-[10px] font-bold font-mono mb-1 transition-colors ${b.isPeak
                               ? 'text-amber-700 font-extrabold'
                               : isSelected
-                              ? 'text-blue-600 font-extrabold'
-                              : b.count > 0
-                              ? 'text-slate-600'
-                              : 'text-slate-300'
-                          }`}>
+                                ? 'text-blue-600 font-extrabold'
+                                : b.count > 0
+                                  ? 'text-slate-600'
+                                  : 'text-slate-300'
+                            }`}>
                             {b.count}
                           </span>
 
                           {/* The Bar */}
                           <div
                             style={{ height: `${barHeightPx}px` }}
-                            className={`w-full max-w-[28px] rounded-t-md transition-all duration-300 ${
-                              b.isPeak
+                            className={`w-full max-w-[28px] rounded-t-md transition-all duration-300 ${b.isPeak
                                 ? 'bg-gradient-to-t from-amber-500 via-amber-400 to-orange-500 shadow-[0_2px_10px_rgba(245,158,11,0.4)]'
                                 : isSelected
-                                ? 'bg-gradient-to-t from-blue-600 to-blue-400 ring-2 ring-blue-500 ring-offset-1'
-                                : b.count > 0
-                                ? 'bg-gradient-to-t from-blue-600/60 to-blue-400/80 group-hover:from-blue-600 group-hover:to-blue-400'
-                                : 'bg-slate-200/80 group-hover:bg-slate-300'
-                            }`}
+                                  ? 'bg-gradient-to-t from-blue-600 to-blue-400 ring-2 ring-blue-500 ring-offset-1'
+                                  : b.count > 0
+                                    ? 'bg-gradient-to-t from-blue-600/60 to-blue-400/80 group-hover:from-blue-600 group-hover:to-blue-400'
+                                    : 'bg-slate-200/80 group-hover:bg-slate-300'
+                              }`}
                           />
                         </div>
                       );
@@ -8499,13 +8388,12 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
                             setSelectedHour24(selectedHour24 === b.hour ? null : b.hour);
                             setGrafik24CurrentPage(1);
                           }}
-                          className={`flex-1 text-center cursor-pointer transition-colors ${
-                            b.isPeak
+                          className={`flex-1 text-center cursor-pointer transition-colors ${b.isPeak
                               ? 'text-amber-700 font-bold'
                               : isSelected
-                              ? 'text-blue-600 font-bold underline'
-                              : 'text-slate-500 hover:text-[#0D1C2E]'
-                          }`}
+                                ? 'text-blue-600 font-bold underline'
+                                : 'text-slate-500 hover:text-[#0D1C2E]'
+                            }`}
                         >
                           <span className="text-[10px] block font-mono">
                             {b.hourLabel}
@@ -8855,11 +8743,10 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
                   <button
                     type="button"
                     onClick={() => setIsEventCodeDropdownOpenHistory((prev) => !prev)}
-                    className={`h-9 px-3 rounded-xl text-xs font-medium border flex items-center gap-1.5 cursor-pointer ${
-                      selectedEventCodesHistory.length > 0
+                    className={`h-9 px-3 rounded-xl text-xs font-medium border flex items-center gap-1.5 cursor-pointer ${selectedEventCodesHistory.length > 0
                         ? 'bg-blue-50 text-blue-600 border-blue-600 font-semibold'
                         : 'bg-[#F8F9FF] hover:bg-[#EFF4FF] text-[#0D1C2E] border-[#EFF4FF]'
-                    }`}
+                      }`}
                   >
                     <SlidersHorizontal size={13} className={selectedEventCodesHistory.length > 0 ? 'text-blue-600' : 'text-[#555F71]'} />
                     <span className="truncate max-w-[160px]">
@@ -8922,9 +8809,8 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
                             return (
                               <label
                                 key={code}
-                                className={`flex items-start justify-between gap-2 px-2 py-1.5 rounded-lg cursor-pointer text-xs transition-colors ${
-                                  isChecked ? 'bg-blue-50 text-blue-600 font-semibold' : 'hover:bg-slate-50 text-slate-700'
-                                }`}
+                                className={`flex items-start justify-between gap-2 px-2 py-1.5 rounded-lg cursor-pointer text-xs transition-colors ${isChecked ? 'bg-blue-50 text-blue-600 font-semibold' : 'hover:bg-slate-50 text-slate-700'
+                                  }`}
                               >
                                 <div className="flex items-start gap-2">
                                   <input
@@ -9159,13 +9045,12 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
                                         setSelectedTicketForDetail(t);
                                         setShowTicketCenterModal(true);
                                       }}
-                                      className={`inline-flex items-center gap-1 px-1.5 py-0.2 rounded-md text-[10px] font-bold border transition-all cursor-pointer ${
-                                        isReopen
+                                      className={`inline-flex items-center gap-1 px-1.5 py-0.2 rounded-md text-[10px] font-bold border transition-all cursor-pointer ${isReopen
                                           ? 'bg-rose-100 text-rose-800 border-rose-300 animate-pulse font-black'
                                           : isReqClose
-                                          ? 'bg-purple-100 text-purple-800 border-purple-300'
-                                          : 'bg-amber-100 text-amber-800 border-amber-300'
-                                      }`}
+                                            ? 'bg-purple-100 text-purple-800 border-purple-300'
+                                            : 'bg-amber-100 text-amber-800 border-amber-300'
+                                        }`}
                                       title={`Tiket #${t.ticketId} (${t.status}): Klik untuk melihat & tindak lanjut`}
                                     >
                                       <Ticket size={10} />
@@ -9196,13 +9081,12 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
                             <td className="px-3 py-1.5">
                               <div className="flex items-center gap-1.5">
                                 <span
-                                  className={`w-2 h-2 rounded-full shrink-0 ${
-                                    r.durasiOpr >= 180
+                                  className={`w-2 h-2 rounded-full shrink-0 ${r.durasiOpr >= 180
                                       ? 'bg-[#BA1A1A]'
                                       : r.durasiOpr >= 60
-                                      ? 'bg-amber-500'
-                                      : 'bg-blue-600'
-                                  }`}
+                                        ? 'bg-amber-500'
+                                        : 'bg-blue-600'
+                                    }`}
                                 />
                                 <span className="text-[#0D1C2E] font-medium truncate max-w-[180px]" title={r.eventCodeDesc}>
                                   {r.eventCodeDesc || '-'}
@@ -9235,13 +9119,12 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
                                         ? `Problem Masih OPEN: Durasi berjalan ${effDur} menit sejak ${getDisplayStartTime(r)} hingga saat ini (sesuai jam operasional WSID)`
                                         : `Durasi Operasional: ${effDur} menit`
                                     }
-                                    className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold font-mono tracking-tight ${
-                                      effDur >= 180
+                                    className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold font-mono tracking-tight ${effDur >= 180
                                         ? 'bg-[#FFDAD6] text-[#BA1A1A] font-extrabold'
                                         : effDur >= 60
-                                        ? 'bg-amber-100 text-amber-900 border border-amber-300'
-                                        : 'bg-[#EFF4FF] text-[#555F71]'
-                                    }`}
+                                          ? 'bg-amber-100 text-amber-900 border border-amber-300'
+                                          : 'bg-[#EFF4FF] text-[#555F71]'
+                                      }`}
                                   >
                                     {formatDurationHuman(effDur)}
                                   </span>
@@ -9275,9 +9158,9 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
                             {/* 8. Action (Menampilkan Isi Keterangannya) */}
                             <td className="px-3 py-1.5">
                               {r.actionTerakhir &&
-                              r.actionTerakhir !== '-' &&
-                              !isTechnicalMachineLog(r.actionTerakhir) &&
-                              r.actionTerakhirOleh !== 'CSV' ? (
+                                r.actionTerakhir !== '-' &&
+                                !isTechnicalMachineLog(r.actionTerakhir) &&
+                                r.actionTerakhirOleh !== 'CSV' ? (
                                 <div
                                   className="flex flex-col gap-0.5 max-w-[240px]"
                                   title={`${r.actionTerakhir} (${r.actionTerakhirOleh || '-'} • ${formatStartProblemTime(r.actionTerakhirWaktu) !== '-' ? formatStartProblemTime(r.actionTerakhirWaktu) : (r.actionTerakhirWaktu || '-')})`}
@@ -9434,11 +9317,10 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
                   if (!requirePetugasName()) return;
                   fileUploadInputRef.current?.click();
                 }}
-                className={`border-2 border-dashed rounded-2xl p-8 sm:p-12 text-center cursor-pointer transition-all flex flex-col items-center justify-center space-y-3 ${
-                  petugasName.trim()
+                className={`border-2 border-dashed rounded-2xl p-8 sm:p-12 text-center cursor-pointer transition-all flex flex-col items-center justify-center space-y-3 ${petugasName.trim()
                     ? 'border-blue-600 hover:border-blue-600 bg-blue-50/20 hover:bg-blue-50/40'
                     : 'border-slate-200 bg-slate-50 opacity-60'
-                }`}
+                  }`}
               >
                 <div className="w-14 h-14 rounded-2xl bg-white shadow-sm flex items-center justify-center text-blue-600">
                   <UploadCloud size={30} />
@@ -9549,9 +9431,8 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
       {/* 3. RIGHT SLIDE-OVER DRAWER (SINGLE MACHINE ACTION)   */}
       {/* ==================================================== */}
       <div
-        className={`fixed inset-y-0 right-0 z-50 w-full sm:w-[440px] bg-white shadow-2xl flex flex-col transform transition-transform duration-300 ease-in-out ${
-          isDrawerOpen && activeIncidentDetail ? 'translate-x-0' : 'translate-x-full'
-        }`}
+        className={`fixed inset-y-0 right-0 z-50 w-full sm:w-[440px] bg-white shadow-2xl flex flex-col transform transition-transform duration-300 ease-in-out ${isDrawerOpen && activeIncidentDetail ? 'translate-x-0' : 'translate-x-full'
+          }`}
       >
         {activeIncidentDetail && (
           <>
@@ -9567,13 +9448,12 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
                     const displayDur = isOpen ? getHistoryEffectiveDuration(activeIncidentDetail) : activeIncidentDetail.durasiOpr;
                     return (
                       <span
-                        className={`px-2 py-0.5 rounded-full text-[10px] font-bold font-mono flex items-center gap-1 ${
-                          displayDur >= 180
+                        className={`px-2 py-0.5 rounded-full text-[10px] font-bold font-mono flex items-center gap-1 ${displayDur >= 180
                             ? 'bg-[#FFDAD6] text-[#BA1A1A]'
                             : displayDur >= 60
-                            ? 'bg-amber-100 text-amber-900'
-                            : 'bg-[#EFF4FF] text-[#555F71]'
-                        }`}
+                              ? 'bg-amber-100 text-amber-900'
+                              : 'bg-[#EFF4FF] text-[#555F71]'
+                          }`}
                         title={isOpen ? `Durasi realtime berjalan sampai saat ini (${currentLiveTime.toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })} WIB)` : `Durasi Operasional: ${displayDur} menit`}
                       >
                         {isOpen && <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse inline-block" />}
@@ -9713,11 +9593,10 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
                     )}
                     <span>Kategori Tindakan:</span>
                   </label>
-                  <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
-                    actionCategory === 'PENANGANAN'
+                  <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${actionCategory === 'PENANGANAN'
                       ? 'bg-emerald-100 text-emerald-800 border border-emerald-300'
                       : 'bg-sky-100 text-sky-800 border border-sky-300'
-                  }`}>
+                    }`}>
                     {actionCategory === 'PENANGANAN' ? '🛠️ Masuk Rekap Frekuensi' : 'ℹ️ Info Progres'}
                   </span>
                 </div>
@@ -9727,11 +9606,10 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
                     id="drawer-kategori-select"
                     value={actionCategory}
                     onChange={(e) => setActionCategory(e.target.value as any)}
-                    className={`w-full h-9 px-3 pr-8 rounded-xl text-xs font-semibold border outline-none cursor-pointer appearance-none transition-all ${
-                      actionCategory === 'PENANGANAN'
+                    className={`w-full h-9 px-3 pr-8 rounded-xl text-xs font-semibold border outline-none cursor-pointer appearance-none transition-all ${actionCategory === 'PENANGANAN'
                         ? 'bg-emerald-50 text-emerald-900 border-emerald-300 focus:ring-1 focus:ring-emerald-400'
                         : 'bg-sky-50 text-sky-900 border-sky-300 focus:ring-1 focus:ring-sky-400'
-                    }`}
+                      }`}
                   >
                     <option value="UPDATE">Update — Informasi Tim OTW Lokasi & Status</option>
                     <option value="PENANGANAN">Penanganan — Perbaikan Nyata Problem Mesin</option>
@@ -9781,11 +9659,10 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
                       key={preset}
                       type="button"
                       onClick={() => addQuickNote(preset)}
-                      className={`px-2.5 py-1 rounded-lg text-[11px] font-medium transition-colors cursor-pointer ${
-                        actionCategory === 'PENANGANAN'
+                      className={`px-2.5 py-1 rounded-lg text-[11px] font-medium transition-colors cursor-pointer ${actionCategory === 'PENANGANAN'
                           ? 'bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-200'
                           : 'bg-[#EFF4FF] hover:bg-[#E5EEFF] hover:text-blue-600 text-[#0D1C2E]'
-                      }`}
+                        }`}
                     >
                       + {preset}
                     </button>
@@ -10092,11 +9969,10 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
                   <select
                     value={bulkActionCategory}
                     onChange={(e) => setBulkActionCategory(e.target.value as any)}
-                    className={`w-full h-9 px-3 pr-8 rounded-xl text-xs font-semibold border outline-none cursor-pointer appearance-none transition-all ${
-                      bulkActionCategory === 'PENANGANAN'
+                    className={`w-full h-9 px-3 pr-8 rounded-xl text-xs font-semibold border outline-none cursor-pointer appearance-none transition-all ${bulkActionCategory === 'PENANGANAN'
                         ? 'bg-emerald-50 text-emerald-900 border-emerald-300 focus:ring-1 focus:ring-emerald-400'
                         : 'bg-sky-50 text-sky-900 border-sky-300 focus:ring-1 focus:ring-sky-400'
-                    }`}
+                      }`}
                   >
                     <option value="UPDATE">Update — Informasi Tim OTW Lokasi & Status</option>
                     <option value="PENANGANAN">Penanganan — Perbaikan Nyata Problem Mesin (Masuk Rekap Frekuensi)</option>
@@ -10116,11 +9992,10 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
                       key={preset}
                       type="button"
                       onClick={() => setBulkActionText(preset)}
-                      className={`px-2.5 py-1 rounded-lg text-[11px] font-medium transition-all cursor-pointer ${
-                        bulkActionCategory === 'PENANGANAN'
+                      className={`px-2.5 py-1 rounded-lg text-[11px] font-medium transition-all cursor-pointer ${bulkActionCategory === 'PENANGANAN'
                           ? 'bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-200'
                           : 'bg-[#EFF4FF] hover:bg-[#E5EEFF] hover:text-blue-600 text-[#0D1C2E]'
-                      }`}
+                        }`}
                     >
                       + {preset}
                     </button>
@@ -10265,11 +10140,10 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
                       <select
                         value={modalPenangananCategory}
                         onChange={(e) => setModalPenangananCategory(e.target.value as any)}
-                        className={`w-full h-8.5 px-3 rounded-lg text-xs font-semibold border outline-none cursor-pointer ${
-                          modalPenangananCategory === 'PENANGANAN'
+                        className={`w-full h-8.5 px-3 rounded-lg text-xs font-semibold border outline-none cursor-pointer ${modalPenangananCategory === 'PENANGANAN'
                             ? 'bg-emerald-50 text-emerald-900 border-emerald-300'
                             : 'bg-sky-50 text-sky-900 border-sky-300'
-                        }`}
+                          }`}
                       >
                         <option value="PENANGANAN">Penanganan — Perbaikan Nyata Mesin</option>
                         <option value="UPDATE">Update — Info Progres / Tim OTW Lokasi</option>
@@ -10363,11 +10237,10 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
                   <button
                     type="button"
                     onClick={() => setFreqDetailDateFilter('ALL')}
-                    className={`px-3 py-1 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
-                      freqDetailDateFilter === 'ALL'
+                    className={`px-3 py-1 rounded-lg text-xs font-semibold transition-all cursor-pointer ${freqDetailDateFilter === 'ALL'
                         ? 'bg-blue-600 text-white shadow-2xs'
                         : 'bg-[#F8F9FF] text-[#555F71] hover:bg-[#EFF4FF] border border-[#EFF4FF]'
-                    }`}
+                      }`}
                   >
                     Semua Tanggal ({selectedFreqItemForDetail.totalFrekuensi}x)
                   </button>
@@ -10380,25 +10253,22 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
                         key={dt}
                         type="button"
                         onClick={() => setFreqDetailDateFilter(dt)}
-                        className={`px-2.5 py-1 rounded-lg text-xs font-medium transition-all cursor-pointer flex items-center gap-1.5 ${
-                          isSelected
+                        className={`px-2.5 py-1 rounded-lg text-xs font-medium transition-all cursor-pointer flex items-center gap-1.5 ${isSelected
                             ? 'bg-blue-600 text-white font-bold shadow-2xs'
                             : 'bg-white hover:bg-[#F8F9FF] text-[#0D1C2E] border border-slate-200'
-                        }`}
+                          }`}
                       >
                         <span>{dt}</span>
-                        <span className={`px-1.5 py-0.2 text-[10px] rounded-full font-bold ${
-                          isSelected ? 'bg-white/20 text-white' : 'bg-slate-100 text-slate-700'
-                        }`}>
+                        <span className={`px-1.5 py-0.2 text-[10px] rounded-full font-bold ${isSelected ? 'bg-white/20 text-white' : 'bg-slate-100 text-slate-700'
+                          }`}>
                           {count}x
                         </span>
                         {notesCount > 0 && (
                           <span
-                            className={`px-1.5 py-0.2 text-[9px] rounded-full font-bold flex items-center gap-0.5 ${
-                              isSelected
+                            className={`px-1.5 py-0.2 text-[9px] rounded-full font-bold flex items-center gap-0.5 ${isSelected
                                 ? 'bg-emerald-300 text-emerald-950'
                                 : 'bg-emerald-100 text-emerald-800 border border-emerald-300'
-                            }`}
+                              }`}
                             title={`${notesCount} catatan penanganan tercatat`}
                           >
                             <Check size={9} />
@@ -10427,11 +10297,10 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
                     <button
                       type="button"
                       onClick={() => setFreqDetailOnlyWithNotes((prev) => !prev)}
-                      className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-semibold transition-all cursor-pointer border ${
-                        freqDetailOnlyWithNotes
+                      className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-semibold transition-all cursor-pointer border ${freqDetailOnlyWithNotes
                           ? 'bg-blue-600 text-white border-blue-600 shadow-2xs'
                           : 'bg-white hover:bg-slate-50 text-slate-600 border-slate-200'
-                      }`}
+                        }`}
                       title={freqDetailOnlyWithNotes ? 'Saat ini hanya menampilkan yang memiliki catatan. Klik untuk melihat semua kejadian.' : 'Klik untuk menyaring hanya kejadian yang memiliki catatan.'}
                     >
                       <Check size={12} className={freqDetailOnlyWithNotes ? 'text-white' : 'opacity-0'} />
@@ -10494,9 +10363,8 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
                                 {formatDurationHuman(row.durasi)}
                               </td>
                               <td className="py-2.5 px-3 whitespace-nowrap">
-                                <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
-                                  row.status === 'OPEN' ? 'bg-rose-100 text-rose-700' : 'bg-emerald-100 text-emerald-800'
-                                }`}>
+                                <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${row.status === 'OPEN' ? 'bg-rose-100 text-rose-700' : 'bg-emerald-100 text-emerald-800'
+                                  }`}>
                                   {row.status}
                                 </span>
                               </td>
@@ -10550,11 +10418,10 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
                       <div key={hIdx} className="p-2.5 rounded-xl bg-white border border-[#E5EAF2] flex items-start justify-between gap-3 text-xs">
                         <div className="space-y-0.5">
                           <div className="flex items-center gap-2">
-                            <span className={`px-2 py-0.2 rounded-full text-[10px] font-bold ${
-                              hist.tipe === 'PENANGANAN' || hist.isiAction.includes('[PENANGANAN]')
+                            <span className={`px-2 py-0.2 rounded-full text-[10px] font-bold ${hist.tipe === 'PENANGANAN' || hist.isiAction.includes('[PENANGANAN]')
                                 ? 'bg-emerald-100 text-emerald-800'
                                 : 'bg-sky-100 text-sky-800'
-                            }`}>
+                              }`}>
                               {hist.tipe === 'PENANGANAN' || hist.isiAction.includes('[PENANGANAN]') ? 'PENANGANAN' : 'UPDATE'}
                             </span>
                             {renderAuthorBadge(hist.namaPetugas)}
@@ -10653,15 +10520,14 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
                       key={p}
                       type="button"
                       onClick={() => setKaOpsFollowUpPriority(p)}
-                      className={`py-2 px-3 rounded-xl border text-xs font-bold transition-all cursor-pointer ${
-                        kaOpsFollowUpPriority === p
+                      className={`py-2 px-3 rounded-xl border text-xs font-bold transition-all cursor-pointer ${kaOpsFollowUpPriority === p
                           ? p === 'URGENT'
                             ? 'bg-rose-500 text-white border-rose-600 shadow-sm'
                             : p === 'HIGH'
-                            ? 'bg-amber-500 text-white border-amber-600 shadow-sm'
-                            : 'bg-indigo-600 text-white border-indigo-700 shadow-sm'
+                              ? 'bg-amber-500 text-white border-amber-600 shadow-sm'
+                              : 'bg-indigo-600 text-white border-indigo-700 shadow-sm'
                           : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50'
-                      }`}
+                        }`}
                     >
                       {p}
                     </button>
@@ -10678,11 +10544,10 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
                       key={cat}
                       type="button"
                       onClick={() => setKaOpsFollowUpCategory(cat)}
-                      className={`py-1.5 px-2 rounded-xl border text-xs font-semibold transition-all cursor-pointer text-center ${
-                        kaOpsFollowUpCategory === cat
+                      className={`py-1.5 px-2 rounded-xl border text-xs font-semibold transition-all cursor-pointer text-center ${kaOpsFollowUpCategory === cat
                           ? 'bg-slate-800 text-white border-slate-900 shadow-xs'
                           : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50'
-                      }`}
+                        }`}
                     >
                       {cat}
                     </button>
@@ -10780,17 +10645,15 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
                 <button
                   type="button"
                   onClick={() => setTicketCenterTab('ALL')}
-                  className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer whitespace-nowrap flex items-center gap-2 ${
-                    ticketCenterTab === 'ALL'
+                  className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer whitespace-nowrap flex items-center gap-2 ${ticketCenterTab === 'ALL'
                       ? 'bg-indigo-600 text-white shadow-xs'
                       : 'bg-white text-slate-600 border border-slate-200 hover:bg-slate-100'
-                  }`}
+                    }`}
                 >
                   <Inbox size={14} />
                   <span>Semua Tiket</span>
-                  <span className={`px-1.5 py-0.2 rounded-full text-[10px] ${
-                    ticketCenterTab === 'ALL' ? 'bg-white/20 text-white' : 'bg-slate-200 text-slate-700'
-                  }`}>
+                  <span className={`px-1.5 py-0.2 rounded-full text-[10px] ${ticketCenterTab === 'ALL' ? 'bg-white/20 text-white' : 'bg-slate-200 text-slate-700'
+                    }`}>
                     {(modernTickets || []).length}
                   </span>
                 </button>
@@ -10798,17 +10661,15 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
                 <button
                   type="button"
                   onClick={() => setTicketCenterTab('ACTION_NEEDED')}
-                  className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer whitespace-nowrap flex items-center gap-2 ${
-                    ticketCenterTab === 'ACTION_NEEDED'
+                  className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer whitespace-nowrap flex items-center gap-2 ${ticketCenterTab === 'ACTION_NEEDED'
                       ? 'bg-amber-500 text-white shadow-xs'
                       : 'bg-white text-slate-600 border border-slate-200 hover:bg-slate-100'
-                  }`}
+                    }`}
                 >
                   <Clock size={14} />
                   <span>Perlu Tindakan Monitoring</span>
-                  <span className={`px-1.5 py-0.2 rounded-full text-[10px] ${
-                    ticketCenterTab === 'ACTION_NEEDED' ? 'bg-white/20 text-white' : 'bg-amber-100 text-amber-800'
-                  }`}>
+                  <span className={`px-1.5 py-0.2 rounded-full text-[10px] ${ticketCenterTab === 'ACTION_NEEDED' ? 'bg-white/20 text-white' : 'bg-amber-100 text-amber-800'
+                    }`}>
                     {openTicketsCount}
                   </span>
                 </button>
@@ -10816,21 +10677,19 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
                 <button
                   type="button"
                   onClick={() => setTicketCenterTab('WAITING_VALIDATION')}
-                  className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer whitespace-nowrap flex items-center gap-2 ${
-                    ticketCenterTab === 'WAITING_VALIDATION'
+                  className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer whitespace-nowrap flex items-center gap-2 ${ticketCenterTab === 'WAITING_VALIDATION'
                       ? 'bg-purple-600 text-white shadow-xs'
                       : 'bg-white text-slate-600 border border-slate-200 hover:bg-slate-100'
-                  }`}
+                    }`}
                 >
                   <ShieldCheck size={14} />
                   <span>Menunggu Validasi Ka Ops</span>
-                  <span className={`px-1.5 py-0.2 rounded-full text-[10px] font-black ${
-                    ticketCenterTab === 'WAITING_VALIDATION'
+                  <span className={`px-1.5 py-0.2 rounded-full text-[10px] font-black ${ticketCenterTab === 'WAITING_VALIDATION'
                       ? 'bg-white text-purple-700'
                       : reqCloseTicketsCount > 0
-                      ? 'bg-purple-100 text-purple-800 animate-pulse'
-                      : 'bg-slate-200 text-slate-700'
-                  }`}>
+                        ? 'bg-purple-100 text-purple-800 animate-pulse'
+                        : 'bg-slate-200 text-slate-700'
+                    }`}>
                     {reqCloseTicketsCount}
                   </span>
                 </button>
@@ -10838,17 +10697,15 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
                 <button
                   type="button"
                   onClick={() => setTicketCenterTab('CLOSED')}
-                  className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer whitespace-nowrap flex items-center gap-2 ${
-                    ticketCenterTab === 'CLOSED'
+                  className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer whitespace-nowrap flex items-center gap-2 ${ticketCenterTab === 'CLOSED'
                       ? 'bg-emerald-600 text-white shadow-xs'
                       : 'bg-white text-slate-600 border border-slate-200 hover:bg-slate-100'
-                  }`}
+                    }`}
                 >
                   <CheckCircle2 size={14} />
                   <span>Tuntas (Closed)</span>
-                  <span className={`px-1.5 py-0.2 rounded-full text-[10px] ${
-                    ticketCenterTab === 'CLOSED' ? 'bg-white/20 text-white' : 'bg-emerald-100 text-emerald-800'
-                  }`}>
+                  <span className={`px-1.5 py-0.2 rounded-full text-[10px] ${ticketCenterTab === 'CLOSED' ? 'bg-white/20 text-white' : 'bg-emerald-100 text-emerald-800'
+                    }`}>
                     {(modernTickets || []).filter(t => t.status === 'CLOSED').length}
                   </span>
                 </button>
@@ -10908,15 +10765,14 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
                   return (
                     <div
                       key={ticket.ticketId}
-                      className={`rounded-2xl border p-4.5 transition-all shadow-xs ${
-                        isReopen
+                      className={`rounded-2xl border p-4.5 transition-all shadow-xs ${isReopen
                           ? 'bg-rose-50/50 border-rose-300 shadow-rose-100'
                           : isReqClose
-                          ? 'bg-purple-50/40 border-purple-200 shadow-purple-50'
-                          : isClosed
-                          ? 'bg-slate-50/80 border-slate-200 opacity-90'
-                          : 'bg-white border-slate-200 hover:border-indigo-300 hover:shadow-md'
-                      }`}
+                            ? 'bg-purple-50/40 border-purple-200 shadow-purple-50'
+                            : isClosed
+                              ? 'bg-slate-50/80 border-slate-200 opacity-90'
+                              : 'bg-white border-slate-200 hover:border-indigo-300 hover:shadow-md'
+                        }`}
                     >
                       {/* Top Card Row */}
                       <div className="flex flex-wrap items-center justify-between gap-2 pb-3 border-b border-slate-100">
@@ -10924,19 +10780,18 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
                           <span className="font-mono font-black text-xs px-2.5 py-1 rounded-lg bg-slate-900 text-white tracking-wider">
                             #{ticket.ticketId}
                           </span>
-                          
+
                           {/* Status Pill */}
-                          <span className={`px-2.5 py-0.5 rounded-full text-[11px] font-bold border flex items-center gap-1 ${
-                            isReopen
+                          <span className={`px-2.5 py-0.5 rounded-full text-[11px] font-bold border flex items-center gap-1 ${isReopen
                               ? 'bg-rose-100 text-rose-800 border-rose-300 animate-pulse'
                               : isReqClose
-                              ? 'bg-purple-100 text-purple-800 border-purple-300'
-                              : ticket.status === 'IN_PROGRESS'
-                              ? 'bg-amber-100 text-amber-800 border-amber-300'
-                              : isClosed
-                              ? 'bg-emerald-100 text-emerald-800 border-emerald-300'
-                              : 'bg-blue-100 text-blue-800 border-blue-300'
-                          }`}>
+                                ? 'bg-purple-100 text-purple-800 border-purple-300'
+                                : ticket.status === 'IN_PROGRESS'
+                                  ? 'bg-amber-100 text-amber-800 border-amber-300'
+                                  : isClosed
+                                    ? 'bg-emerald-100 text-emerald-800 border-emerald-300'
+                                    : 'bg-blue-100 text-blue-800 border-blue-300'
+                            }`}>
                             {isReopen && <AlertOctagon size={12} />}
                             {isReqClose && <ShieldCheck size={12} />}
                             {isClosed && <CheckCircle2 size={12} />}
@@ -10948,13 +10803,12 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
                           </span>
 
                           {/* Prioritas */}
-                          <span className={`px-2 py-0.5 rounded-md text-[10px] font-bold ${
-                            ticket.prioritas === 'URGENT'
+                          <span className={`px-2 py-0.5 rounded-md text-[10px] font-bold ${ticket.prioritas === 'URGENT'
                               ? 'bg-rose-600 text-white'
                               : ticket.prioritas === 'HIGH'
-                              ? 'bg-amber-500 text-white'
-                              : 'bg-slate-200 text-slate-700'
-                          }`}>
+                                ? 'bg-amber-500 text-white'
+                                : 'bg-slate-200 text-slate-700'
+                            }`}>
                             {ticket.prioritas}
                           </span>
 
@@ -10965,13 +10819,12 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
                         </div>
 
                         {/* Duration Clock */}
-                        <div className={`flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-mono font-bold ${
-                          isClosed
+                        <div className={`flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-mono font-bold ${isClosed
                             ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
                             : isUrgentDuration
-                            ? 'bg-rose-100 text-rose-800 border border-rose-300 animate-pulse'
-                            : 'bg-slate-100 text-slate-700 border border-slate-200'
-                        }`}>
+                              ? 'bg-rose-100 text-rose-800 border border-rose-300 animate-pulse'
+                              : 'bg-slate-100 text-slate-700 border border-slate-200'
+                          }`}>
                           <Timer size={13} />
                           <span>{isClosed ? `Total SLA: ${durationStr}` : `Durasi Berjalan: ${durationStr}`}</span>
                         </div>
@@ -11401,11 +11254,10 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
                   <button
                     type="button"
                     onClick={() => setValidationDecision('CLOSED')}
-                    className={`p-3 rounded-xl border text-left transition-all cursor-pointer flex flex-col justify-between ${
-                      validationDecision === 'CLOSED'
+                    className={`p-3 rounded-xl border text-left transition-all cursor-pointer flex flex-col justify-between ${validationDecision === 'CLOSED'
                         ? 'bg-emerald-50 border-emerald-500 ring-2 ring-emerald-500/20 text-emerald-950 font-bold'
                         : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-50'
-                    }`}
+                      }`}
                   >
                     <div className="flex items-center gap-2 mb-1">
                       <CheckCircle2 size={16} className={validationDecision === 'CLOSED' ? 'text-emerald-600' : 'text-slate-400'} />
@@ -11419,11 +11271,10 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
                   <button
                     type="button"
                     onClick={() => setValidationDecision('RE_OPEN')}
-                    className={`p-3 rounded-xl border text-left transition-all cursor-pointer flex flex-col justify-between ${
-                      validationDecision === 'RE_OPEN'
+                    className={`p-3 rounded-xl border text-left transition-all cursor-pointer flex flex-col justify-between ${validationDecision === 'RE_OPEN'
                         ? 'bg-rose-50 border-rose-500 ring-2 ring-rose-500/20 text-rose-950 font-bold'
                         : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-50'
-                    }`}
+                      }`}
                   >
                     <div className="flex items-center gap-2 mb-1">
                       <AlertOctagon size={16} className={validationDecision === 'RE_OPEN' ? 'text-rose-600' : 'text-slate-400'} />
@@ -11481,11 +11332,10 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
                 type="button"
                 onClick={handleSubmitValidation}
                 disabled={isSubmittingValidation || (validationDecision === 'RE_OPEN' && !validationReopenReason.trim())}
-                className={`px-5 py-2 rounded-xl text-white text-xs font-bold transition-all shadow-md cursor-pointer flex items-center gap-1.5 disabled:opacity-40 ${
-                  validationDecision === 'CLOSED'
+                className={`px-5 py-2 rounded-xl text-white text-xs font-bold transition-all shadow-md cursor-pointer flex items-center gap-1.5 disabled:opacity-40 ${validationDecision === 'CLOSED'
                     ? 'bg-emerald-600 hover:bg-emerald-700 shadow-emerald-500/20'
                     : 'bg-rose-600 hover:bg-rose-700 shadow-rose-500/20'
-                }`}
+                  }`}
               >
                 {validationDecision === 'CLOSED' ? <CheckCircle2 size={14} /> : <AlertOctagon size={14} />}
                 <span>{validationDecision === 'CLOSED' ? 'Setujui & Tutup Tiket' : 'Simpan & Re-Open Tiket'}</span>
