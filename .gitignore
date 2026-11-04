@@ -34,4 +34,7 @@ pnpm-debug.log*
 # Vercel CLI cache
 .vercel/
 
+# Heavy Seed Files Backup
+src/data/seed_backup/
+
 

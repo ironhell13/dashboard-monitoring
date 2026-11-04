@@ -9,18 +9,32 @@ let lastUsedKey = '';
 
 /**
  * Mendapatkan Supabase URL yang aktif.
- * Prioritas:
- * 1. Custom URL di localStorage (dari modal setting di dashboard)
- * 2. Environment variable VITE_SUPABASE_URL (dari Vercel / .env)
+ * Prioritas Utama: Environment variable VITE_SUPABASE_URL (dari Vercel / .env)
+ * Di mode produksi, kredensial env Vercel adalah Single Source of Truth mutlak.
  */
 export function getSupabaseUrl(): string {
-  try {
-    const custom = localStorage.getItem(STORAGE_URL_KEY);
-    if (custom && custom.trim() !== '') return custom.trim();
-  } catch (e) {}
-
   const envUrl = (import.meta as any).env?.VITE_SUPABASE_URL;
+  const isDev = Boolean((import.meta as any).env?.DEV);
+
+  // Jika di produksi, bersihkan override localStorage lama agar tidak memecah koneksi
+  if (!isDev) {
+    try {
+      if (localStorage.getItem(STORAGE_URL_KEY)) {
+        console.warn('[SupabaseClient] Menghapus override custom URL lama di produksi.');
+        localStorage.removeItem(STORAGE_URL_KEY);
+      }
+    } catch (_) {}
+  }
+
   if (envUrl && envUrl.trim() !== '') return envUrl.trim();
+
+  // Hanya izinkan custom URL jika di mode development (DEV)
+  if (isDev) {
+    try {
+      const custom = localStorage.getItem(STORAGE_URL_KEY);
+      if (custom && custom.trim() !== '') return custom.trim();
+    } catch (_) {}
+  }
 
   return '';
 }
@@ -29,19 +43,32 @@ export function getSupabaseUrl(): string {
  * Mendapatkan Supabase Anon/Public Key yang aktif.
  */
 export function getSupabaseAnonKey(): string {
-  try {
-    const custom = localStorage.getItem(STORAGE_KEY_KEY);
-    if (custom && custom.trim() !== '') return custom.trim();
-  } catch (e) {}
-
   const envKey = (import.meta as any).env?.VITE_SUPABASE_ANON_KEY;
+  const isDev = Boolean((import.meta as any).env?.DEV);
+
+  // Jika di produksi, bersihkan override localStorage lama
+  if (!isDev) {
+    try {
+      if (localStorage.getItem(STORAGE_KEY_KEY)) {
+        localStorage.removeItem(STORAGE_KEY_KEY);
+      }
+    } catch (_) {}
+  }
+
   if (envKey && envKey.trim() !== '') return envKey.trim();
+
+  if (isDev) {
+    try {
+      const custom = localStorage.getItem(STORAGE_KEY_KEY);
+      if (custom && custom.trim() !== '') return custom.trim();
+    } catch (_) {}
+  }
 
   return '';
 }
 
 /**
- * Menyimpan kredensial Supabase dari UI Dashboard
+ * Menyimpan kredensial Supabase dari UI Dashboard (hanya berlaku jika mode DEV)
  */
 export function setSupabaseCredentials(url: string, anonKey: string): void {
   try {
@@ -62,6 +89,40 @@ export function setSupabaseCredentials(url: string, anonKey: string): void {
     lastUsedUrl = '';
     lastUsedKey = '';
   } catch (e) {}
+}
+
+/**
+ * Informasi diagnostik koneksi Supabase untuk panel debug (?debug=1)
+ */
+export function getSupabaseInfo(): {
+  url: string;
+  projectRef: string;
+  credentialSource: 'env' | 'localStorage' | 'none';
+  isConfigured: boolean;
+} {
+  const envUrl = (import.meta as any).env?.VITE_SUPABASE_URL;
+  const url = getSupabaseUrl();
+  const key = getSupabaseAnonKey();
+
+  let source: 'env' | 'localStorage' | 'none' = 'none';
+  if (url) {
+    source = (envUrl && url === envUrl.trim()) ? 'env' : 'localStorage';
+  }
+
+  let projectRef = 'none';
+  try {
+    if (url) {
+      const parsed = new URL(url);
+      projectRef = parsed.hostname.split('.')[0] || 'unknown';
+    }
+  } catch (_) {}
+
+  return {
+    url,
+    projectRef,
+    credentialSource: source,
+    isConfigured: Boolean(url && key)
+  };
 }
 
 /**

@@ -1,5 +1,6 @@
 import type { MasterRow, ParsedUptimeFile } from './excelParser';
 import type { FollowUpTicket } from './spreadsheetService';
+import { getSupabaseInfo } from './supabaseClient';
 
 export interface CachedSnapshot {
   masterData: MasterRow[];
@@ -10,6 +11,9 @@ export interface CachedSnapshot {
   timestamp: number;
   matchedMachines?: any[];
 }
+
+export const CACHE_SCHEMA_VERSION = 2;
+const CACHE_VERSION_TAG = 'EMONS_CACHE_VERSION_TAG';
 
 const DB_NAME = 'DOWNTIME_BCA_CACHE_DB';
 const DB_VERSION = 1;
@@ -312,8 +316,101 @@ export async function loadLocalActions(incidentKey?: string): Promise<any[]> {
 }
 
 // ==========================================
-// MONITORING SNAPSHOT CACHE (PERSIS SEPERTI KA OPS)
+// MONITORING FIRST-PAINT CACHE (STALE-WHILE-REVALIDATE)
 // ==========================================
+export interface FirstPaintMonitoringCache {
+  version: number;
+  projectRef: string;
+  savedAt: number;
+  openIncidents: any[];
+  allDailyIncidents: any[];
+  historyResults: any[];
+}
+
+export function getScopedCacheKey(baseKey: string): string {
+  try {
+    const { projectRef } = getSupabaseInfo();
+    return `v${CACHE_SCHEMA_VERSION}_${projectRef || 'default'}_${baseKey}`;
+  } catch (_) {
+    return `v${CACHE_SCHEMA_VERSION}_default_${baseKey}`;
+  }
+}
+
+/**
+ * Menyimpan first-paint cache ke IndexedDB (hanya untuk first-paint, selalu ditimpa hasil server)
+ */
+export async function saveFirstPaintCache(data: {
+  openIncidents: any[];
+  allDailyIncidents?: any[];
+  historyResults?: any[];
+}): Promise<boolean> {
+  try {
+    const db = await openIndexedDB();
+    const { projectRef } = getSupabaseInfo();
+    const cacheKey = getScopedCacheKey('first_paint_monitoring');
+
+    const payload: FirstPaintMonitoringCache = {
+      version: CACHE_SCHEMA_VERSION,
+      projectRef: projectRef || 'default',
+      savedAt: Date.now(),
+      openIncidents: Array.isArray(data.openIncidents) ? data.openIncidents : [],
+      allDailyIncidents: Array.isArray(data.allDailyIncidents) ? data.allDailyIncidents.slice(0, 500) : [],
+      historyResults: Array.isArray(data.historyResults) ? data.historyResults.slice(0, 500) : []
+    };
+
+    await new Promise<void>((resolve, reject) => {
+      const tx = db.transaction(STORE_NAME, 'readwrite');
+      const store = tx.objectStore(STORE_NAME);
+      const req = store.put(payload, cacheKey);
+      req.onsuccess = () => resolve();
+      req.onerror = () => reject(req.error);
+      tx.oncomplete = () => resolve();
+    });
+    return true;
+  } catch (err) {
+    console.warn('[Cache] Gagal menyimpan first paint cache:', err);
+    return false;
+  }
+}
+
+/**
+ * Memuat first-paint cache dari IndexedDB untuk tampilan instan awal (< 15ms)
+ */
+export async function loadFirstPaintCache(): Promise<FirstPaintMonitoringCache | null> {
+  try {
+    // Purge otomatis jika versi schema cache lama
+    const storedVer = localStorage.getItem(CACHE_VERSION_TAG);
+    if (!storedVer || parseInt(storedVer, 10) !== CACHE_SCHEMA_VERSION) {
+      await clearMonitoringCache();
+      localStorage.setItem(CACHE_VERSION_TAG, String(CACHE_SCHEMA_VERSION));
+      return null;
+    }
+
+    const db = await openIndexedDB();
+    const cacheKey = getScopedCacheKey('first_paint_monitoring');
+    const { projectRef } = getSupabaseInfo();
+
+    const result: FirstPaintMonitoringCache | null = await new Promise((resolve) => {
+      try {
+        const tx = db.transaction(STORE_NAME, 'readonly');
+        const store = tx.objectStore(STORE_NAME);
+        const req = store.get(cacheKey);
+        req.onsuccess = () => resolve(req.result || null);
+        req.onerror = () => resolve(null);
+      } catch (_) {
+        resolve(null);
+      }
+    });
+
+    if (result && result.version === CACHE_SCHEMA_VERSION && (!projectRef || result.projectRef === projectRef)) {
+      return result;
+    }
+  } catch (err) {
+    console.warn('[Cache] Gagal membaca first paint cache:', err);
+  }
+  return null;
+}
+
 export interface MonitoringSnapshot {
   openIncidents: any[];
   allDailyIncidents: any[];
@@ -322,13 +419,16 @@ export interface MonitoringSnapshot {
 }
 
 const MONITORING_SNAPSHOT_KEY = 'monitoring_full_snapshot';
-const MONITORING_LS_SNAPSHOT = 'MONITORING_SNAPSHOT_FALLBACK';
 
 /**
- * Menyimpan snapshot monitoring ke IndexedDB agar kunjungan berikutnya instan (< 10ms)
+ * Kompatibilitas mundur: simpan first-paint snapshot
  */
-export async function saveMonitoringSnapshot(_snapshot: MonitoringSnapshot): Promise<boolean> {
-  return true;
+export async function saveMonitoringSnapshot(snapshot: MonitoringSnapshot): Promise<boolean> {
+  return saveFirstPaintCache({
+    openIncidents: snapshot.openIncidents,
+    allDailyIncidents: snapshot.allDailyIncidents,
+    historyResults: snapshot.historyResults
+  });
 }
 
 /**

@@ -110,7 +110,7 @@ import {
   type DailyIncidentRow,
   type WsidProblemDateAggregation
 } from '../utils/dailyIncidentParser';
-import { loadLocalActions } from '../utils/dbCache';
+import { loadLocalActions, clearMonitoringCache } from '../utils/dbCache';
 import { useDataStore } from '../store/useDataStore';
 import FollowUpPage from './FollowUpPage';
 import { useQuickChips } from '../utils/quickChipsService';
@@ -121,6 +121,9 @@ import {
   getMachineMetadata,
   type RealtimeIncidentPayload
 } from '../utils/supabaseService';
+import { useOpenIncidents } from '../hooks/useOpenIncidents';
+import { AutoRefreshCountdown } from '../components/AutoRefreshCountdown';
+import { DebugPanel } from '../components/DebugPanel';
 
 interface MonitoringPageProps {
   onLogout?: () => void;
@@ -598,9 +601,8 @@ export function enrichOpenWithDailyData(
     return result;
   }
 
-  // KASUS B: Jika openItems kosong (misal mode offline saat pertama kali load)
-  // Ekstrak insiden OPEN langsung dari dailyRows sebagai fallback
-  return extractOpenFromRows(dailyRows);
+  // KASUS B: Jika openItems kosong, kembalikan array kosong (Supabase adalah Single Source of Truth, tidak membangkitkan data lama)
+  return [];
 }
 
 /** Format durasi menit ke format manusiawi ringkas e.g. "1j 42m" atau "48m" */
@@ -837,7 +839,6 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
   const [isDutyModalOpen, setIsDutyModalOpen] = useState(false);
   const [dutyOperatorInput, setDutyOperatorInput] = useState('');
   const [isSimulasiAman, setIsSimulasiAman] = useState(false);
-  const [countdownSeconds, setCountdownSeconds] = useState(15);
   const [currentLiveTime, setCurrentLiveTime] = useState<Date>(() => new Date());
 
   const [allDailyIncidents, setAllDailyIncidents] = useState<DailyIncidentRow[]>([]);
@@ -847,9 +848,15 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
     text: string;
   } | null>(null);
 
-  // 3. Tab 1: Problem Open State (Single Source of Truth: Supabase Cloud DB)
-  const [openIncidents, setOpenIncidents] = useState<OpenIncidentItem[]>([]);
-  const [isLoadingOpen, setIsLoadingOpen] = useState(false);
+  // 3. Tab 1: Problem Open State via Hook useOpenIncidents (Single Source of Truth: Supabase Cloud DB)
+  const {
+    openIncidents,
+    setOpenIncidents,
+    isLoading: isLoadingOpen,
+    connectionStatus,
+    lastSyncedAt,
+    refetch: fetchOpenIncidents
+  } = useOpenIncidents();
   const [openCardFilter, setOpenCardFilter] = useState<
     'ALL' | 'OVER_60' | 'OVER_180' | 'CHRONIC' | 'CHRONIC_3X_SEHARI' | 'CHRONIC_3X_5HARI' | 'NO_ACTION'
   >('ALL');
@@ -1176,16 +1183,10 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
         historyCacheRef.current[month] = mappedHistory;
         setHistoryResults(mappedHistory);
 
-        // Langsung perbaiki Problem Open dengan data tanggal & jam asli dari database
+        // Sinkronkan detail Problem Open yang aktif dengan data tanggal & jam asli dari database
         setOpenIncidents((prev) => {
-          let enriched = enrichOpenWithDailyData(prev, res.rows);
-          if (enriched.length === 0 && res.rows.length > 0) {
-            const fallbackExtracted = extractOpenFromRows(res.rows);
-            if (fallbackExtracted.length > 0) {
-              enriched = fallbackExtracted;
-            }
-          }
-          return enriched;
+          if (!prev || prev.length === 0) return prev;
+          return enrichOpenWithDailyData(prev, res.rows);
         });
 
         setSyncStatusBanner({
@@ -1240,169 +1241,9 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
     }
   };
 
-  // Tarik update terbaru di latar belakang (non-blocking)
-  const fetchOpenIncidents = async (forceSync = false) => {
-    setIsLoadingOpen(true);
-    try {
-      const res = await getOpenIncidentsApi({ forceSync });
-      const rawServerIncidents = (res && res.success && Array.isArray(res.incidents)) ? res.incidents : [];
-
-      const cleanIncidents: OpenIncidentItem[] = rawServerIncidents
-        .filter((it) => !isEndTimeFilled(it.endTime))
-        .map((it) => {
-          const sTime = formatStartProblemTime(it.startTime) !== '-' ? formatStartProblemTime(it.startTime) : getDisplayStartTime(it);
-          const dText = (!it.detail || it.detail === '-' || isDateLikeString(it.detail)) ? '-' : it.detail;
-
-          // Bersihkan actionTerakhir dari pesan error teknis mesin
-          let act = (it.actionTerakhir && it.actionTerakhir !== '-' && !isTechnicalMachineLog(it.actionTerakhir)) ? it.actionTerakhir : '-';
-          const actBy = (act !== '-') ? (it.actionTerakhirOleh && it.actionTerakhirOleh !== 'CSV' && it.actionTerakhirOleh !== 'CSV Comment' ? it.actionTerakhirOleh : 'Petugas') : '-';
-          const actTime = (act !== '-') ? (it.actionTerakhirWaktu && it.actionTerakhirWaktu !== '-' ? it.actionTerakhirWaktu : '-') : '-';
-          const jml = (act !== '-') ? (it.jumlahAction || 1) : 0;
-
-          return {
-            ...it,
-            detail: dText,
-            startTime: sTime,
-            endTime: '-',
-            status: 'OPEN',
-            actionTerakhir: act,
-            actionTerakhirOleh: actBy,
-            actionTerakhirWaktu: actTime,
-            jumlahAction: jml
-          };
-        });
-
-      setOpenIncidents((prev) => {
-        const currentDaily =
-          allDailyIncidentsRef.current.length > 0
-            ? allDailyIncidentsRef.current
-            : allDailyIncidents;
-
-        // Gabungkan list open dari server dengan catatan lokal di prev
-        const baseItems = cleanIncidents.length > 0 ? cleanIncidents : prev;
-        let finalEnriched = (currentDaily && currentDaily.length > 0)
-          ? enrichOpenWithDailyData(baseItems, currentDaily)
-          : (cleanIncidents.length > 0 ? cleanIncidents : prev);
-
-        if (finalEnriched.length === 0 && currentDaily && currentDaily.length > 0) {
-          const fallback = extractOpenFromRows(currentDaily);
-          if (fallback.length > 0) {
-            finalEnriched = fallback;
-          }
-        }
-
-        return finalEnriched;
-      });
-    } catch (err) {
-      console.warn('Gagal memuat open incidents dari server:', err);
-    } finally {
-      setIsLoadingOpen(false);
-      setCountdownSeconds(15);
-    }
-  };
-
-  // Muat data awal langsung dari database Supabase
+  // Muat dataset harian Supabase saat awal mount
   useEffect(() => {
-    fetchOpenIncidents(true);
     fetchDailyIncidentsFromDb('ALL');
-  }, []);
-
-  // Supabase Realtime Delta Listener untuk sinkronisasi multi-device instan antar PC (0ms)
-  useEffect(() => {
-    if (!isSupabaseConfigured()) return;
-
-    const unsubscribe = subscribeActiveIncidentsSupabase((payload: RealtimeIncidentPayload) => {
-      const { eventType, new: newRow, old: oldRow } = payload;
-
-      if (eventType === 'INSERT') {
-        if (!newRow || newRow.status !== 'OPEN' || isEndTimeFilled(newRow.end_time)) return;
-        const newItem = mapRowToOpenIncident(newRow, getMachineMetadata(newRow.wsid));
-        setOpenIncidents((prev) => {
-          const exists = prev.some((it) => it.incidentKey === newItem.incidentKey || (it.wsid === newItem.wsid && it.incidentNumber === newItem.incidentNumber));
-          if (exists) {
-            return prev.map((it) => (it.incidentKey === newItem.incidentKey || (it.wsid === newItem.wsid && it.incidentNumber === newItem.incidentNumber)) ? newItem : it);
-          }
-          return [newItem, ...prev];
-        });
-      } else if (eventType === 'UPDATE') {
-        if (!newRow) return;
-        const isClosed = newRow.status === 'CLOSED' || isEndTimeFilled(newRow.end_time);
-
-        if (isClosed) {
-          // Jika status CLOSED atau end_time terisi, keluarkan dari list Problem Open
-          setOpenIncidents((prev) =>
-            prev.filter(
-              (it) =>
-                it.incidentKey !== newRow.incident_key &&
-                (it as any).id !== newRow.id &&
-                !(newRow.ticket_no && it.incidentNumber === newRow.ticket_no)
-            )
-          );
-        } else {
-          // Perbarui item in-place jika status masih OPEN
-          const updatedItem = mapRowToOpenIncident(newRow, getMachineMetadata(newRow.wsid));
-          setOpenIncidents((prev) =>
-            prev.map((it) => {
-              const isMatch =
-                it.incidentKey === newRow.incident_key ||
-                (it as any).id === newRow.id ||
-                (newRow.ticket_no && newRow.ticket_no !== '-' && it.incidentNumber === newRow.ticket_no);
-              return isMatch ? { ...it, ...updatedItem } : it;
-            })
-          );
-        }
-
-        // Jika modal detail sedang terbuka pada insiden ini, sinkronkan real-time
-        setActiveIncidentDetail((cur) => {
-          if (!cur) return null;
-          const isMatch =
-            cur.incidentKey === newRow.incident_key ||
-            (newRow.ticket_no && newRow.ticket_no !== '-' && cur.incidentNumber === newRow.ticket_no);
-          if (isMatch) {
-            const mapped = mapRowToOpenIncident(newRow, getMachineMetadata(newRow.wsid));
-            return { ...cur, ...mapped };
-          }
-          return cur;
-        });
-      } else if (eventType === 'DELETE') {
-        const targetKey = oldRow?.incident_key;
-        const targetId = oldRow?.id;
-        const targetTicket = oldRow?.ticket_no;
-        setOpenIncidents((prev) =>
-          prev.filter(
-            (it) =>
-              it.incidentKey !== targetKey &&
-              (it as any).id !== targetId &&
-              !(targetTicket && it.incidentNumber === targetTicket)
-          )
-        );
-      }
-    });
-
-    return () => {
-      unsubscribe();
-    };
-  }, []);
-
-  // Countdown timer simulation (15 seconds auto-refresh loop) & Live Clock
-  useEffect(() => {
-    let tickCount = 0;
-    const timer = setInterval(() => {
-      setCountdownSeconds((prev) => {
-        if (prev <= 1) {
-          fetchOpenIncidents();
-          setCurrentLiveTime(new Date());
-          return 15;
-        }
-        return prev - 1;
-      });
-
-      tickCount++;
-      if (tickCount % 15 === 0) {
-        setCurrentLiveTime(new Date());
-      }
-    }, 1000);
-    return () => clearInterval(timer);
   }, []);
 
   // =========================================================================
@@ -2503,31 +2344,20 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
     setSingleActionText('');
     setActionSaveSuccess(false);
     setIsDrawerOpen(true);
+    setIncidentHistory([]);
+    setIsLoadingHistory(true);
 
     try {
-      const localActions = await loadLocalActions(inc.incidentKey);
-      if (localActions && localActions.length > 0) {
-        setIncidentHistory(localActions);
+      const mStr = extractMonthStr(inc.tanggal || inc.startTime || inc.monthStr, historyMonth);
+      const res = await getIncidentHistoryApi(inc.incidentKey, mStr);
+      if (res && res.success && Array.isArray(res.history)) {
+        setIncidentHistory(res.history.sort((a, b) => b.waktu.localeCompare(a.waktu)));
       } else {
         setIncidentHistory([]);
       }
     } catch (e) {
+      console.warn('Gagal memuat riwayat tindakan dari Supabase:', e);
       setIncidentHistory([]);
-    }
-
-    setIsLoadingHistory(true);
-    try {
-      const mStr = extractMonthStr(inc.tanggal || inc.startTime || inc.monthStr, historyMonth);
-      const res = await getIncidentHistoryApi(inc.incidentKey, mStr);
-      if (res.success && res.history && res.history.length > 0) {
-        setIncidentHistory((prev) => {
-          const map = new Map<string, IncidentHistoryItem>();
-          res.history.forEach((h) => map.set(h.logId, h));
-          prev.forEach((h) => map.set(h.logId, h));
-          return Array.from(map.values()).sort((a, b) => b.waktu.localeCompare(a.waktu));
-        });
-      }
-    } catch (e) {
     } finally {
       setIsLoadingHistory(false);
     }
@@ -5119,24 +4949,17 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
                 <h1 className="font-bold text-lg sm:text-xl text-[#0D1C2E] tracking-tight">
                   Monitoring Problem Open
                 </h1>
-                <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-white text-[#555F71] text-[11px] font-medium border border-[#E5EAF2] shadow-2xs">
-                  <span className="w-1.5 h-1.5 rounded-full bg-blue-600 animate-pulse"></span>
-                  <span>Tersinkronisasi &bull; {currentLiveTime.toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })} WIB</span>
-                </div>
-                <button
-                  type="button"
-                  onClick={async () => {
-                    setCountdownSeconds(15);
+                <AutoRefreshCountdown
+                  isLoading={isLoadingOpen || isLoadingDailyFromDb}
+                  connectionStatus={connectionStatus}
+                  lastSyncedAt={lastSyncedAt}
+                  intervalSeconds={15}
+                  onRefresh={async () => {
                     historyCacheRef.current = {};
-                    await fetchOpenIncidents(true);
+                    await fetchOpenIncidents();
                     await fetchDailyIncidentsFromDb('ALL');
                   }}
-                  className="flex items-center gap-1.5 text-[#555F71] hover:text-[#0D1C2E] text-[11px] bg-[#EFF4FF] hover:bg-[#dbe6ff] px-2.5 py-1 rounded-full cursor-pointer transition-all border border-transparent hover:border-[#BFD3FF]"
-                  title="Klik untuk menyinkronkan data Problem Open & Database terbaru sekarang"
-                >
-                  <RefreshCw size={12} className={isLoadingOpen || isLoadingDailyFromDb ? 'animate-spin text-blue-600' : 'text-blue-600'} />
-                  <span>{isLoadingOpen || isLoadingDailyFromDb ? 'Menyinkronkan...' : <span>Update otomatis (<strong className="text-[#0D1C2E] font-semibold">{countdownSeconds}s</strong>) • <strong className="text-blue-600 underline">Refresh</strong></span>}</span>
-                </button>
+                />
               </div>
 
               {/* Right Utility Buttons */}
@@ -11589,6 +11412,19 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
           </button>
         </div>
       )}
+
+      {/* Panel Diagnostik (Aktif hanya jika URL mengandung ?debug=1) */}
+      <DebugPanel
+        activeDataset="supabase"
+        openCount={openIncidents.length}
+        dailyCount={allDailyIncidents.length}
+        lastSyncedAt={lastSyncedAt}
+        connectionStatus={connectionStatus}
+        onResetCache={async () => {
+          await clearMonitoringCache();
+          window.location.reload();
+        }}
+      />
 
       {/* ==================================================== */}
       {/* 8. FOOTER                                            */}

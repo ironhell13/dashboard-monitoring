@@ -367,7 +367,66 @@ ON CONFLICT (username) DO UPDATE SET
   full_name = EXCLUDED.full_name;
 
 -- ==============================================================================
--- 15. INITIAL SEED: QUICK CHIPS DEFAULT
+-- 16. OPTIMASI REALTIME & PARITAS DATA CEK DAILY
+-- ==============================================================================
+CREATE INDEX IF NOT EXISTS idx_active_incidents_status_start
+  ON public.active_incidents (status, start_time DESC, incident_key);
+
+CREATE INDEX IF NOT EXISTS idx_incident_logs_periode_start_id
+  ON public.incident_logs (periode_bulan, start_time DESC, id DESC);
+
+CREATE OR REPLACE VIEW public.v_open_incidents
+WITH (security_invoker = true) AS
+SELECT
+  ai.*,
+  m.lokasi,
+  m.wilayah_operasional AS service_point,
+  m.sektor_bca,
+  m.tipe_mesin,
+  m.vendor
+FROM public.active_incidents ai
+LEFT JOIN public.machines m ON upper(trim(m.wsid)) = upper(trim(ai.wsid))
+WHERE ai.status = 'OPEN';
+
+GRANT SELECT ON public.v_open_incidents TO anon, authenticated, service_role;
+
+CREATE OR REPLACE FUNCTION public.save_incident_action(
+  p_incident_key text,
+  p_wsid text,
+  p_problem text,
+  p_action text,
+  p_by text,
+  p_periode text
+) RETURNS public.active_incidents
+LANGUAGE plpgsql SECURITY DEFINER AS $$
+DECLARE
+  v_row public.active_incidents;
+BEGIN
+  UPDATE public.active_incidents
+     SET action_taken = p_action,
+         action_by = p_by,
+         action_at = now(),
+         updated_at = now()
+   WHERE incident_key = p_incident_key
+   RETURNING * INTO v_row;
+
+  IF NOT FOUND THEN
+    RAISE EXCEPTION 'Incident % tidak ditemukan atau sudah selesai (CLOSED)', p_incident_key;
+  END IF;
+
+  INSERT INTO public.incident_logs
+    (incident_key, wsid, problem, action_taken, action_by, action_at, status, periode_bulan)
+  VALUES
+    (p_incident_key, p_wsid, p_problem, p_action, p_by, now(), 'OPEN', COALESCE(p_periode, to_char(now(), 'YYYY-MM')));
+
+  RETURN v_row;
+END;
+$$;
+
+GRANT EXECUTE ON FUNCTION public.save_incident_action(text, text, text, text, text, text) TO anon, authenticated, service_role;
+
+-- ==============================================================================
+-- 17. INITIAL SEED: QUICK CHIPS DEFAULT
 -- ==============================================================================
 INSERT INTO public.quick_chips (id, category, text, order_num, is_custom)
 VALUES

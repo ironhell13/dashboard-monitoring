@@ -1020,6 +1020,30 @@ export function getMachineMetadata(wsid?: string): any {
   return null;
 }
 
+export function getMachinesMap(): Map<string, any> {
+  const map = new Map<string, any>();
+  try {
+    const list = useDataStore.getState().machines || [];
+    for (let i = 0; i < list.length; i++) {
+      const m = list[i];
+      const w = String(m.wsid || '').trim().toUpperCase();
+      if (w) {
+        map.set(w, {
+          lokasi: m.lokasi || '-',
+          service_point: m.servicePoint || m.wilayahOperasional || '-',
+          sektor_bca: m.sektorBCA || '-',
+          tipe_mesin: m.tipeMesin || '-',
+          vendor: m.vendor || '-'
+        });
+      }
+    }
+  } catch (_) {}
+  return map;
+}
+
+export { isEndTimeFilled } from './dailyIncidentParser';
+export type { OpenIncidentItem } from './monitoringService';
+
 export function extractDateStrFromRaw(rawDate: any): string {
   if (!rawDate || rawDate === '-' || rawDate === 'N/A') return '-';
   const str = String(rawDate).trim();
@@ -1186,26 +1210,74 @@ export async function fetchOpenIncidentsSupabase(filters?: { forceSync?: boolean
   try {
     const allRows: any[] = [];
     const chunkSize = 1000;
+    const machinesMap = getMachinesMap();
 
-    // Gunakan range pagination untuk mengambil seluruh insiden OPEN tanpa batas potong 1.000 PostgREST
-    for (let from = 0; from < 50000; from += chunkSize) {
-      const to = from + chunkSize - 1;
-      const { data, error } = await client
-        .from('active_incidents')
-        .select('*')
-        .eq('status', 'OPEN')
-        .order('start_time', { ascending: false })
-        .range(from, to);
+    // Kolom spesifik yang diperlukan untuk performa optimal
+    const selectCols = 'incident_key, wsid, problem, status, start_time, end_time, duration_minutes, action_taken, action_by, action_at, is_bulk_action';
 
-      if (error) throw error;
-      if (!data || data.length === 0) break;
-      allRows.push(...data);
-      if (data.length < chunkSize) break;
+    // Coba query dari view v_open_incidents terlebih dahulu
+    let usedView = true;
+    try {
+      for (let from = 0; from < 50000; from += chunkSize) {
+        const to = from + chunkSize - 1;
+        const { data, error } = await client
+          .from('v_open_incidents')
+          .select(`${selectCols}, lokasi, service_point, sektor_bca, tipe_mesin, vendor`)
+          .order('start_time', { ascending: false })
+          .order('incident_key')
+          .range(from, to);
+
+        if (error) {
+          // Jika view belum ada di SQL Supabase, beralih ke fallback active_incidents
+          usedView = false;
+          break;
+        }
+        if (!data || data.length === 0) break;
+        allRows.push(...data);
+        if (data.length < chunkSize) break;
+      }
+    } catch {
+      usedView = false;
     }
 
-    const incidents: OpenIncidentItem[] = allRows.map((row: any) =>
-      mapRowToOpenIncident(row, getMachineMetadata(row.wsid))
-    );
+    // Fallback jika v_open_incidents belum dibuat di Supabase
+    if (!usedView) {
+      allRows.length = 0;
+      for (let from = 0; from < 50000; from += chunkSize) {
+        const to = from + chunkSize - 1;
+        const { data, error } = await client
+          .from('active_incidents')
+          .select(selectCols)
+          .eq('status', 'OPEN')
+          .order('start_time', { ascending: false })
+          .order('incident_key')
+          .range(from, to);
+
+        if (error) throw error;
+        if (!data || data.length === 0) break;
+        allRows.push(...data);
+        if (data.length < chunkSize) break;
+      }
+    }
+
+    const incidents: OpenIncidentItem[] = allRows.map((row: any) => {
+      if (usedView && (row.lokasi || row.service_point || row.sektor_bca)) {
+        // Data metadata sudah langsung dari view v_open_incidents
+        const meta = {
+          wsid: row.wsid || '',
+          lokasi: row.lokasi || '-',
+          servicePoint: row.service_point || '-',
+          sektor: row.sektor_bca || '-',
+          typeMesin: row.tipe_mesin || '-',
+          vendor: row.vendor || '-'
+        };
+        return mapRowToOpenIncident(row, meta);
+      }
+      // O(1) map lookup
+      const cleanWsid = (row.wsid || '').trim().toUpperCase();
+      const meta = machinesMap.get(cleanWsid) || getMachineMetadata(row.wsid);
+      return mapRowToOpenIncident(row, meta);
+    });
 
     return {
       success: true,
@@ -1484,8 +1556,28 @@ export async function saveIncidentActionSupabase(payload: {
     const kategori = payload.kategori || 'UPDATE';
     const formattedAction = payload.isiAction.startsWith('[') ? payload.isiAction : `[${kategori}] ${payload.isiAction}`;
     const nowIso = new Date().toISOString();
+    const targetMonth = payload.monthStr || nowIso.slice(0, 7);
 
-    const { error } = await client
+    // 1. Coba jalankan via RPC atomik jika tersedia di Supabase
+    try {
+      const { data: rpcData, error: rpcError } = await client.rpc('save_incident_action', {
+        p_incident_key: payload.incidentKey,
+        p_wsid: payload.wsid,
+        p_problem: payload.eventCodeDesc,
+        p_action: formattedAction,
+        p_by: payload.namaPetugas,
+        p_periode: targetMonth
+      });
+
+      if (!rpcError && rpcData) {
+        return { success: true, message: 'Tindakan berhasil disimpan secara transaksional ke Supabase!' };
+      }
+    } catch {
+      // Lanjutkan ke fallback query standar jika RPC belum terpasang
+    }
+
+    // 2. Fallback: Update tabel active_incidents dengan .select('incident_key') untuk memverifikasi baris terupdate
+    const { data: updatedRows, error: updateError } = await client
       .from('active_incidents')
       .update({
         action_taken: formattedAction,
@@ -1493,29 +1585,35 @@ export async function saveIncidentActionSupabase(payload: {
         action_at: nowIso,
         updated_at: nowIso
       })
-      .eq('incident_key', payload.incidentKey);
+      .eq('incident_key', payload.incidentKey)
+      .select('incident_key');
 
-    if (error) throw error;
+    if (updateError) throw updateError;
+    if (!updatedRows || updatedRows.length === 0) {
+      return { success: false, message: `Insiden ${payload.incidentKey} tidak ditemukan atau sudah selesai (CLOSED).` };
+    }
 
-    // Catat log tindakan ke incident_logs
-    try {
-      await client.from('incident_logs').insert([
-        {
-          incident_key: payload.incidentKey,
-          wsid: payload.wsid,
-          problem: payload.eventCodeDesc,
-          action_taken: formattedAction,
-          action_by: payload.namaPetugas,
-          action_at: nowIso,
-          status: 'OPEN',
-          periode_bulan: payload.monthStr || nowIso.slice(0, 7)
-        }
-      ]);
-    } catch (_) {}
+    // 3. Catat log tindakan ke incident_logs dan periksa hasilnya
+    const { error: logError } = await client.from('incident_logs').insert([
+      {
+        incident_key: payload.incidentKey,
+        wsid: payload.wsid,
+        problem: payload.eventCodeDesc,
+        action_taken: formattedAction,
+        action_by: payload.namaPetugas,
+        action_at: nowIso,
+        status: 'OPEN',
+        periode_bulan: targetMonth
+      }
+    ]);
+
+    if (logError) {
+      console.warn('Gagal mencatat log riwayat incident_logs:', logError);
+    }
 
     return { success: true, message: 'Tindakan berhasil disimpan ke Supabase!' };
   } catch (err: any) {
-    return { success: false, message: err.message };
+    return { success: false, message: err.message || 'Gagal menyimpan tindakan ke Supabase.' };
   }
 }
 
@@ -1535,7 +1633,7 @@ export async function bulkSaveIncidentActionSupabase(payload: {
     const formattedAction = payload.isiAction.startsWith('[') ? payload.isiAction : `[${kategori}] ${payload.isiAction}`;
     const nowIso = new Date().toISOString();
 
-    const { error } = await client
+    const { data: updatedRows, error: updateError } = await client
       .from('active_incidents')
       .update({
         action_taken: formattedAction,
@@ -1544,9 +1642,14 @@ export async function bulkSaveIncidentActionSupabase(payload: {
         is_bulk_action: true,
         updated_at: nowIso
       })
-      .in('incident_key', payload.incidentKeys);
+      .in('incident_key', payload.incidentKeys)
+      .select('incident_key');
 
-    if (error) throw error;
+    if (updateError) throw updateError;
+    const actualCount = updatedRows?.length || 0;
+    if (actualCount === 0) {
+      return { success: false, count: 0, message: 'Tidak ada insiden yang ter-update (mungkin sudah closed).' };
+    }
 
     // Catat batch log ke incident_logs
     if (payload.items && payload.items.length > 0) {
@@ -1560,18 +1663,19 @@ export async function bulkSaveIncidentActionSupabase(payload: {
         status: 'OPEN',
         periode_bulan: it.monthStr || payload.monthStr || nowIso.slice(0, 7)
       }));
-      try {
-        await client.from('incident_logs').insert(logs);
-      } catch (_) {}
+      const { error: logError } = await client.from('incident_logs').insert(logs);
+      if (logError) {
+        console.warn('Gagal mencatat log batch tindakan:', logError);
+      }
     }
 
     return {
       success: true,
-      count: payload.incidentKeys.length,
-      message: `${payload.incidentKeys.length} tindakan massal berhasil disimpan ke Supabase!`
+      count: actualCount,
+      message: `${actualCount} tindakan massal berhasil disimpan ke Supabase!`
     };
   } catch (err: any) {
-    return { success: false, message: err.message };
+    return { success: false, message: err.message || 'Gagal menyimpan tindakan massal ke Supabase.' };
   }
 }
 
@@ -1749,14 +1853,17 @@ export async function fetchDailyIncidentsFromDbSupabase(payload?: {
     const maxLimit = payload?.limit || 100000;
     const chunkSize = 1000;
     const allData: any[] = [];
+    const selectCols = 'id, incident_key, wsid, problem, status, start_time, end_time, duration_minutes, action_taken, action_by, action_at, periode_bulan';
+    const machinesMap = getMachinesMap();
 
-    // Tarik data secara chunked range pagination yang tangguh & reliable
+    // Tarik data secara chunked range pagination dengan order tie-breaker yang stabil
     for (let from = 0; from < maxLimit; from += chunkSize) {
       const to = Math.min(from + chunkSize - 1, maxLimit - 1);
       let query = client
         .from('incident_logs')
-        .select('*')
+        .select(selectCols)
         .order('start_time', { ascending: false })
+        .order('id', { ascending: false })
         .range(from, to);
 
       if (payload?.monthStr && payload.monthStr !== 'ALL') {
@@ -1776,7 +1883,11 @@ export async function fetchDailyIncidentsFromDbSupabase(payload?: {
       if (data.length < chunkSize) break;
     }
 
-    const rows = allData.map((row: any) => mapRowToDailyIncidentRow(row, getMachineMetadata(row.wsid)));
+    const rows = allData.map((row: any) => {
+      const cleanWsid = (row.wsid || '').trim().toUpperCase();
+      const meta = machinesMap.get(cleanWsid) || getMachineMetadata(row.wsid);
+      return mapRowToDailyIncidentRow(row, meta);
+    });
 
     return {
       success: true,
