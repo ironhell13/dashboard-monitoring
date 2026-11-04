@@ -195,8 +195,9 @@ export function isDateInRange(dateStr?: string | null, start?: string | null, en
 /**
  * Ekstrak format YYYY-MM dari format tanggal DD/MM/YYYY atau YYYY-MM-DD
  */
-export function extractMonthStr(dateStr?: string | null, fallback: string = '2026-10'): string {
-  if (!dateStr || dateStr === '-') return fallback;
+export function extractMonthStr(dateStr?: string | null, fallback?: string): string {
+  const defaultFallback = fallback || new Date().toISOString().slice(0, 7);
+  if (!dateStr || dateStr === '-') return defaultFallback;
   const s = String(dateStr).trim();
   if (s.includes('/')) {
     const parts = s.split(' ')[0].split('/');
@@ -212,7 +213,7 @@ export function extractMonthStr(dateStr?: string | null, fallback: string = '202
       return `${parts[0]}-${parts[1].padStart(2, '0')}`;
     }
   }
-  return fallback;
+  return defaultFallback;
 }
 
 /**
@@ -273,11 +274,6 @@ export function parseDateTime(str?: string | null, targetMonthHint = 10): Date |
   } else {
     // DD/MM/YYYY or MM/DD/YYYY
     if (month > 12 && day <= 12) {
-      const tmp = day;
-      day = month;
-      month = tmp;
-    } else if (day === targetMonthHint && month !== targetMonthHint && month <= 12) {
-      // Inversi locale US oleh sistem/Sheets (misal 10/07/2026 untuk 7 Oktober)
       const tmp = day;
       day = month;
       month = tmp;

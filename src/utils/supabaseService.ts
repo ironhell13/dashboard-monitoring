@@ -1479,7 +1479,7 @@ export async function uploadIncidentsToSupabase(payload: {
       const sTime = parseToIso(r.startTime);
       const eTime = parseToIso(r.endTime);
       const dur = Math.round(Number(r.durasiOpr || r.durationRaw || r.durasi || 0));
-      const mStr = sTime ? sTime.slice(0, 7) : (r.dateStr ? String(r.dateStr).slice(0, 7) : null);
+      const mStr = sTime ? sTime.slice(0, 7) : extractMonthStr(r.dateStr || r.startTime);
 
       return {
         incident_key: key,

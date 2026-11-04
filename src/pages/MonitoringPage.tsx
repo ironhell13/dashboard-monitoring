@@ -955,9 +955,9 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
   const [floatingBarWidthFreq, setFloatingBarWidthFreq] = useState(0);
 
   // 5. Tab 3: History Problem State
-  const [historyMonth, setHistoryMonth] = useState('2026-10');
-  const [historyStartDate, setHistoryStartDate] = useState('2026-10-01');
-  const [historyEndDate, setHistoryEndDate] = useState('2026-10-31');
+  const [historyMonth, setHistoryMonth] = useState('ALL');
+  const [historyStartDate, setHistoryStartDate] = useState('');
+  const [historyEndDate, setHistoryEndDate] = useState('');
   const [historyStatus, setHistoryStatus] = useState('ALL');
   const [historyQuery, setHistoryQuery] = useState('');
   const [historyEventCode, setHistoryEventCode] = useState('ALL');
@@ -4070,6 +4070,11 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
       setUploadProgress(100);
       setUploadStats(aggStats);
       setUploadMessage('Sinkronisasi selesai! Database berhasil diperbarui.');
+
+      // Refresh cache riwayat dan tarik dataset database terbaru
+      historyCacheRef.current = {};
+      await fetchDailyIncidentsFromDb('ALL');
+      await fetchOpenIncidents();
 
       const autoCloseReport = autoClosedRows.length > 0
         ? ` (${autoClosedRows.length} problem hilang dari OASE otomatis di-auto-close oleh dashboard).`
@@ -8545,6 +8550,21 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
                     }}
                     className="bg-transparent text-[#0D1C2E] font-medium outline-none cursor-pointer"
                   />
+                  {(historyStartDate || historyEndDate) && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setHistoryStartDate('');
+                        setHistoryEndDate('');
+                        setHistoryMonth('ALL');
+                        setCurrentPageHistory(1);
+                      }}
+                      className="text-xs text-rose-500 hover:text-rose-700 font-bold px-1.5 py-0.5 rounded-md hover:bg-rose-50 transition-colors ml-1 cursor-pointer"
+                      title="Tampilkan Semua Tanggal"
+                    >
+                      ✕ Reset
+                    </button>
+                  )}
                 </div>
 
                 {/* Status Filter */}
