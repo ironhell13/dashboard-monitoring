@@ -375,6 +375,9 @@ CREATE INDEX IF NOT EXISTS idx_active_incidents_status_start
 CREATE INDEX IF NOT EXISTS idx_incident_logs_periode_start_id
   ON public.incident_logs (periode_bulan, start_time DESC, id DESC);
 
+CREATE INDEX IF NOT EXISTS idx_incident_logs_start_desc_id
+  ON public.incident_logs (start_time DESC, id DESC);
+
 CREATE OR REPLACE VIEW public.v_open_incidents
 WITH (security_invoker = true) AS
 SELECT

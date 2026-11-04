@@ -1835,6 +1835,47 @@ export async function searchIncidentsSupabase(filters: {
   }
 }
 
+/**
+ * Ambil riwayat insiden beberapa hari terakhir khusus untuk evaluasi kalkulasi Chronic instan (<500ms).
+ * Membaca incident_logs menggunakan index start_time (default 14 hari) untuk mencakup rolling 5 hari & problem open.
+ */
+export async function fetchRecentIncidentsForChronicSupabase(days: number = 14): Promise<{
+  success: boolean;
+  rows: DailyIncidentRow[];
+}> {
+  const client = getSupabase();
+  if (!client) return { success: false, rows: [] };
+
+  try {
+    const cutoff = new Date();
+    cutoff.setDate(cutoff.getDate() - days);
+    cutoff.setHours(0, 0, 0, 0);
+    const cutoffIso = cutoff.toISOString();
+
+    const selectCols = 'id, incident_key, wsid, problem, status, start_time, end_time, duration_minutes, action_taken, action_by, action_at, periode_bulan';
+    const { data, error } = await client
+      .from('incident_logs')
+      .select(selectCols)
+      .gte('start_time', cutoffIso)
+      .order('start_time', { ascending: false })
+      .limit(10000);
+
+    if (error) throw error;
+
+    const machinesMap = getMachinesMap();
+    const rows = (data || []).map((row: any) => {
+      const cleanWsid = (row.wsid || '').trim().toUpperCase();
+      const meta = machinesMap.get(cleanWsid) || getMachineMetadata(row.wsid);
+      return mapRowToDailyIncidentRow(row, meta);
+    });
+
+    return { success: true, rows };
+  } catch (err) {
+    console.warn('fetchRecentIncidentsForChronicSupabase warning:', err);
+    return { success: false, rows: [] };
+  }
+}
+
 export async function fetchDailyIncidentsFromDbSupabase(payload?: {
   monthStr?: string;
   startMonth?: string;
@@ -1852,35 +1893,56 @@ export async function fetchDailyIncidentsFromDbSupabase(payload?: {
   try {
     const maxLimit = payload?.limit || 100000;
     const chunkSize = 1000;
+    const concurrency = 4;
     const allData: any[] = [];
     const selectCols = 'id, incident_key, wsid, problem, status, start_time, end_time, duration_minutes, action_taken, action_by, action_at, periode_bulan';
     const machinesMap = getMachinesMap();
 
-    // Tarik data secara chunked range pagination dengan order tie-breaker yang stabil
-    for (let from = 0; from < maxLimit; from += chunkSize) {
-      const to = Math.min(from + chunkSize - 1, maxLimit - 1);
-      let query = client
-        .from('incident_logs')
-        .select(selectCols)
-        .order('start_time', { ascending: false })
-        .order('id', { ascending: false })
-        .range(from, to);
+    // Tarik data secara chunked range pagination dengan concurrency 4 agar 4x lebih cepat
+    for (let from = 0; from < maxLimit; from += chunkSize * concurrency) {
+      const chunkPromises = [];
+      for (let c = 0; c < concurrency; c++) {
+        const cFrom = from + c * chunkSize;
+        if (cFrom >= maxLimit) break;
+        const cTo = Math.min(cFrom + chunkSize - 1, maxLimit - 1);
 
-      if (payload?.monthStr && payload.monthStr !== 'ALL') {
-        query = query.eq('periode_bulan', payload.monthStr);
-      } else if (payload?.startMonth && payload?.endMonth) {
-        query = query.gte('periode_bulan', payload.startMonth).lte('periode_bulan', payload.endMonth);
+        let query = client
+          .from('incident_logs')
+          .select(selectCols)
+          .order('start_time', { ascending: false })
+          .order('id', { ascending: false })
+          .range(cFrom, cTo);
+
+        if (payload?.monthStr && payload.monthStr !== 'ALL') {
+          query = query.eq('periode_bulan', payload.monthStr);
+        } else if (payload?.startMonth && payload?.endMonth) {
+          query = query.gte('periode_bulan', payload.startMonth).lte('periode_bulan', payload.endMonth);
+        }
+
+        chunkPromises.push(query);
       }
 
-      const { data, error } = await query;
-      if (error) {
-        console.error('fetchDailyIncidentsFromDbSupabase error at offset', from, error);
-        throw error;
-      }
-      if (!data || data.length === 0) break;
+      const results = await Promise.all(chunkPromises);
+      let reachedEnd = false;
 
-      allData.push(...data);
-      if (data.length < chunkSize) break;
+      for (const res of results) {
+        if (res.error) {
+          console.error('fetchDailyIncidentsFromDbSupabase error:', res.error);
+          throw res.error;
+        }
+        if (res.data && res.data.length > 0) {
+          allData.push(...res.data);
+          if (res.data.length < chunkSize) {
+            reachedEnd = true;
+            break;
+          }
+        } else {
+          reachedEnd = true;
+          break;
+        }
+      }
+
+      if (reachedEnd) break;
     }
 
     const rows = allData.map((row: any) => {

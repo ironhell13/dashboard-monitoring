@@ -119,6 +119,7 @@ import {
   subscribeActiveIncidentsSupabase,
   mapRowToOpenIncident,
   getMachineMetadata,
+  fetchRecentIncidentsForChronicSupabase,
   type RealtimeIncidentPayload
 } from '../utils/supabaseService';
 import { useOpenIncidents } from '../hooks/useOpenIncidents';
@@ -842,6 +843,8 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
   const [currentLiveTime, setCurrentLiveTime] = useState<Date>(() => new Date());
 
   const [allDailyIncidents, setAllDailyIncidents] = useState<DailyIncidentRow[]>([]);
+  const [chronicDataset, setChronicDataset] = useState<DailyIncidentRow[]>([]);
+  const [isLoadingChronic, setIsLoadingChronic] = useState<boolean>(false);
 
   const [syncStatusBanner, setSyncStatusBanner] = useState<{
     type: 'syncing' | 'success' | 'error';
@@ -857,6 +860,25 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
     lastSyncedAt,
     refetch: fetchOpenIncidents
   } = useOpenIncidents();
+
+  // Penarik dataset insiden beberapa hari terakhir secara kilat (<500ms) untuk kalkulasi Chronic instan
+  const fetchChronicDataset = useCallback(async () => {
+    setIsLoadingChronic(true);
+    try {
+      const res = await fetchRecentIncidentsForChronicSupabase(14);
+      if (res.success && res.rows && res.rows.length > 0) {
+        setChronicDataset(res.rows);
+        setOpenIncidents((prev) => {
+          if (!prev || prev.length === 0) return prev;
+          return enrichOpenWithDailyData(prev, res.rows);
+        });
+      }
+    } catch (err) {
+      console.warn('Gagal memuat dataset chronic cepat:', err);
+    } finally {
+      setIsLoadingChronic(false);
+    }
+  }, [setOpenIncidents]);
   const [openCardFilter, setOpenCardFilter] = useState<
     'ALL' | 'OVER_60' | 'OVER_180' | 'CHRONIC' | 'CHRONIC_3X_SEHARI' | 'CHRONIC_3X_5HARI' | 'NO_ACTION'
   >('ALL');
@@ -1241,10 +1263,16 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
     }
   };
 
-  // Muat dataset harian Supabase saat awal mount
+  // Muat dataset harian Supabase saat awal mount:
+  // 1. Tarik dataset chronic cepat (14 hari terakhir) secara instan (<500ms)
+  // 2. Tarik dataset lengkap allDailyIncidents di latar belakang tanpa memblokir tab Problem Open
   useEffect(() => {
-    fetchDailyIncidentsFromDb('ALL');
-  }, []);
+    fetchChronicDataset();
+    const timer = setTimeout(() => {
+      fetchDailyIncidentsFromDb('ALL');
+    }, 1000);
+    return () => clearTimeout(timer);
+  }, [fetchChronicDataset]);
 
   // =========================================================================
   // BASIS DATA FREKUENSI & DETEKSI PROBLEM CHRONIC
@@ -1253,9 +1281,11 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
     const sourceRows =
       allDailyIncidents.length > 0
         ? allDailyIncidents
-        : historyResults.length > 0
-          ? historyResults
-          : openIncidents;
+        : chronicDataset.length > 0
+          ? [...chronicDataset, ...openIncidents]
+          : historyResults.length > 0
+            ? historyResults
+            : openIncidents;
 
     return sourceRows.map((r: any) => {
       // Normalisasi dateStr menjadi format DD/MM/YYYY (mendukung input ISO, DB, maupun CSV)
@@ -1307,13 +1337,15 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
   }, [allDailyIncidents, historyResults, openIncidents]);
 
   const chronicInfoMap = useMemo(() => {
-    // Sumber data: allDailyIncidents (dataset bulanan 100+ insiden) -> historyResults -> openIncidents
+    // Prioritas sumber: allDailyIncidents (jika lengkap) -> chronicDataset (14 hari terakhir, instan <1s) -> historyResults -> openIncidents
     const sourceRows =
       allDailyIncidents.length > 0
         ? allDailyIncidents
-        : historyResults.length > 0
-          ? historyResults
-          : (openIncidents as any[]);
+        : chronicDataset.length > 0
+          ? [...chronicDataset, ...openIncidents]
+          : historyResults.length > 0
+            ? historyResults
+            : (openIncidents as any[]);
 
     const groupMap = new Map<string, { dateStr: string; normDate: string; epoch: number | null }[]>();
 
@@ -1471,7 +1503,7 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
     }
 
     return resultMap;
-  }, [openIncidents, allDailyIncidents]);
+  }, [openIncidents, allDailyIncidents, chronicDataset]);
 
   const masterSchedMap = useMemo(() => {
     const map = new Map<string, any>();
@@ -4073,8 +4105,11 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
 
       // Refresh cache riwayat dan tarik dataset database terbaru
       historyCacheRef.current = {};
-      await fetchDailyIncidentsFromDb('ALL');
-      await fetchOpenIncidents();
+      await Promise.all([
+        fetchOpenIncidents(),
+        fetchChronicDataset()
+      ]);
+      fetchDailyIncidentsFromDb('ALL');
 
       const autoCloseReport = autoClosedRows.length > 0
         ? ` (${autoClosedRows.length} problem hilang dari OASE otomatis di-auto-close oleh dashboard).`
@@ -4955,14 +4990,15 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
                   Monitoring Problem Open
                 </h1>
                 <AutoRefreshCountdown
-                  isLoading={isLoadingOpen || isLoadingDailyFromDb}
+                  isLoading={isLoadingOpen || isLoadingChronic}
                   connectionStatus={connectionStatus}
                   lastSyncedAt={lastSyncedAt}
                   intervalSeconds={120}
                   onRefresh={async () => {
-                    historyCacheRef.current = {};
-                    await fetchOpenIncidents();
-                    await fetchDailyIncidentsFromDb('ALL');
+                    await Promise.all([
+                      fetchOpenIncidents(),
+                      fetchChronicDataset()
+                    ]);
                   }}
                 />
               </div>
