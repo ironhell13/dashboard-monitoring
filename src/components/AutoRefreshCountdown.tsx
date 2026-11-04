@@ -13,7 +13,7 @@ interface AutoRefreshCountdownProps {
 export const AutoRefreshCountdown: React.FC<AutoRefreshCountdownProps> = React.memo(({
   onRefresh,
   isLoading,
-  intervalSeconds = 15,
+  intervalSeconds = 120, // Default 2 menit (120 detik)
   connectionStatus = 'SUBSCRIBED',
   lastSyncedAt
 }) => {
@@ -21,11 +21,22 @@ export const AutoRefreshCountdown: React.FC<AutoRefreshCountdownProps> = React.m
   const onRefreshRef = useRef(onRefresh);
   onRefreshRef.current = onRefresh;
 
-  // Timer internal terisolasi (tidak memicu re-render parent)
+  // Format sisa waktu: "2m 00s", "1m 35s", atau "45s"
+  const formatTimeLeft = (sec: number) => {
+    if (sec <= 0) return '0s';
+    if (sec >= 60) {
+      const m = Math.floor(sec / 60);
+      const s = sec % 60;
+      return `${m}m ${s < 10 ? '0' : ''}${s}s`;
+    }
+    return `${sec}s`;
+  };
+
+  // Timer internal terisolasi (tidak memicu re-render halaman utama)
   useEffect(() => {
     const timer = setInterval(() => {
-      // Jangan kurangi timer jika tab sedang di background
-      if (document.hidden) return;
+      // Jangan kurangi timer jika tab sedang di background atau sedang loading
+      if (document.hidden || isLoading) return;
 
       setSecondsLeft((prev) => {
         if (prev <= 1) {
@@ -37,16 +48,19 @@ export const AutoRefreshCountdown: React.FC<AutoRefreshCountdownProps> = React.m
     }, 1000);
 
     return () => clearInterval(timer);
-  }, [intervalSeconds]);
+  }, [intervalSeconds, isLoading]);
 
-  // Reset countdown jika sedang loading
+  // Reset countdown ke 2 menit setelah sinkronisasi selesai
+  const prevLoadingRef = useRef(isLoading);
   useEffect(() => {
-    if (isLoading) {
+    if (prevLoadingRef.current && !isLoading) {
       setSecondsLeft(intervalSeconds);
     }
+    prevLoadingRef.current = isLoading;
   }, [isLoading, intervalSeconds]);
 
   const handleManualClick = () => {
+    if (isLoading) return;
     setSecondsLeft(intervalSeconds);
     onRefreshRef.current();
   };
@@ -104,7 +118,7 @@ export const AutoRefreshCountdown: React.FC<AutoRefreshCountdownProps> = React.m
             'Menyinkronkan...'
           ) : (
             <span>
-              Update otomatis (<strong className="text-[#0D1C2E] font-semibold">{secondsLeft}s</strong>) • <strong className="text-blue-600 underline">Refresh</strong>
+              Update otomatis (<strong className="text-[#0D1C2E] font-semibold">{formatTimeLeft(secondsLeft)}</strong>) • <strong className="text-blue-600 underline">Refresh</strong>
             </span>
           )}
         </span>

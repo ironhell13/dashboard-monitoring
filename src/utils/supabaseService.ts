@@ -1962,6 +1962,154 @@ export async function cleanStaleActiveIncidentsSupabase(): Promise<{
   }
 }
 
+/**
+ * Menghitung jumlah baris data insiden (incident_logs) pada periode bulan tertentu
+ */
+export async function countIncidentsByPeriodeSupabase(periodeBulan: string): Promise<{
+  success: boolean;
+  count: number;
+  message?: string;
+}> {
+  const client = getSupabase();
+  if (!client) return { success: false, count: 0, message: 'Supabase belum dikonfigurasi.' };
+
+  try {
+    const cleanPeriod = (periodeBulan || '').trim();
+    if (!cleanPeriod) return { success: false, count: 0, message: 'Periode bulan tidak boleh kosong.' };
+
+    const { count, error } = await client
+      .from('incident_logs')
+      .select('*', { count: 'exact', head: true })
+      .eq('periode_bulan', cleanPeriod);
+
+    if (error) throw error;
+
+    return {
+      success: true,
+      count: count || 0
+    };
+  } catch (err: any) {
+    return { success: false, count: 0, message: err.message };
+  }
+}
+
+/**
+ * Mengambil daftar periode bulan yang unik dari incident_logs untuk dropdown filter/penghapusan
+ */
+export async function fetchDistinctIncidentMonthsSupabase(): Promise<string[]> {
+  const client = getSupabase();
+  if (!client) return [];
+
+  try {
+    const { data, error } = await client
+      .from('incident_logs')
+      .select('periode_bulan')
+      .not('periode_bulan', 'is', null)
+      .order('periode_bulan', { ascending: false })
+      .limit(1000);
+
+    if (!error && Array.isArray(data)) {
+      const set = new Set<string>();
+      data.forEach((r) => {
+        if (r.periode_bulan && typeof r.periode_bulan === 'string' && r.periode_bulan.trim()) {
+          set.add(r.periode_bulan.trim());
+        }
+      });
+      return Array.from(set).sort().reverse();
+    }
+  } catch (e) {
+    console.warn('Gagal membaca periode bulan unik dari incident_logs:', e);
+  }
+  return [];
+}
+
+/**
+ * Menghapus data problem (incident_logs & opsional active_incidents) per periode tertentu
+ */
+export async function deleteIncidentsByPeriodeSupabase(
+  periodeBulan: string,
+  deleteActive: boolean = false
+): Promise<{
+  success: boolean;
+  deletedLogsCount: number;
+  deletedActiveCount: number;
+  message: string;
+}> {
+  const client = getSupabase();
+  if (!client) {
+    return { success: false, deletedLogsCount: 0, deletedActiveCount: 0, message: 'Supabase belum dikonfigurasi.' };
+  }
+
+  try {
+    const cleanPeriod = (periodeBulan || '').trim();
+    if (!cleanPeriod) {
+      return { success: false, deletedLogsCount: 0, deletedActiveCount: 0, message: 'Periode bulan tidak valid.' };
+    }
+
+    // 1. Cek jumlah data yang ada di incident_logs
+    const { count: initialCount } = await client
+      .from('incident_logs')
+      .select('*', { count: 'exact', head: true })
+      .eq('periode_bulan', cleanPeriod);
+
+    const logsToDelete = initialCount || 0;
+
+    // 2. Hapus data dari incident_logs
+    const { error: logsError } = await client
+      .from('incident_logs')
+      .delete()
+      .eq('periode_bulan', cleanPeriod);
+
+    if (logsError) throw logsError;
+
+    let deletedActive = 0;
+    // 3. Jika dipilih, hapus juga dari active_incidents berdasarkan rentang bulan
+    if (deleteActive && cleanPeriod.length === 7 && cleanPeriod.includes('-')) {
+      const [yStr, mStr] = cleanPeriod.split('-');
+      const y = parseInt(yStr, 10);
+      const m = parseInt(mStr, 10);
+      if (!isNaN(y) && !isNaN(m)) {
+        const startDate = new Date(Date.UTC(y, m - 1, 1, 0, 0, 0)).toISOString();
+        const endDate = new Date(Date.UTC(y, m, 1, 0, 0, 0)).toISOString();
+
+        const { count: activeCount } = await client
+          .from('active_incidents')
+          .select('*', { count: 'exact', head: true })
+          .gte('start_time', startDate)
+          .lt('start_time', endDate);
+
+        deletedActive = activeCount || 0;
+
+        const { error: activeError } = await client
+          .from('active_incidents')
+          .delete()
+          .gte('start_time', startDate)
+          .lt('start_time', endDate);
+
+        if (activeError) {
+          console.warn('Gagal menghapus active_incidents rentang tanggal:', activeError);
+        }
+      }
+    }
+
+    return {
+      success: true,
+      deletedLogsCount: logsToDelete,
+      deletedActiveCount: deletedActive,
+      message: `Berhasil menghapus ${logsToDelete.toLocaleString()} baris data problem pada periode ${cleanPeriod}${
+        deletedActive > 0 ? ` serta ${deletedActive} baris insiden aktif` : ''
+      }.`
+    };
+  } catch (err: any) {
+    return {
+      success: false,
+      deletedLogsCount: 0,
+      deletedActiveCount: 0,
+      message: err.message || 'Gagal menghapus data problem dari Supabase.'
+    };
+  }
+}
+
 export function subscribeActiveIncidentsSupabase(onUpdate: () => void) {
   const client = getSupabase();
   if (!client) return () => {};

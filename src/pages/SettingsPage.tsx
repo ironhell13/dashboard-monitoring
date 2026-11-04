@@ -39,7 +39,8 @@ import {
   UserX,
   Server,
   Lock,
-  Upload
+  Upload,
+  ShieldCheck
 } from 'lucide-react';
 import {
   type QuickChipCategory,
@@ -59,8 +60,12 @@ import {
   migrateDailyDataToSupabase,
   uploadIncidentsToSupabase,
   cleanStaleActiveIncidentsSupabase,
+  countIncidentsByPeriodeSupabase,
+  fetchDistinctIncidentMonthsSupabase,
+  deleteIncidentsByPeriodeSupabase,
   type MigrationProgress
 } from '../utils/supabaseService';
+import { clearMonitoringCache } from '../utils/dbCache';
 import { parseDailyIncidentCsv } from '../utils/dailyIncidentParser';
 import {
   getSupabaseUrl,
@@ -501,6 +506,132 @@ export default function SettingsPage({ userRole = 'KAOPS' }: SettingsPageProps) 
     } finally {
       setIsMigratingDaily(false);
       e.target.value = '';
+    }
+  };
+
+  // --------------------------------------------------------------------------
+  // HAPUS DATA PROBLEM PER PERIODE
+  // --------------------------------------------------------------------------
+  const [selectedDeletePeriod, setSelectedDeletePeriod] = useState<string>('2026-10');
+  const [customDeletePeriod, setCustomDeletePeriod] = useState<string>('');
+  const [deleteActiveAlso, setDeleteActiveAlso] = useState<boolean>(false);
+  const [isCheckingPeriodCount, setIsCheckingPeriodCount] = useState<boolean>(false);
+  const [periodDataCount, setPeriodDataCount] = useState<number | null>(null);
+  const [isDeletingPeriod, setIsDeletingPeriod] = useState<boolean>(false);
+  const [detectedIncidentMonths, setDetectedIncidentMonths] = useState<string[]>([]);
+  const [isDeleteModalOpen, setIsDeleteModalOpen] = useState<boolean>(false);
+  const [deleteConfirmText, setDeleteConfirmText] = useState<string>('');
+
+  const targetPeriodToDelete = useMemo(() => {
+    if (selectedDeletePeriod === 'CUSTOM') {
+      return customDeletePeriod.trim();
+    }
+    return selectedDeletePeriod.trim();
+  }, [selectedDeletePeriod, customDeletePeriod]);
+
+  // Load periode unik dari incident_logs saat membuka tab DATABASE_CONFIG
+  useEffect(() => {
+    if (activeSubMenu === 'DATABASE_CONFIG' && isSupabaseConfigured()) {
+      fetchDistinctIncidentMonthsSupabase().then((months) => {
+        if (months && months.length > 0) {
+          setDetectedIncidentMonths(months);
+          if (!months.includes(selectedDeletePeriod) && selectedDeletePeriod !== 'CUSTOM') {
+            setSelectedDeletePeriod(months[0]);
+          }
+        }
+      });
+    }
+  }, [activeSubMenu]);
+
+  // Reset count saat periode diubah
+  useEffect(() => {
+    setPeriodDataCount(null);
+  }, [targetPeriodToDelete]);
+
+  const handleCheckPeriodCount = async () => {
+    if (!isSupabaseConfigured()) {
+      showToast('Koneksi Supabase belum terkonfigurasi.', 'error');
+      return;
+    }
+    if (!targetPeriodToDelete) {
+      showToast('Pilih atau masukkan periode bulan terlebih dahulu (contoh: 2026-10).', 'error');
+      return;
+    }
+
+    setIsCheckingPeriodCount(true);
+    try {
+      const res = await countIncidentsByPeriodeSupabase(targetPeriodToDelete);
+      if (res.success) {
+        setPeriodDataCount(res.count);
+        if (res.count === 0) {
+          showToast(`Tidak ditemukan data problem pada periode ${targetPeriodToDelete}.`, 'info');
+        } else {
+          showToast(`Ditemukan ${res.count.toLocaleString()} baris data problem pada periode ${targetPeriodToDelete}.`, 'info');
+        }
+      } else {
+        showToast(res.message || 'Gagal mengecek jumlah data.', 'error');
+      }
+    } catch (e: any) {
+      showToast(e.message || 'Error saat memeriksa data.', 'error');
+    } finally {
+      setIsCheckingPeriodCount(false);
+    }
+  };
+
+  const handleOpenDeleteModal = async () => {
+    if (!isSupabaseConfigured()) {
+      showToast('Koneksi Supabase belum terkonfigurasi.', 'error');
+      return;
+    }
+    if (!targetPeriodToDelete) {
+      showToast('Pilih atau masukkan periode bulan terlebih dahulu.', 'error');
+      return;
+    }
+
+    if (periodDataCount === null) {
+      setIsCheckingPeriodCount(true);
+      try {
+        const res = await countIncidentsByPeriodeSupabase(targetPeriodToDelete);
+        if (res.success) {
+          setPeriodDataCount(res.count);
+        }
+      } catch (e) {
+      } finally {
+        setIsCheckingPeriodCount(false);
+      }
+    }
+
+    setDeleteConfirmText('');
+    setIsDeleteModalOpen(true);
+  };
+
+  const handleExecuteDeletePeriod = async () => {
+    if (deleteConfirmText.trim() !== targetPeriodToDelete) {
+      alert(`Ketik konfirmasi "${targetPeriodToDelete}" dengan tepat untuk melanjutkan.`);
+      return;
+    }
+
+    setIsDeletingPeriod(true);
+    try {
+      const res = await deleteIncidentsByPeriodeSupabase(targetPeriodToDelete, deleteActiveAlso);
+      if (res.success) {
+        showToast(res.message, 'success');
+        setPeriodDataCount(0);
+        setIsDeleteModalOpen(false);
+        setDeleteConfirmText('');
+
+        // Bersihkan cache lokal monitoring agar sinkron instan
+        await clearMonitoringCache();
+
+        // Refresh daftar bulan
+        fetchDistinctIncidentMonthsSupabase().then(setDetectedIncidentMonths);
+      } else {
+        showToast(res.message || 'Gagal menghapus data.', 'error');
+      }
+    } catch (err: any) {
+      showToast(err?.message || 'Terjadi kesalahan saat menghapus data.', 'error');
+    } finally {
+      setIsDeletingPeriod(false);
     }
   };
 
@@ -1613,6 +1744,118 @@ export default function SettingsPage({ userRole = 'KAOPS' }: SettingsPageProps) 
                 )}
               </div>
 
+              {/* Manajemen Hapus Data Problem per Periode */}
+              <div className="p-4 md:p-5 rounded-xl border border-rose-200 bg-rose-50/40 space-y-4">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                  <div className="flex items-center gap-2.5">
+                    <div className="w-9 h-9 rounded-lg bg-rose-600 text-white flex items-center justify-center shrink-0 shadow-xs">
+                      <Trash2 className="w-5 h-5" />
+                    </div>
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <h4 className="text-xs font-bold text-slate-900">Hapus Data Problem per Periode</h4>
+                        <span className="text-[10px] px-2 py-0.5 rounded-full font-bold bg-rose-100 text-rose-800 border border-rose-200">
+                          Data Retention
+                        </span>
+                      </div>
+                      <p className="text-[11px] text-slate-500">
+                        Hapus arsip insiden harian (<code className="font-mono text-rose-700 bg-rose-100/60 px-1 py-0.5 rounded">incident_logs</code>) berdasarkan periode bulan tertentu sesuai kebutuhan
+                      </p>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="p-4 bg-white rounded-xl border border-rose-200 space-y-3.5">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3 items-end">
+                    {/* Pilihan Periode Bulan */}
+                    <div>
+                      <label className="block text-xs font-bold text-slate-700 mb-1">
+                        Pilih Periode Bulan:
+                      </label>
+                      <select
+                        value={selectedDeletePeriod}
+                        onChange={(e) => setSelectedDeletePeriod(e.target.value)}
+                        className="w-full h-9 px-3 bg-slate-50 border border-slate-300 rounded-lg text-xs font-semibold text-slate-800 focus:outline-none focus:ring-1 focus:ring-rose-500"
+                      >
+                        {detectedIncidentMonths.length > 0 ? (
+                          detectedIncidentMonths.map((m) => (
+                            <option key={m} value={m}>
+                              Periode: {m}
+                            </option>
+                          ))
+                        ) : (
+                          <>
+                            <option value="2026-10">Periode: 2026-10 (Oktober 2026)</option>
+                            <option value="2026-09">Periode: 2026-09 (September 2026)</option>
+                            <option value="2026-11">Periode: 2026-11 (November 2026)</option>
+                            <option value="2026-08">Periode: 2026-08 (Agustus 2026)</option>
+                          </>
+                        )}
+                        <option value="CUSTOM">-- Ketik Periode Kustom (YYYY-MM) --</option>
+                      </select>
+                    </div>
+
+                    {/* Input Kustom jika dipilih */}
+                    {selectedDeletePeriod === 'CUSTOM' && (
+                      <div>
+                        <label className="block text-xs font-bold text-slate-700 mb-1">
+                          Ketik Periode (YYYY-MM):
+                        </label>
+                        <input
+                          type="text"
+                          placeholder="misal: 2026-10"
+                          value={customDeletePeriod}
+                          onChange={(e) => setCustomDeletePeriod(e.target.value)}
+                          className="w-full h-9 px-3 bg-white border border-slate-300 rounded-lg text-xs font-mono text-slate-800 focus:outline-none focus:ring-1 focus:ring-rose-500"
+                        />
+                      </div>
+                    )}
+
+                    {/* Tombol Cek Jumlah Data */}
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={handleCheckPeriodCount}
+                        disabled={isCheckingPeriodCount || !isSupabaseConfigured() || !targetPeriodToDelete}
+                        className="h-9 px-3.5 rounded-lg border border-slate-300 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold transition-all cursor-pointer disabled:opacity-50 flex items-center gap-1.5"
+                      >
+                        {isCheckingPeriodCount ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <Search className="w-3.5 h-3.5" />}
+                        <span>Cek Jumlah Data</span>
+                      </button>
+
+                      {periodDataCount !== null && (
+                        <div className="text-xs px-2.5 py-1.5 rounded-lg bg-slate-100 border border-slate-200 text-slate-800 font-semibold">
+                          Total: <strong className="text-rose-600">{periodDataCount.toLocaleString()}</strong> baris
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Opsi Hapus Insiden Aktif */}
+                  <div className="pt-2 border-t border-slate-100 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                    <label className="flex items-center gap-2 cursor-pointer select-none text-xs text-slate-600 font-medium">
+                      <input
+                        type="checkbox"
+                        checked={deleteActiveAlso}
+                        onChange={(e) => setDeleteActiveAlso(e.target.checked)}
+                        className="w-4 h-4 rounded text-rose-600 focus:ring-rose-500 border-slate-300"
+                      />
+                      <span>Hapus juga insiden aktif (<code className="font-mono text-slate-700">active_incidents</code>) pada rentang bulan ini</span>
+                    </label>
+
+                    <button
+                      type="button"
+                      onClick={handleOpenDeleteModal}
+                      disabled={isDeletingPeriod || !isSupabaseConfigured() || !targetPeriodToDelete}
+                      className="h-9 px-4 rounded-lg bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold shadow-xs cursor-pointer transition-all disabled:opacity-50 flex items-center gap-1.5 shrink-0 self-start sm:self-auto"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                      <span>Hapus Data Periode {targetPeriodToDelete || ''}</span>
+                    </button>
+                  </div>
+                </div>
+              </div>
+
               {/* Panduan Schema SQL */}
               <div className="p-4 rounded-xl border border-blue-200 bg-blue-50/50 space-y-2">
                 <div className="flex items-center gap-2 text-xs font-bold text-blue-950">
@@ -1973,6 +2216,75 @@ export default function SettingsPage({ userRole = 'KAOPS' }: SettingsPageProps) 
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* Modal Konfirmasi Hapus Data Problem Periode */}
+      {isDeleteModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs animate-in fade-in duration-200">
+          <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl border border-rose-200 space-y-4 animate-in zoom-in-95 duration-200">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-full bg-rose-100 text-rose-600 flex items-center justify-center shrink-0">
+                <AlertTriangle className="w-5 h-5" />
+              </div>
+              <div>
+                <h3 className="text-base font-bold text-slate-900">Konfirmasi Penghapusan Data</h3>
+                <p className="text-xs text-slate-500">Tindakan ini permanen dan tidak dapat dibatalkan</p>
+              </div>
+            </div>
+
+            <div className="p-3 bg-rose-50 border border-rose-200 rounded-xl space-y-2 text-xs text-rose-900">
+              <p>
+                Anda akan menghapus seluruh data riwayat problem pada periode: <strong className="font-bold underline">{targetPeriodToDelete}</strong>.
+              </p>
+              {periodDataCount !== null && (
+                <p className="font-semibold">
+                  Jumlah data yang akan dihapus: <span className="text-rose-700 font-bold">{periodDataCount.toLocaleString()} baris</span>.
+                </p>
+              )}
+              {deleteActiveAlso && (
+                <p className="text-[11px] text-rose-700 italic">
+                  * Termasuk seluruh baris insiden aktif (active_incidents) pada rentang bulan ini.
+                </p>
+              )}
+            </div>
+
+            <div className="space-y-1.5">
+              <label className="block text-xs font-bold text-slate-700">
+                Ketik <span className="font-mono text-rose-600 font-bold select-all">{targetPeriodToDelete}</span> untuk mengonfirmasi:
+              </label>
+              <input
+                type="text"
+                placeholder={targetPeriodToDelete}
+                value={deleteConfirmText}
+                onChange={(e) => setDeleteConfirmText(e.target.value)}
+                className="w-full px-3 py-2 border border-slate-300 rounded-lg text-xs font-mono focus:outline-none focus:ring-2 focus:ring-rose-500 text-slate-800"
+              />
+            </div>
+
+            <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-100">
+              <button
+                type="button"
+                onClick={() => {
+                  setIsDeleteModalOpen(false);
+                  setDeleteConfirmText('');
+                }}
+                disabled={isDeletingPeriod}
+                className="px-4 py-2 rounded-xl text-xs font-bold text-slate-600 hover:bg-slate-100 transition-all cursor-pointer"
+              >
+                Batal
+              </button>
+              <button
+                type="button"
+                onClick={handleExecuteDeletePeriod}
+                disabled={isDeletingPeriod || deleteConfirmText.trim() !== targetPeriodToDelete}
+                className="px-4 py-2 rounded-xl text-xs font-bold bg-rose-600 hover:bg-rose-700 text-white shadow-xs transition-all cursor-pointer disabled:opacity-50 flex items-center gap-1.5"
+              >
+                {isDeletingPeriod ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <Trash2 className="w-3.5 h-3.5" />}
+                <span>{isDeletingPeriod ? 'Menghapus Data...' : 'Ya, Hapus Sekarang'}</span>
+              </button>
+            </div>
           </div>
         </div>
       )}

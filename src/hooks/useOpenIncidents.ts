@@ -186,6 +186,9 @@ export function useOpenIncidents(options: UseOpenIncidentsOptions = {}) {
     };
   }, [fetchAllOpen]);
 
+  const connectionStatusRef = useRef<RealtimeConnectionStatus>('CONNECTING');
+  connectionStatusRef.current = connectionStatus;
+
   // 4. Realtime Subscription & Connection Status Tracking
   useEffect(() => {
     if (!autoSubscribe) return;
@@ -236,12 +239,12 @@ export function useOpenIncidents(options: UseOpenIncidentsOptions = {}) {
     window.addEventListener('online', handleOnline);
     window.addEventListener('offline', handleOffline);
 
-    // Polling cadangan (30s) hanya saat tab aktif dan channel TIDAK SUBSCRIBED
+    // Polling cadangan (setiap 2 menit) hanya saat tab aktif dan channel TIDAK SUBSCRIBED
     const backupInterval = setInterval(() => {
-      if (document.visibilityState === 'visible' && connectionStatus !== 'SUBSCRIBED') {
+      if (document.visibilityState === 'visible' && connectionStatusRef.current !== 'SUBSCRIBED') {
         fetchAllOpen(true);
       }
-    }, 30000);
+    }, 120000);
 
     return () => {
       if (batchTimerRef.current) clearTimeout(batchTimerRef.current);
@@ -253,7 +256,7 @@ export function useOpenIncidents(options: UseOpenIncidentsOptions = {}) {
         client.removeChannel(channel);
       } catch (_) {}
     };
-  }, [autoSubscribe, fetchAllOpen, queueRealtimeEvent, connectionStatus]);
+  }, [autoSubscribe, fetchAllOpen, queueRealtimeEvent]);
 
   return {
     openIncidents,

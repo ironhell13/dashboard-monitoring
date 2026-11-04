@@ -4953,7 +4953,7 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
                   isLoading={isLoadingOpen || isLoadingDailyFromDb}
                   connectionStatus={connectionStatus}
                   lastSyncedAt={lastSyncedAt}
-                  intervalSeconds={15}
+                  intervalSeconds={120}
                   onRefresh={async () => {
                     historyCacheRef.current = {};
                     await fetchOpenIncidents();
