@@ -11,7 +11,7 @@ import {
   ShieldAlert, ArrowRight, Activity, ChevronDown, ChevronUp
 } from 'lucide-react';
 import { exportDashboardExcel, SERVICE_POINT_MAP, getServicePointName, formatBulanTahun } from '../utils/comprehensiveExporter';
-import { cleanSektorName } from '../utils/dailyIncidentParser';
+import { cleanSektorName, normalizeServicePoint } from '../utils/dailyIncidentParser';
 import StickyTableWrapper from '../components/StickyTableWrapper';
 import { 
   evaluateMachineHealth, 
@@ -108,7 +108,7 @@ export default function DashboardPage() {
   const servicePointOptions = useMemo(() => {
     const spSet = new Set<string>();
     filteredMachines.forEach(m => {
-      const sp = getServicePointName(m.sektorBCA, m.wilayahOperasional);
+      const sp = normalizeServicePoint(getServicePointName(m.sektorBCA, m.wilayahOperasional));
       if (sp && sp !== 'Unknown Service Point' && !sp.startsWith('Unknown')) {
         spSet.add(sp);
       }
@@ -127,7 +127,7 @@ export default function DashboardPage() {
     }>();
 
     filteredMachines.forEach(m => {
-      const spName = getServicePointName(m.sektorBCA, m.wilayahOperasional);
+      const spName = normalizeServicePoint(getServicePointName(m.sektorBCA, m.wilayahOperasional));
 
       let key = spName;
       let displayName = spName;
@@ -252,7 +252,7 @@ export default function DashboardPage() {
         const unitMachines = filteredMachines.filter(m => {
           if (m.klienStatus !== 'BCA') return false;
           if (groupBy === 'SERVICE_POINT') {
-            const sp = getServicePointName(m.sektorBCA, m.wilayahOperasional);
+            const sp = normalizeServicePoint(getServicePointName(m.sektorBCA, m.wilayahOperasional));
             return sp === unit.name;
           } else {
             const clean = cleanSektorName(m.sektorBCA);

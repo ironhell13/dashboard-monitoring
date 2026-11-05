@@ -28,7 +28,7 @@ import {
   CheckCircle2
 } from 'lucide-react';
 import { exportAllWsidExcel, SERVICE_POINT_MAP, getServicePointName } from '../utils/comprehensiveExporter';
-import { cleanSektorName } from '../utils/dailyIncidentParser';
+import { cleanSektorName, normalizeServicePoint } from '../utils/dailyIncidentParser';
 import { evaluateMachineHealth, type MachineHealthStatus } from '../utils/slaHelper';
 import { useDataStore, type MachineData } from '../store/useDataStore';
 
@@ -90,7 +90,7 @@ export default function AllWsidPage() {
   const uniqueServicePoints = useMemo(() => {
     const set = new Set<string>();
     baseBcaAktifMachines.forEach((m) => {
-      const sp = getServicePointName(m.sektorBCA, m.wilayahOperasional);
+      const sp = normalizeServicePoint(getServicePointName(m.sektorBCA, m.wilayahOperasional));
       if (sp && sp !== 'Unknown Service Point' && !sp.startsWith('Unknown')) {
         set.add(sp.trim());
       }
@@ -158,7 +158,7 @@ export default function AllWsidPage() {
     // Service Point Filter
     if (servicePointFilter !== 'ALL') {
       list = list.filter((m) => {
-        const sp = getServicePointName(m.sektorBCA, m.wilayahOperasional);
+        const sp = normalizeServicePoint(getServicePointName(m.sektorBCA, m.wilayahOperasional));
         return sp === servicePointFilter;
       });
     }
@@ -197,8 +197,8 @@ export default function AllWsidPage() {
           aVal = a.jenisMesin || '';
           bVal = b.jenisMesin || '';
         } else if (sortConfig.key === 'servicePoint') {
-          aVal = getServicePointName(a.sektorBCA, a.wilayahOperasional);
-          bVal = getServicePointName(b.sektorBCA, b.wilayahOperasional);
+          aVal = normalizeServicePoint(getServicePointName(a.sektorBCA, a.wilayahOperasional));
+          bVal = normalizeServicePoint(getServicePointName(b.sektorBCA, b.wilayahOperasional));
         }
 
         if (aVal < bVal) return sortConfig.direction === 'asc' ? -1 : 1;
@@ -746,7 +746,7 @@ export default function AllWsidPage() {
                   paginatedMachines.map((m) => {
                     const totalPct = (m as any).aggregatedData?.total || 0;
                     const isSelected = selectedWsid === m.wsid;
-                    const spLabel = getServicePointName(m.sektorBCA, m.wilayahOperasional);
+                    const spLabel = normalizeServicePoint(getServicePointName(m.sektorBCA, m.wilayahOperasional));
                     const mHealth = evaluateMachineHealth(m);
                     const isCrm =
                       (m.jenisMesin || '').trim().toUpperCase() === 'CRM' ||

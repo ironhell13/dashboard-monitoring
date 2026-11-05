@@ -17,7 +17,10 @@ with (security_invoker = true) as
 select
   ai.*,
   m.lokasi,
-  m.wilayah_operasional as service_point,
+  case 
+    when m.sektor_bca like '%-%' then split_part(m.sektor_bca, '-', 1)
+    else coalesce(m.wilayah_operasional, 'ACJK')
+  end as service_point,
   m.sektor_bca,
   m.tipe_mesin,
   m.vendor

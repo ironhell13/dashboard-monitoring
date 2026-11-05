@@ -6,7 +6,7 @@ import * as XLSX from 'xlsx';
 import { Download, Layers, MapPin, FileSpreadsheet, ChevronDown, ChevronUp, ArrowUpDown, ArrowUp, ArrowDown, Activity } from 'lucide-react';
 import { exportMesinPerSektorExcel, SERVICE_POINT_MAP, getServicePointName } from '../utils/comprehensiveExporter';
 import { aggregateMachinesData, getHighestProblemCategory, getValueForCategory, getFrxDurForCategory, type HighestProblemResult } from '../utils/problemCalculator';
-import { cleanSektorName } from '../utils/dailyIncidentParser';
+import { cleanSektorName, normalizeServicePoint } from '../utils/dailyIncidentParser';
 import StickyTableWrapper from '../components/StickyTableWrapper';
 
 interface SektorRow {
@@ -49,7 +49,7 @@ export default function MesinPerSektorPage() {
     filteredData.forEach(m => {
       const clean = cleanSektorName(m.sektorBCA);
       const groupName = clean !== '-' ? clean : 'Unknown Sektor';
-      const servicePoint = getServicePointName(m.sektorBCA, m.wilayahOperasional);
+      const servicePoint = normalizeServicePoint(getServicePointName(m.sektorBCA, m.wilayahOperasional));
 
       if (!map.has(groupName)) {
         map.set(groupName, { sektor: groupName, servicePoint, machinesBCA: [], machinesNonBCA: [] });
@@ -118,7 +118,7 @@ export default function MesinPerSektorPage() {
   const uniqueServicePoints = useMemo(() => {
     const spSet = new Set<string>();
     filteredData.forEach(m => {
-      const sp = getServicePointName(m.sektorBCA, m.wilayahOperasional);
+      const sp = normalizeServicePoint(getServicePointName(m.sektorBCA, m.wilayahOperasional));
       if (sp && sp !== 'Unknown Service Point' && !sp.startsWith('Unknown')) {
         spSet.add(sp);
       }

@@ -108,6 +108,7 @@ import {
   toComparableDate,
   extractMonthStr,
   normalizeServicePoint,
+  resolveServicePoint,
   type DailyIncidentRow,
   type WsidProblemDateAggregation
 } from '../utils/dailyIncidentParser';
@@ -785,7 +786,13 @@ export function renderIncidentEndTime(row: {
 }
 
 export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: MonitoringPageProps) {
-  const { rawMasterData, modernTickets, setModernTickets, addOrUpdateModernTicket, removeModernTicket } = useDataStore();
+  const { rawMasterData, machines, modernTickets, setModernTickets, addOrUpdateModernTicket, removeModernTicket } = useDataStore();
+
+  const masterList = useMemo(() => {
+    if (rawMasterData && rawMasterData.length > 0) return rawMasterData;
+    if (machines && machines.length > 0) return machines;
+    return [];
+  }, [rawMasterData, machines]);
 
   const effectiveRole: 'KAWIL' | 'KAOPS' | 'MONITORING' = useMemo(() => {
     if (userRole) return userRole;
@@ -2306,17 +2313,16 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
 
   const baseOpenSPs = useMemo(() => {
     const set = new Set<string>();
-    if (rawMasterData && rawMasterData.length > 0) {
-      for (let i = 0; i < rawMasterData.length; i++) {
-        const m = rawMasterData[i];
-        const raw = (m.servicePoint || m.service_point || m.ServicePoint || m.wilayahOperasional || '').trim();
-        const sp = normalizeServicePoint(raw);
+    if (masterList && masterList.length > 0) {
+      for (let i = 0; i < masterList.length; i++) {
+        const m = masterList[i];
+        const sp = resolveServicePoint(m);
         if (sp && sp !== '-' && sp !== 'N/A') set.add(sp);
       }
     }
     for (let i = 0; i < allDailyIncidents.length; i++) {
       const r = allDailyIncidents[i];
-      const sp = normalizeServicePoint((r.servicePoint || '').trim());
+      const sp = resolveServicePoint(null, r);
       if (sp && sp !== '-' && sp !== 'N/A') set.add(sp);
       if (r.servicePointSektor && r.servicePointSektor !== '-') {
         const p = normalizeServicePoint(r.servicePointSektor.split('-')[0].trim());
@@ -2324,13 +2330,13 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
       }
     }
     return Array.from(set).filter(Boolean);
-  }, [rawMasterData, allDailyIncidents]);
+  }, [masterList, allDailyIncidents]);
 
   const openAvailableSPs = useMemo(() => {
     const set = new Set<string>(baseOpenSPs);
     for (let i = 0; i < trulyOpenIncidents.length; i++) {
       const r = trulyOpenIncidents[i];
-      const sp = normalizeServicePoint((r.servicePoint || '').trim());
+      const sp = resolveServicePoint(null, r);
       if (sp && sp !== '-' && sp !== 'N/A') set.add(sp);
     }
     return Array.from(set).filter(Boolean).sort((a, b) => a.localeCompare(b));
@@ -2338,9 +2344,9 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
 
   const baseOpenSektors = useMemo(() => {
     const set = new Set<string>();
-    if (rawMasterData && rawMasterData.length > 0) {
-      for (let i = 0; i < rawMasterData.length; i++) {
-        const m = rawMasterData[i];
+    if (masterList && masterList.length > 0) {
+      for (let i = 0; i < masterList.length; i++) {
+        const m = masterList[i];
         const sk = cleanSektorName(m.Sektor || m.sektor || m.sektorBCA || '');
         if (sk && sk !== '-') set.add(sk);
       }
@@ -2351,7 +2357,7 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
       if (sk && sk !== '-') set.add(sk);
     }
     return Array.from(set);
-  }, [rawMasterData, allDailyIncidents]);
+  }, [masterList, allDailyIncidents]);
 
   const openAvailableSektors = useMemo(() => {
     const set = new Set<string>(baseOpenSektors);
@@ -2365,7 +2371,7 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
 
   const baseOpenVendors = useMemo(() => {
     const set = new Set<string>();
-    if (rawMasterData && rawMasterData.length > 0) {
+    if (masterList && masterList.length > 0) {
       for (let i = 0; i < rawMasterData.length; i++) {
         const m = rawMasterData[i];
         const vd = (m.Vendor || m.vendor || '').trim();
@@ -2691,15 +2697,14 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
 
   const freqAvailableSPs = useMemo(() => {
     const set = new Set<string>();
-    if (rawMasterData && rawMasterData.length > 0) {
-      rawMasterData.forEach((m: any) => {
-        const raw = (m.servicePoint || m.service_point || m.ServicePoint || m.wilayahOperasional || '').trim();
-        const sp = normalizeServicePoint(raw);
+    if (masterList && masterList.length > 0) {
+      masterList.forEach((m: any) => {
+        const sp = resolveServicePoint(m);
         if (sp && sp !== '-' && sp !== 'N/A') set.add(sp);
       });
     }
     allDailyIncidents.forEach((r) => {
-      const sp = normalizeServicePoint((r.servicePoint || '').trim());
+      const sp = resolveServicePoint(null, r);
       if (sp && sp !== '-' && sp !== 'N/A') set.add(sp);
       if (r.servicePointSektor && r.servicePointSektor !== '-') {
         const p = normalizeServicePoint(r.servicePointSektor.split('-')[0].trim());
@@ -2707,7 +2712,7 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
       }
     });
     openIncidents.forEach((r) => {
-      const sp = normalizeServicePoint((r.servicePoint || '').trim());
+      const sp = resolveServicePoint(null, r);
       if (sp && sp !== '-' && sp !== 'N/A') set.add(sp);
     });
     aggFreqItems.forEach((r) => {
@@ -2717,7 +2722,7 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
       }
     });
     return Array.from(set).filter(Boolean).sort((a, b) => a.localeCompare(b));
-  }, [rawMasterData, allDailyIncidents, openIncidents, aggFreqItems]);
+  }, [masterList, allDailyIncidents, openIncidents, aggFreqItems]);
 
   // Click outside to close dropdowns
   useEffect(() => {
@@ -3441,12 +3446,18 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
         if (s) set.add(s);
       });
     }
+    if (masterList && masterList.length > 0) {
+      masterList.forEach((m: any) => {
+        const sp = resolveServicePoint(m);
+        if (sp && sp !== '-' && sp !== 'N/A') set.add(sp);
+      });
+    }
     frequencyDataset.forEach((r) => {
-      const sp = normalizeServicePoint((r.servicePoint || '').trim());
+      const sp = resolveServicePoint(null, r);
       if (sp && sp !== '-' && sp !== 'N/A') set.add(sp);
     });
     return Array.from(set).filter(Boolean).sort((a, b) => a.localeCompare(b));
-  }, [openAvailableSPs, frequencyDataset]);
+  }, [openAvailableSPs, masterList, frequencyDataset]);
 
   /**
    * Daftar Sektor unik untuk filter Grafik 24 Jam (mengikuti filter Service Point jika dipilih)
@@ -3457,7 +3468,7 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
 
     frequencyDataset.forEach((r) => {
       if (targetSpNorm) {
-        const rowSp = normSP(r.servicePoint);
+        const rowSp = normSP(resolveServicePoint(null, r));
         const rowSpSek = normSP(r.servicePointSektor);
         if (rowSp !== targetSpNorm && !rowSpSek.includes(targetSpNorm)) {
           return;
@@ -3467,10 +3478,10 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
       if (sk && sk !== '-' && sk !== 'N/A') set.add(sk);
     });
 
-    if (rawMasterData && rawMasterData.length > 0) {
-      rawMasterData.forEach((m: any) => {
+    if (masterList && masterList.length > 0) {
+      masterList.forEach((m: any) => {
         if (targetSpNorm) {
-          const mSp = normSP(m.servicePoint || m.service_point || m.ServicePoint);
+          const mSp = normSP(resolveServicePoint(m));
           if (mSp !== targetSpNorm) return;
         }
         const sk = cleanSektorName(m.Sektor || m.sektor || m.sektorBCA || '');
@@ -4200,15 +4211,14 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
   // Available Service Points for Grafik Frekuensi filter
   const gfAvailableSPs = useMemo(() => {
     const set = new Set<string>();
-    if (rawMasterData && rawMasterData.length > 0) {
-      rawMasterData.forEach((m: any) => {
-        const raw = (m.servicePoint || m.service_point || m.ServicePoint || m.wilayahOperasional || '').trim();
-        const sp = normalizeServicePoint(raw);
+    if (masterList && masterList.length > 0) {
+      masterList.forEach((m: any) => {
+        const sp = resolveServicePoint(m);
         if (sp && sp !== '-' && sp !== 'N/A') set.add(sp);
       });
     }
     rawGfDataset.forEach((r) => {
-      const sp = normalizeServicePoint((r.servicePoint || '').trim());
+      const sp = resolveServicePoint(null, r);
       if (sp && sp !== '-' && sp !== 'N/A') set.add(sp);
       if (r.servicePointSektor && r.servicePointSektor !== '-') {
         const parts = r.servicePointSektor.split('-');
@@ -4219,7 +4229,7 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
       }
     });
     return Array.from(set).filter(Boolean).sort((a, b) => a.localeCompare(b));
-  }, [rawGfDataset, rawMasterData]);
+  }, [rawGfDataset, masterList]);
 
   // Deferred values for instant responsive UI when typing or selecting filters
   const deferredGfProblems = useDeferredValue(gfSelectedProblems);
@@ -4285,7 +4295,7 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
 
       // 2. Service Point filter
       if (hasSpFilter) {
-        const sp = normalizeServicePoint(r.servicePoint || '').toUpperCase();
+        const sp = resolveServicePoint(null, r).toUpperCase();
         const spSek = normalizeServicePoint((r.servicePointSektor || '').split('-')[0].trim()).toUpperCase();
         if (sp !== targetSpNorm && spSek !== targetSpNorm) continue;
       }
@@ -4317,11 +4327,10 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
       pMap[p] = (pMap[p] || 0) + 1;
 
       // Service Point count
-      let sp = normalizeServicePoint(r.servicePoint || '');
-      if (!sp && r.servicePointSektor && r.servicePointSektor !== '-') {
-        sp = normalizeServicePoint(r.servicePointSektor.split('-')[0].trim());
+      let sp = resolveServicePoint(null, r);
+      if (!sp || sp === 'UNKNOWN' || sp === '-') {
+        sp = 'Others';
       }
-      if (!sp) sp = 'Others';
       spMap[sp] = (spMap[sp] || 0) + 1;
 
       // WSID

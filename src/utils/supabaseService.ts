@@ -1004,17 +1004,19 @@ function parseToIso(dateStr?: any): string | null {
 export function getMachineMetadata(wsid?: string): any {
   if (!wsid) return null;
   try {
-    const list = useDataStore.getState().machines || [];
+    const store = useDataStore.getState();
+    const list = (store.rawMasterData && store.rawMasterData.length > 0) ? store.rawMasterData : (store.machines || []);
     const w = String(wsid).trim().toUpperCase();
-    const found = list.find((m) => String(m.wsid || '').trim().toUpperCase() === w);
+    const found = list.find((m: any) => String(m.wsid || m.WSID || '').trim().toUpperCase() === w);
     if (found) {
-      const spRaw = found.servicePoint || found.wilayahOperasional || '-';
+      const sp = resolveServicePoint(found);
+      const rawSek = found.sektorBCA || found.sektor || found.Sektor || found.sektor_bca || '-';
       return {
-        lokasi: found.lokasi || '-',
-        service_point: normalizeServicePoint(spRaw) || spRaw,
-        sektor_bca: found.sektorBCA || '-',
-        tipe_mesin: found.tipeMesin || '-',
-        vendor: found.vendor || '-'
+        lokasi: found.lokasi || found['Nama Lokasi'] || '-',
+        service_point: sp,
+        sektor_bca: rawSek,
+        tipe_mesin: found.tipeMesin || found['Tipe Mesin'] || '-',
+        vendor: found.vendor || found.Vendor || '-'
       };
     }
   } catch (_) {}
@@ -1024,18 +1026,20 @@ export function getMachineMetadata(wsid?: string): any {
 export function getMachinesMap(): Map<string, any> {
   const map = new Map<string, any>();
   try {
-    const list = useDataStore.getState().machines || [];
+    const store = useDataStore.getState();
+    const list = (store.rawMasterData && store.rawMasterData.length > 0) ? store.rawMasterData : (store.machines || []);
     for (let i = 0; i < list.length; i++) {
-      const m = list[i];
-      const w = String(m.wsid || '').trim().toUpperCase();
+      const m: any = list[i];
+      const w = String(m.wsid || m.WSID || '').trim().toUpperCase();
       if (w) {
-        const spRaw = m.servicePoint || m.wilayahOperasional || '-';
+        const sp = resolveServicePoint(m);
+        const rawSek = m.sektorBCA || m.sektor || m.Sektor || m.sektor_bca || '-';
         map.set(w, {
-          lokasi: m.lokasi || '-',
-          service_point: normalizeServicePoint(spRaw) || spRaw,
-          sektor_bca: m.sektorBCA || '-',
-          tipe_mesin: m.tipeMesin || '-',
-          vendor: m.vendor || '-'
+          lokasi: m.lokasi || m['Nama Lokasi'] || '-',
+          service_point: sp,
+          sektor_bca: rawSek,
+          tipe_mesin: m.tipeMesin || m['Tipe Mesin'] || '-',
+          vendor: m.vendor || m.Vendor || '-'
         });
       }
     }
@@ -1043,8 +1047,8 @@ export function getMachinesMap(): Map<string, any> {
   return map;
 }
 
-import { isEndTimeFilled, normalizeServicePoint } from './dailyIncidentParser';
-export { isEndTimeFilled, normalizeServicePoint } from './dailyIncidentParser';
+import { isEndTimeFilled, normalizeServicePoint, resolveServicePoint, cleanSektorName } from './dailyIncidentParser';
+export { isEndTimeFilled, normalizeServicePoint, resolveServicePoint, cleanSektorName } from './dailyIncidentParser';
 export type { OpenIncidentItem } from './monitoringService';
 
 export function extractDateStrFromRaw(rawDate: any): string {
@@ -1138,9 +1142,10 @@ export function mapRowToDailyIncidentRow(row: any, machine?: any): DailyIncident
     }
   }
 
-  const rawSp = m.service_point || row.service_point || '-';
-  const sp = normalizeServicePoint(rawSp) || rawSp;
-  const sek = m.sektor_bca || row.sektor || '-';
+  const sp = resolveServicePoint(m, row);
+  const rawSek = m.sektor_bca || row.sektor || row.sektor_bca || '-';
+  const cleanSek = cleanSektorName(rawSek);
+  const sek = cleanSek !== '-' ? cleanSek : (rawSek !== '-' ? rawSek : '-');
   const spSek = (sp !== '-' && sek !== '-') ? `${sp} - ${sek}` : (sp !== '-' ? sp : (sek !== '-' ? sek : '-'));
   const dur = Math.round(Number(row.duration_minutes || row.durasi || row.durationRaw || 0));
 
@@ -1174,15 +1179,17 @@ export function mapRowToDailyIncidentRow(row: any, machine?: any): DailyIncident
 
 export function mapRowToOpenIncident(row: any, machine?: any): OpenIncidentItem {
   const m = machine || row.machines || getMachineMetadata(row.wsid) || {};
-  const rawSp = m.service_point || row.service_point || '-';
-  const sp = normalizeServicePoint(rawSp) || rawSp;
+  const sp = resolveServicePoint(m, row);
+  const rawSek = m.sektor_bca || row.sektor || row.sektor_bca || '-';
+  const cleanSek = cleanSektorName(rawSek);
+  const sek = cleanSek !== '-' ? cleanSek : (rawSek !== '-' ? rawSek : '-');
   return {
     incidentKey: row.incident_key,
     incidentNumber: row.ticket_no || '-',
     wsid: row.wsid,
     lokasi: m.lokasi || row.lokasi || '-',
     servicePoint: sp,
-    sektor: m.sektor_bca || row.sektor || '-',
+    sektor: sek,
     typeMesin: m.tipe_mesin || row.type_mesin || '-',
     vendor: m.vendor || row.vendor || '-',
     eventCode: row.event_code || '-',

@@ -121,6 +121,42 @@ export function cleanSektorName(raw?: string | null): string {
 }
 
 /**
+ * Peta nama sektor ke singkatan Service Point resmi untuk resolusi akurat
+ */
+export const KNOWN_SEKTOR_SP_MAP: Record<string, string> = {
+  // ACJK
+  "SUDIRMAN": "ACJK", "INPRES": "ACJK", "TJ DUREN": "ACJK", "CILEDUG": "ACJK", "SLIPI": "ACJK",
+  "KEBAYORAN LAMA": "ACJK", "KREO": "ACJK", "SENAYAN": "ACJK", "DAAN MOGOT": "ACJK", "ULUJAMI": "ACJK",
+  "BENHIL": "ACJK", "KOTA": "ACJK", "TELUK GONG": "ACJK", "TELUK GONG 2": "ACJK", "PIK": "ACJK",
+  "TOMANG": "ACJK", "CENTRAL PARK": "ACJK", "JELAMBAR": "ACJK", "SENAYAN 2": "ACJK",
+
+  // ACBT
+  "CENGKARENG 1": "ACBT", "CENGKARENG 2": "ACBT", "CEGER": "ACBT", "GRAHA": "ACBT", "MELATI MAS": "ACBT",
+  "BINTARO": "ACBT", "SUMMARECON SERPONG": "ACBT", "GADING SERPONG": "ACBT", "LEGOK": "ACBT",
+  "ALAM SUTERA": "ACBT", "CURUG": "ACBT", "KARAWACI": "ACBT", "SERPONG RAYA": "ACBT",
+  "BSD TAMAN TEKNO": "ACBT", "CIKOKOL": "ACBT", "BSD 1": "ACBT", "BSD 2": "ACBT", "CIPONDOH 1": "ACBT",
+  "CIPONDOH 2": "ACBT", "DUTA GARDEN": "ACBT", "TANGERANG KOTA": "ACBT", "PORIS": "ACBT",
+  "NEGLASARI": "ACBT", "DADAP": "ACBT", "BITUNG": "ACBT", "CISAUK": "ACBT", "JATAKE": "ACBT",
+  "FORESTA": "ACBT", "TELUK NAGA": "ACBT", "KOTA BUMI": "ACBT", "SEPATAN": "ACBT", "PAKU HAJI": "ACBT",
+  "PARUNG PANJANG": "ACBT",
+
+  // ACCK
+  "CITRA RAYA": "ACCK", "CIKANDE": "ACCK", "BALARAJA": "ACCK", "JAYANTI": "ACCK", "KRAGILAN": "ACCK",
+  "PASAR KEMIS": "ACCK", "TIGARAKSA": "ACCK", "JAWILAN": "ACCK", "CIRUAS": "ACCK", "CISOKA": "ACCK",
+  "RAJEG": "ACCK", "RANGKASBITUNG": "ACCK",
+
+  // ACSR
+  "SERANG KOTA 1": "ACSR", "SERANG KOTA 2": "ACSR", "PETIR": "ACSR", "CIPOCOK JAYA": "ACSR",
+  "CIOMAS": "ACSR", "TAKTAKAN": "ACSR", "SERANG": "ACSR", "CILEGON": "ACSR",
+
+  // ACRW
+  "CIDENG": "ACRW", "RAWAMANGUN": "ACRW",
+
+  // ACBS
+  "SGC": "ACBS", "BEKASI": "ACBS", "CIKARANG": "ACBS"
+};
+
+/**
  * Normalisasi nama Service Point agar selalu seragam menggunakan singkatan resmi:
  * ACJK (Jakarta), ACBT (Bintaro), ACCK (Cikande), ACSR (Serang), ACBS (Bekasi), ACRW (Rawamangun), TAG
  */
@@ -129,7 +165,7 @@ export function normalizeServicePoint(val?: string | null): string {
   const s = String(val).trim().toUpperCase();
   if (!s || s === '-' || s === 'N/A' || s === 'UNKNOWN' || s === 'NULL') return '';
 
-  // Jika berformat "ACJK - SEKTOR" atau "ACBT - BSD"
+  // 1. Jika berformat "ACJK - SEKTOR" atau "ACBT-KOTA BUMI"
   if (s.includes('-')) {
     const first = s.split('-')[0].trim();
     if (['ACJK', 'ACBT', 'ACCK', 'ACSR', 'ACBS', 'ACRW', 'TAG'].includes(first)) {
@@ -137,7 +173,7 @@ export function normalizeServicePoint(val?: string | null): string {
     }
   }
 
-  // Exact matching nama panjang -> singkatan
+  // 2. Exact matching nama panjang -> singkatan
   if (s === 'ABACUS JAKARTA' || s === 'JAKARTA' || s === 'PT ABACUS JAKARTA') return 'ACJK';
   if (s === 'ABACUS BINTARO' || s === 'BINTARO' || s === 'PT ABACUS BINTARO') return 'ACBT';
   if (s === 'ABACUS CIKANDE' || s === 'CIKANDE' || s === 'PT ABACUS CIKANDE') return 'ACCK';
@@ -146,7 +182,7 @@ export function normalizeServicePoint(val?: string | null): string {
   if (s === 'ABACUS RAWAMANGUN' || s === 'RAWAMANGUN' || s === 'PT ABACUS RAWAMANGUN') return 'ACRW';
   if (s === 'TAG' || s === 'PT TAG' || s === 'TRANS ARTHA GEDUNG') return 'TAG';
 
-  // Prefix matching
+  // 3. Prefix matching
   if (s.startsWith('ACJK')) return 'ACJK';
   if (s.startsWith('ACBT')) return 'ACBT';
   if (s.startsWith('ACCK')) return 'ACCK';
@@ -155,7 +191,16 @@ export function normalizeServicePoint(val?: string | null): string {
   if (s.startsWith('ACRW')) return 'ACRW';
   if (s.startsWith('TAG')) return 'TAG';
 
-  // Substring matching
+  // 4. Cek apakah ini nama sektor murni (misal: "KOTA BUMI" -> "ACBT", "CITRA RAYA" -> "ACCK")
+  const clean = cleanSektorName(s).toUpperCase();
+  if (KNOWN_SEKTOR_SP_MAP[clean]) {
+    return KNOWN_SEKTOR_SP_MAP[clean];
+  }
+  if (KNOWN_SEKTOR_SP_MAP[s]) {
+    return KNOWN_SEKTOR_SP_MAP[s];
+  }
+
+  // 5. Substring matching
   if (s.includes('JAKARTA')) return 'ACJK';
   if (s.includes('BINTARO')) return 'ACBT';
   if (s.includes('CIKANDE')) return 'ACCK';
@@ -164,6 +209,59 @@ export function normalizeServicePoint(val?: string | null): string {
   if (s.includes('RAWAMANGUN')) return 'ACRW';
 
   return s;
+}
+
+/**
+ * Resolusi cerdas Service Point (ACJK, ACBT, ACCK, ACSR, ACBS, ACRW, TAG)
+ * Mengutamakan data sektor (sektorBCA/sektor) daripada wilayah generic ("ABACUS JAKARTA")
+ */
+export function resolveServicePoint(machine?: any, incidentRow?: any): string {
+  // 1. Ambil dari sektor mesin (sumber paling spesifik, misal: "ACBT-KOTA BUMI", "ACCK-RAJEG")
+  const mSektor = machine?.sektorBCA || machine?.sektor || machine?.Sektor || machine?.sektor_bca || '';
+  if (mSektor && typeof mSektor === 'string' && mSektor !== '-') {
+    const spFromSek = normalizeServicePoint(mSektor);
+    if (spFromSek && ['ACJK', 'ACBT', 'ACCK', 'ACSR', 'ACBS', 'ACRW', 'TAG'].includes(spFromSek)) {
+      return spFromSek;
+    }
+  }
+
+  // 2. Ambil dari sektor baris insiden jika mesin tidak ada
+  const rSektor = incidentRow?.sektor || incidentRow?.sektor_bca || incidentRow?.servicePointSektor || incidentRow?.service_point_sektor || '';
+  if (rSektor && typeof rSektor === 'string' && rSektor !== '-') {
+    const spFromRowSek = normalizeServicePoint(rSektor);
+    if (spFromRowSek && ['ACJK', 'ACBT', 'ACCK', 'ACSR', 'ACBS', 'ACRW', 'TAG'].includes(spFromRowSek)) {
+      return spFromRowSek;
+    }
+  }
+
+  // 3. Ambil dari servicePoint langsung jika ada (dan bukan generic)
+  const mSp = machine?.servicePoint || machine?.service_point || machine?.ServicePoint || '';
+  if (mSp && typeof mSp === 'string' && mSp !== '-') {
+    const spFromM = normalizeServicePoint(mSp);
+    if (spFromM && ['ACJK', 'ACBT', 'ACCK', 'ACSR', 'ACBS', 'ACRW', 'TAG'].includes(spFromM)) {
+      return spFromM;
+    }
+  }
+
+  // 4. Ambil dari service_point baris insiden jika ada
+  const rSp = incidentRow?.servicePoint || incidentRow?.service_point || '';
+  if (rSp && typeof rSp === 'string' && rSp !== '-') {
+    const spFromRow = normalizeServicePoint(rSp);
+    if (spFromRow && ['ACJK', 'ACBT', 'ACCK', 'ACSR', 'ACBS', 'ACRW', 'TAG'].includes(spFromRow)) {
+      return spFromRow;
+    }
+  }
+
+  // 5. Fallback ke wilayah operasional mesin jika tidak ada info sektor
+  const wil = machine?.wilayahOperasional || machine?.wilayah_operasional || machine?.Wilayah || '';
+  if (wil && typeof wil === 'string' && wil !== '-') {
+    const spFromWil = normalizeServicePoint(wil);
+    if (spFromWil && ['ACJK', 'ACBT', 'ACCK', 'ACSR', 'ACBS', 'ACRW', 'TAG'].includes(spFromWil)) {
+      return spFromWil;
+    }
+  }
+
+  return 'ACJK';
 }
 
 export function toComparableDate(str?: string | null, isEnd: boolean = false): string {
