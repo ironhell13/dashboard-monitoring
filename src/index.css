@@ -93,6 +93,18 @@
   @apply bg-slate-400;
 }
 
+/* Subtle background grid pattern & glow for login */
+.bg-grid-pattern {
+  background-image: radial-gradient(rgba(0, 102, 255, 0.08) 1px, transparent 1px);
+  background-size: 24px 24px;
+}
+.panel-glow {
+  box-shadow: 0 20px 40px -15px rgba(11, 25, 44, 0.08);
+}
+.brand-glow {
+  box-shadow: 0 0 50px -10px rgba(0, 102, 255, 0.25);
+}
+
 /* Custom Horizontal Scrollbar for Table */
 .floating-scrollbar::-webkit-scrollbar {
   height: 8px;

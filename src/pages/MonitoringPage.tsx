@@ -10096,6 +10096,16 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
               </div>
 
               <div className="flex items-center gap-2">
+                <a
+                  href={`#/wsid/${selectedFreqItemForDetail.wsid}`}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="px-2.5 py-1.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold flex items-center gap-1.5 transition-colors shadow-2xs"
+                  title="Buka Halaman Detail Mesin Lengkap"
+                >
+                  <ExternalLink size={13} />
+                  <span>Detail Mesin</span>
+                </a>
                 <button
                   type="button"
                   onClick={() => setShowAddPenangananInModal((prev) => !prev)}
@@ -10458,6 +10468,234 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
                   </div>
                 </div>
               )}
+
+              {/* Seksi Tiket Follow Up & Tindakan Penanganan Lapangan */}
+              {(() => {
+                const wsidClean = (selectedFreqItemForDetail.wsid || '').trim().toUpperCase();
+                const wsidTickets = (modernTickets || []).filter(
+                  (t) => (t.wsid || '').trim().toUpperCase() === wsidClean
+                );
+                const activeTicket = wsidTickets.find((t) => t.status !== 'CLOSED');
+
+                return (
+                  <div className="space-y-3 pt-3 border-t border-[#E5EAF2]">
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <div className="flex items-center gap-2">
+                        <div className="w-7 h-7 rounded-lg bg-indigo-50 border border-indigo-200 flex items-center justify-center text-indigo-600">
+                          <Ticket size={15} />
+                        </div>
+                        <div>
+                          <span className="text-xs font-bold text-[#0D1C2E] flex items-center gap-1.5">
+                            <span>Tiket Follow Up &amp; Tindakan Penanganan</span>
+                            <span className="px-1.5 py-0.2 rounded-full text-[10px] font-bold bg-indigo-100 text-indigo-700">
+                              {wsidTickets.length} Tiket
+                            </span>
+                          </span>
+                          <span className="text-[10px] text-slate-500 block">
+                            Eskalasi pengawasan dan catatan progres penanganan teknisi vendor/lapangan
+                          </span>
+                        </div>
+                      </div>
+
+                      {/* Action Button: Req Follow Up jika belum ada tiket aktif */}
+                      {!activeTicket && isSupervisorRole && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            handleOpenKaOpsFollowUp(
+                              {
+                                wsid: selectedFreqItemForDetail.wsid,
+                                lokasi: selectedFreqItemForDetail.lokasi,
+                                servicePointSektor: selectedFreqItemForDetail.servicePointSektor,
+                                problem: selectedFreqItemForDetail.eventCodeDesc,
+                                frekuensi: selectedFreqItemForDetail.totalFrekuensi
+                              },
+                              'FREKUENSI'
+                            );
+                          }}
+                          className="px-3 py-1.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold shadow-2xs flex items-center gap-1.5 transition-all cursor-pointer"
+                        >
+                          <Send size={12} />
+                          <span>Terbitkan Tiket Follow Up</span>
+                        </button>
+                      )}
+                    </div>
+
+                    {wsidTickets.length === 0 ? (
+                      <div className="p-4 rounded-xl bg-slate-50 border border-slate-200 text-center text-xs text-slate-500">
+                        <Ticket size={24} className="mx-auto text-slate-300 mb-1" />
+                        <p className="font-semibold text-slate-600">Belum ada Tiket Follow Up untuk mesin ini.</p>
+                        <p className="text-[11px] text-slate-400 mt-0.5">
+                          Jika problem berulang ini perlu penanganan terpadu oleh teknisi/vendor, terbitkan tiket follow up di atas.
+                        </p>
+                      </div>
+                    ) : (
+                      <div className="space-y-3">
+                        {wsidTickets.map((t) => (
+                          <div
+                            key={t.ticketId}
+                            className={`p-3.5 rounded-xl border transition-all ${
+                              t.status === 'CLOSED'
+                                ? 'bg-slate-50/70 border-slate-200 opacity-90'
+                                : 'bg-white border-indigo-200 shadow-xs ring-1 ring-indigo-500/10'
+                            }`}
+                          >
+                            {/* Ticket Header */}
+                            <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-100 pb-2">
+                              <div className="flex items-center gap-2 flex-wrap">
+                                <span className="font-mono font-bold text-xs text-indigo-700 bg-indigo-50 px-2 py-0.5 rounded border border-indigo-200">
+                                  #{t.ticketId}
+                                </span>
+                                <span
+                                  className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
+                                    t.status === 'CLOSED'
+                                      ? 'bg-slate-100 text-slate-700'
+                                      : t.status === 'REQ_CLOSE'
+                                      ? 'bg-purple-100 text-purple-700 border border-purple-200'
+                                      : t.status === 'IN_PROGRESS'
+                                      ? 'bg-blue-100 text-blue-700 border border-blue-200'
+                                      : 'bg-amber-100 text-amber-800 border border-amber-200'
+                                  }`}
+                                >
+                                  {t.status === 'REQ_CLOSE' ? 'MENUNGGU VALIDASI' : t.status}
+                                </span>
+                                <span
+                                  className={`px-2 py-0.5 rounded-full text-[10px] font-semibold ${
+                                    t.prioritas === 'URGENT'
+                                      ? 'bg-rose-100 text-rose-700 border border-rose-200'
+                                      : t.prioritas === 'HIGH'
+                                      ? 'bg-amber-100 text-amber-700 border border-amber-200'
+                                      : 'bg-slate-100 text-slate-600'
+                                  }`}
+                                >
+                                  Prioritas: {t.prioritas}
+                                </span>
+                                <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-slate-100 text-slate-600">
+                                  Kategori: {t.kategori}
+                                </span>
+                              </div>
+
+                              <div className="flex items-center gap-2 text-[11px] text-slate-400">
+                                <Clock size={11} />
+                                <span>{new Date(t.createdAt).toLocaleString('id-ID')}</span>
+                                <span>&bull;</span>
+                                <span>
+                                  Oleh: <strong>{t.createdBy}</strong>
+                                </span>
+                              </div>
+                            </div>
+
+                            {/* Problem & Catatan Request */}
+                            <div className="mt-2.5 space-y-1">
+                              <div className="text-xs">
+                                <span className="text-slate-400 text-[11px]">Problem Terkait: </span>
+                                <strong className="text-slate-800">{t.problem}</strong>
+                              </div>
+                              {t.catatanRequest && (
+                                <div className="p-2.5 rounded-lg bg-amber-50/60 border border-amber-200/70 text-xs text-amber-900 leading-relaxed">
+                                  <span className="font-semibold text-amber-800 block text-[10px] uppercase mb-0.5">
+                                    Arahan / Catatan Request:
+                                  </span>
+                                  {t.catatanRequest}
+                                </div>
+                              )}
+                            </div>
+
+                            {/* Progres List / Tindakan Penanganan */}
+                            <div className="mt-3 space-y-1.5">
+                              <div className="flex items-center justify-between">
+                                <span className="text-[11px] font-bold text-slate-700 flex items-center gap-1">
+                                  <Wrench size={11} className="text-indigo-600" />
+                                  <span>Daftar Tindakan / Progres Penanganan ({(t.progresList || []).length}):</span>
+                                </span>
+                              </div>
+
+                              {!t.progresList || t.progresList.length === 0 ? (
+                                <p className="text-[11px] text-slate-400 italic bg-slate-50 p-2 rounded-lg border border-slate-100">
+                                  Belum ada tindakan / progres yang diinputkan untuk tiket ini.
+                                </p>
+                              ) : (
+                                <div className="space-y-1.5 max-h-48 overflow-y-auto pr-1">
+                                  {t.progresList.map((prg, pIdx) => (
+                                    <div
+                                      key={prg.id || pIdx}
+                                      className="p-2 rounded-lg bg-slate-50 border border-slate-200 flex items-start justify-between gap-2 text-xs"
+                                    >
+                                      <div className="space-y-0.5 flex-1 min-w-0">
+                                        <div className="flex items-center gap-2 text-[10px]">
+                                          <span className="font-semibold text-indigo-700 bg-indigo-50 px-1.5 py-0.2 rounded border border-indigo-200">
+                                            Tindakan #{pIdx + 1}
+                                          </span>
+                                          <strong className="text-slate-800">{prg.petugas}</strong>
+                                          <span className="text-slate-400">
+                                            &bull; {new Date(prg.waktu).toLocaleString('id-ID')}
+                                          </span>
+                                        </div>
+                                        <p className="text-slate-700 leading-relaxed pt-0.5 text-xs">
+                                          {prg.catatan}
+                                        </p>
+                                      </div>
+                                    </div>
+                                  ))}
+                                </div>
+                              )}
+
+                              {/* Info Request Close / Validasi jika ada */}
+                              {t.reqCloseInfo && (
+                                <div className="p-2.5 rounded-lg bg-purple-50 border border-purple-200 text-xs text-purple-900 space-y-0.5 mt-2">
+                                  <div className="flex items-center gap-1.5 font-bold text-[10px] uppercase text-purple-800">
+                                    <CheckCircle2 size={12} />
+                                    <span>Catatan Permintaan Close:</span>
+                                    <span className="text-purple-600 font-normal">
+                                      ({t.reqCloseInfo.requestedBy} &bull;{' '}
+                                      {new Date(t.reqCloseInfo.requestedAt).toLocaleString('id-ID')})
+                                    </span>
+                                  </div>
+                                  <p className="leading-relaxed">{t.reqCloseInfo.catatanPenyelesaian}</p>
+                                </div>
+                              )}
+
+                              {t.status === 'CLOSED' && t.validationInfo && (
+                                <div className="p-2.5 rounded-lg bg-emerald-50 border border-emerald-200 text-xs text-emerald-900 space-y-0.5 mt-1">
+                                  <div className="flex items-center gap-1.5 font-bold text-[10px] uppercase text-emerald-800">
+                                    <ShieldCheck size={12} />
+                                    <span>Tiket Tervalidasi Selesai (Closed):</span>
+                                    <span className="text-emerald-600 font-normal">
+                                      ({t.validationInfo.validatedBy} &bull;{' '}
+                                      {new Date(t.validationInfo.validatedAt).toLocaleString('id-ID')})
+                                    </span>
+                                  </div>
+                                  {t.validationInfo.catatanApproval && (
+                                    <p className="leading-relaxed">{t.validationInfo.catatanApproval}</p>
+                                  )}
+                                </div>
+                              )}
+
+                              {/* Quick Button to open in Ticket Center Modal */}
+                              {t.status !== 'CLOSED' && (
+                                <div className="pt-2 flex justify-end">
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      setSelectedTicketForDetail(t);
+                                      setShowTicketCenterModal(true);
+                                    }}
+                                    className="px-3 py-1 rounded-lg bg-indigo-50 hover:bg-indigo-100 text-indigo-700 text-xs font-semibold border border-indigo-200 transition-colors flex items-center gap-1 cursor-pointer"
+                                  >
+                                    <Ticket size={12} />
+                                    <span>Buka Tindak Lanjut Lengkap di Pusat Tiket</span>
+                                    <ChevronRight size={12} />
+                                  </button>
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                );
+              })()}
             </div>
 
             {/* Modal Footer */}

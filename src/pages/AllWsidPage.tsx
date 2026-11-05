@@ -25,7 +25,9 @@ import {
   Activity,
   Layers,
   Calendar,
-  CheckCircle2
+  CheckCircle2,
+  Ticket,
+  Wrench
 } from 'lucide-react';
 import { exportAllWsidExcel, SERVICE_POINT_MAP, getServicePointName } from '../utils/comprehensiveExporter';
 import { cleanSektorName, normalizeServicePoint } from '../utils/dailyIncidentParser';
@@ -36,7 +38,7 @@ export default function AllWsidPage() {
   const navigate = useNavigate();
   const allFilteredData = useFilteredData();
   const location = useLocation();
-  const { machines, isSyncing } = useDataStore();
+  const { machines, isSyncing, modernTickets } = useDataStore();
 
   // Selection & Inspector State
   const [selectedWsid, setSelectedWsid] = useState<string | null>(location.state?.selectedWsid || null);
@@ -1258,6 +1260,51 @@ export default function AllWsidPage() {
                   </div>
                 )}
 
+                {/* Active Ticket / Action Status if any */}
+                {(() => {
+                  const activeTkt = (modernTickets || []).find(
+                    (t) => (t.wsid || '').trim().toUpperCase() === selectedMachine.wsid.trim().toUpperCase() && t.status !== 'CLOSED'
+                  );
+                  if (!activeTkt) return null;
+                  const latestAction = (activeTkt.progresList && activeTkt.progresList.length > 0)
+                    ? activeTkt.progresList[activeTkt.progresList.length - 1]
+                    : null;
+
+                  return (
+                    <div className="p-3 rounded-lg bg-indigo-50/70 border border-indigo-200 text-xs space-y-1.5 animate-in fade-in">
+                      <div className="flex items-center justify-between">
+                        <span className="font-bold text-indigo-900 flex items-center gap-1.5 text-[11px]">
+                          <Ticket size={13} className="text-indigo-600" />
+                          <span>Tiket Aktif: #{activeTkt.ticketId}</span>
+                        </span>
+                        <span className={`px-1.5 py-0.2 rounded-full text-[9px] font-bold ${
+                          activeTkt.status === 'REQ_CLOSE'
+                            ? 'bg-purple-100 text-purple-700'
+                            : activeTkt.status === 'IN_PROGRESS'
+                            ? 'bg-blue-100 text-blue-700'
+                            : 'bg-amber-100 text-amber-800'
+                        }`}>
+                          {activeTkt.status}
+                        </span>
+                      </div>
+                      <p className="text-[11px] text-slate-700 line-clamp-2">
+                        <strong>Problem:</strong> {activeTkt.problem}
+                      </p>
+                      {latestAction ? (
+                        <div className="text-[10px] bg-white p-1.5 rounded border border-indigo-100 text-slate-600">
+                          <span className="font-semibold text-indigo-700">Tindakan Terakhir: </span>
+                          <span>{latestAction.catatan}</span>
+                        </div>
+                      ) : activeTkt.catatanRequest ? (
+                        <div className="text-[10px] bg-white p-1.5 rounded border border-indigo-100 text-slate-600">
+                          <span className="font-semibold text-amber-800">Instruksi: </span>
+                          <span>{activeTkt.catatanRequest}</span>
+                        </div>
+                      ) : null}
+                    </div>
+                  );
+                })()}
+
                 {/* Shortcut to Deep Analytics */}
                 <div className="pt-2 border-t border-[#E5EAF2]">
                   <button
@@ -1265,7 +1312,7 @@ export default function AllWsidPage() {
                     onClick={() => navigate(`/wsid/${selectedMachine.wsid}`)}
                     className="w-full py-2 px-3.5 bg-blue-600 hover:bg-blue-700 active:bg-blue-800 text-white font-medium rounded-lg transition-colors flex items-center justify-center gap-1.5 text-xs shadow-xs cursor-pointer"
                   >
-                    <span>Buka Analisis Bulanan Lengkap</span>
+                    <span>Buka Detail Mesin &amp; Tiket Lengkap</span>
                     <ExternalLink size={13} />
                   </button>
                 </div>
