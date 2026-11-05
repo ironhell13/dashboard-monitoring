@@ -1145,6 +1145,7 @@ export interface WsidProblemDateAggregation {
   vendorMesin: string;
   eventCodeDesc: string;
   dateCounts: Record<string, number>;
+  dateDurations?: Record<string, number>;
   totalFrekuensi: number;
   totalDurasi: number; // in minutes
 }
@@ -1200,6 +1201,7 @@ export function aggregateByWsidProblemDate(
         vendorMesin: r.vendorMesin,
         eventCodeDesc: r.eventCodeDesc,
         dateCounts: {},
+        dateDurations: {},
         totalFrekuensi: 0,
         totalDurasi: 0
       };
@@ -1208,6 +1210,8 @@ export function aggregateByWsidProblemDate(
     const cur = map[key];
     if (d && d !== '-') {
       cur.dateCounts[d] = (cur.dateCounts[d] || 0) + 1;
+      if (!cur.dateDurations) cur.dateDurations = {};
+      cur.dateDurations[d] = (cur.dateDurations[d] || 0) + (r.durasi || 0);
     }
     cur.totalFrekuensi += 1;
     cur.totalDurasi += r.durasi || 0;

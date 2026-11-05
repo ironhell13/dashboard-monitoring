@@ -1263,10 +1263,10 @@ export function mapRowToDailyIncidentRow(row: any, machine?: any): DailyIncident
     detail: row.keterangan || row.detail || '-',
     actionTerakhir: (row.action_taken && row.action_taken !== '-') ? row.action_taken : '-',
     actionTerakhirOleh: (row.action_by && row.action_by !== '-') ? row.action_by : '-',
-    actionTerakhirWaktu: row.action_at ? new Date(row.action_at).toISOString().replace('T', ' ').slice(0, 19) : '-',
+    actionTerakhirWaktu: toWibDateTimeString(row.action_at),
     jumlahAction: row.action_taken ? 1 : 0,
     closeSource: row.close_source || (formattedEndTime !== '-' ? 'OASE' : '-'),
-    monthStr: row.periode_bulan || (dateStr.length >= 10 ? `${dateStr.slice(6, 10)}-${dateStr.slice(3, 5)}` : '2026-10')
+    monthStr: row.periode_bulan || (dateStr.length >= 10 ? `${dateStr.slice(6, 10)}-${dateStr.slice(3, 5)}` : `${new Date().getFullYear()}-${String(new Date().getMonth() + 1).padStart(2, '0')}`)
   };
 }
 
@@ -1840,7 +1840,7 @@ export async function fetchIncidentHistorySupabase(
 
     const history: any[] = (data || []).map((row: any) => ({
       logId: String(row.id),
-      waktu: row.action_at ? new Date(row.action_at).toISOString().replace('T', ' ').slice(0, 19) : (row.created_at || '-'),
+      waktu: toWibDateTimeString(row.action_at || row.created_at),
       incidentKey: row.incident_key,
       wsid: row.wsid,
       eventCodeDesc: row.problem || '-',
@@ -1862,7 +1862,7 @@ export async function fetchIncidentHistorySupabase(
       if (actData && actData.action_taken) {
         history.push({
           logId: 'ACT_CURRENT',
-          waktu: actData.action_at ? new Date(actData.action_at).toISOString().replace('T', ' ').slice(0, 19) : '-',
+          waktu: toWibDateTimeString(actData.action_at),
           incidentKey: actData.incident_key,
           wsid: actData.wsid,
           eventCodeDesc: actData.problem || '-',
@@ -1908,7 +1908,7 @@ export async function fetchWsidPenangananHistorySupabase(
 
     const history = (data || []).map((row: any) => ({
       logId: String(row.id),
-      waktu: row.action_at ? new Date(row.action_at).toISOString().replace('T', ' ').slice(0, 19) : (row.created_at || '-'),
+      waktu: toWibDateTimeString(row.action_at || row.created_at),
       incidentKey: row.incident_key,
       wsid: row.wsid,
       eventCodeDesc: row.problem || '-',
@@ -2351,7 +2351,7 @@ export async function fetchUploadLogsSupabase(): Promise<{
     if (error) throw error;
 
     const logs = (data || []).map((l: any) => ({
-      waktu: l.created_at ? new Date(l.created_at).toISOString().replace('T', ' ').slice(0, 19) : '-',
+      waktu: toWibDateTimeString(l.created_at),
       uploader: l.uploaded_by || '-',
       sumber: l.file_type || 'Monitoring',
       namaFile: l.file_name || '-',

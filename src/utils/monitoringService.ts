@@ -16,6 +16,7 @@ import {
   mapRowToDailyIncidentRow,
   extractDateStrFromRaw,
   getMachineMetadata,
+  toWibDateTimeString,
   type RealtimeIncidentPayload
 } from './supabaseService';
 
@@ -25,6 +26,7 @@ export {
   mapRowToDailyIncidentRow,
   extractDateStrFromRaw,
   getMachineMetadata,
+  toWibDateTimeString,
   type RealtimeIncidentPayload
 };
 
@@ -452,7 +454,7 @@ export const getDailyIncidentsFromDbApi = async (payload?: {
         rows: res.rows || [],
         totalCount: res.totalCount || 0,
         lastUploadInfo: {
-          waktu: new Date().toISOString().replace('T', ' ').slice(0, 19),
+          waktu: toWibDateTimeString(new Date()),
           uploader: 'Supabase Cloud DB',
           sumber: 'PostgreSQL',
           namaFile: 'incident_logs'

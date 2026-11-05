@@ -2399,11 +2399,62 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
     try {
       const mStr = extractMonthStr(inc.tanggal || inc.startTime || inc.monthStr, historyMonth);
       const res = await getIncidentHistoryApi(inc.incidentKey, mStr);
-      if (res && res.success && Array.isArray(res.history)) {
-        setIncidentHistory(res.history.sort((a, b) => b.waktu.localeCompare(a.waktu)));
-      } else {
-        setIncidentHistory([]);
+      let combinedHistory = (res && res.success && Array.isArray(res.history)) ? [...res.history] : [];
+
+      // Masukkan riwayat penanganan dari Tiket Follow Up jika ada untuk mesin ini
+      const wsidClean = inc.wsid.trim().toUpperCase();
+      const relatedTickets = (modernTickets || []).filter((t) => t.wsid.trim().toUpperCase() === wsidClean);
+      for (const t of relatedTickets) {
+        combinedHistory.push({
+          logId: `TKT_REQ_${t.ticketId}`,
+          waktu: toWibDateTimeString(t.createdAt),
+          incidentKey: inc.incidentKey,
+          wsid: inc.wsid,
+          eventCodeDesc: t.problem || inc.eventCodeDesc,
+          tipe: 'PENANGANAN',
+          isiAction: `[TIKET ${t.ticketId}] Permintaan Follow Up (${t.kategori}): ${t.catatanRequest}`,
+          namaPetugas: t.createdBy,
+          statusSebelum: 'OPEN',
+          statusSesudah: t.status,
+          catatan: `Prioritas: ${t.prioritas}`
+        });
+
+        if (Array.isArray(t.progresList)) {
+          for (const p of t.progresList) {
+            combinedHistory.push({
+              logId: `TKT_PROG_${t.ticketId}_${p.id || p.waktu}`,
+              waktu: toWibDateTimeString(p.waktu),
+              incidentKey: inc.incidentKey,
+              wsid: inc.wsid,
+              eventCodeDesc: t.problem || inc.eventCodeDesc,
+              tipe: 'PENANGANAN',
+              isiAction: `[TIKET ${t.ticketId}] Penanganan: ${p.catatan}`,
+              namaPetugas: p.petugas,
+              statusSebelum: 'IN_PROGRESS',
+              statusSesudah: t.status,
+              catatan: '-'
+            });
+          }
+        }
+
+        if (t.reqCloseInfo) {
+          combinedHistory.push({
+            logId: `TKT_CLOSE_${t.ticketId}`,
+            waktu: toWibDateTimeString(t.reqCloseInfo.requestedAt),
+            incidentKey: inc.incidentKey,
+            wsid: inc.wsid,
+            eventCodeDesc: t.problem || inc.eventCodeDesc,
+            tipe: 'PENANGANAN',
+            isiAction: `[TIKET ${t.ticketId}] Pengajuan Selesai: ${t.reqCloseInfo.catatanPenyelesaian}`,
+            namaPetugas: t.reqCloseInfo.requestedBy,
+            statusSebelum: 'IN_PROGRESS',
+            statusSesudah: 'REQ_CLOSE',
+            catatan: t.reqCloseInfo.statusMesinSaatReq || '-'
+          });
+        }
       }
+
+      setIncidentHistory(combinedHistory.sort((a, b) => b.waktu.localeCompare(a.waktu)));
     } catch (e) {
       console.warn('Gagal memuat riwayat tindakan dari Supabase:', e);
       setIncidentHistory([]);
@@ -2873,8 +2924,15 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
         aVal = getItemCount(a);
         bVal = getItemCount(b);
       } else if (sortFieldFreq === 'totalDurasi') {
-        aVal = a.totalDurasi;
-        bVal = b.totalDurasi;
+        const getDur = (it: any) => {
+          if (!isDateFiltered) return it.totalDurasi;
+          const exact = displayedFreqDates.reduce((acc, d) => acc + (it.dateDurations?.[d] || 0), 0);
+          if (exact > 0) return exact;
+          const cnt = displayedFreqDates.reduce((acc, d) => acc + (it.dateCounts?.[d] || 0), 0);
+          return it.totalFrekuensi > 0 ? Math.round((it.totalDurasi / it.totalFrekuensi) * cnt) : 0;
+        };
+        aVal = getDur(a);
+        bVal = getDur(b);
       } else if (sortFieldFreq === 'wsid') {
         return sortDirectionFreq === 'asc' ? a.wsid.localeCompare(b.wsid) : b.wsid.localeCompare(a.wsid);
       } else if (sortFieldFreq === 'lokasi') {
@@ -6905,6 +6963,8 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
                                 if (!isDateFiltered) return formatDurationHuman(item.totalDurasi);
                                 const countInFiltered = displayedFreqDates.reduce((acc, d) => acc + (item.dateCounts?.[d] || 0), 0);
                                 if (countInFiltered === 0) return '0m';
+                                const exactDurInFiltered = displayedFreqDates.reduce((acc, d) => acc + (item.dateDurations?.[d] || 0), 0);
+                                if (exactDurInFiltered > 0) return formatDurationHuman(exactDurInFiltered);
                                 if (item.totalFrekuensi > 0 && countInFiltered !== item.totalFrekuensi) {
                                   const proRatedDur = Math.round((item.totalDurasi / item.totalFrekuensi) * countInFiltered);
                                   return formatDurationHuman(proRatedDur);
