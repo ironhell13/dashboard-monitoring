@@ -27,6 +27,11 @@ export default function Layout({ onLogout, userRole }: LayoutProps) {
   const location = useLocation();
   const { machines, modernTickets } = useDataStore();
   const effectiveRole = userRole || (sessionStorage.getItem('USER_ROLE') as any) || 'KAOPS';
+  const isSuperAdmin =
+    effectiveRole === 'SUPER_ADMIN' ||
+    effectiveRole === 'SUPERADMIN' ||
+    sessionStorage.getItem('USER_ROLE') === 'SUPER_ADMIN' ||
+    sessionStorage.getItem('USERNAME') === 'superadmin';
 
   const pendingValidationCount = (modernTickets || []).filter((t) => t.status === 'REQ_CLOSE').length;
   const activeTicketsCount = (modernTickets || []).filter((t) => t.status !== 'CLOSED').length;
@@ -81,7 +86,7 @@ export default function Layout({ onLogout, userRole }: LayoutProps) {
       title: 'PENGATURAN',
       items: [
         { name: 'Upload Data', path: '/upload', icon: UploadCloud },
-        { name: 'Setting', path: '/settings', icon: Settings },
+        ...(isSuperAdmin ? [{ name: 'Setting', path: '/settings', icon: Settings }] : []),
       ]
     }
   ];

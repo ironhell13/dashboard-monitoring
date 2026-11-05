@@ -32,7 +32,7 @@ const SLA_ATM = 99.00;
 const SLA_CRM = 98.50;
 
 export default function TotalUptimeBulanPage() {
-  const [tableViewMode, setTableViewMode] = useState<'COMBINED' | 'SPLIT' | 'ATM' | 'CRM'>('COMBINED');
+  const [tableViewMode, setTableViewMode] = useState<'SPLIT' | 'ATM' | 'CRM'>('SPLIT');
   const [isExporting, setIsExporting] = useState(false);
   const { 
     globalTrendData, 
@@ -402,19 +402,8 @@ export default function TotalUptimeBulanPage() {
             </p>
           </div>
 
-          {/* View Mode Toggle: Gabungan dengan Pembatas / Pisah 2 Tabel / ATM Saja / CRM Saja */}
+          {/* View Mode Toggle: Pisah 2 Tabel / ATM Saja / CRM Saja */}
           <div className="flex items-center bg-slate-100 p-0.5 rounded-md border border-slate-200 text-[11px] font-medium">
-            <button
-              type="button"
-              onClick={() => setTableViewMode('COMBINED')}
-              className={`px-2.5 py-1 rounded transition-colors cursor-pointer ${
-                tableViewMode === 'COMBINED'
-                  ? 'bg-white text-blue-600 font-semibold shadow-2xs'
-                  : 'text-slate-600 hover:text-slate-900'
-              }`}
-            >
-              Gabungan (Ada Pembatas)
-            </button>
             <button
               type="button"
               onClick={() => setTableViewMode('SPLIT')}
@@ -451,109 +440,7 @@ export default function TotalUptimeBulanPage() {
           </div>
         </div>
 
-        {/* 1. TAMPILAN GABUNGAN DENGAN PEMBATAS TEGAS */}
-        {tableViewMode === 'COMBINED' && (
-          <StickyTableWrapper>
-            <table className="w-full text-xs text-left border-collapse">
-              <thead>
-                {/* Baris 1 Group Header: ATM vs CRM Pembatas Jelas */}
-                <tr className="border-b border-[#E5EAF2] text-[11px]">
-                  <th rowSpan={2} className="px-3 py-2 font-semibold text-slate-700 bg-slate-50 border-r-2 border-slate-300">
-                    Periode Bulan
-                  </th>
-                  <th colSpan={3} className="px-3 py-1.5 text-center font-bold text-blue-700 bg-blue-50/70 border-r-2 border-slate-300">
-                    <div className="flex items-center justify-center gap-1.5">
-                      <span className="w-2 h-2 rounded-full bg-blue-600"></span>
-                      <span>DATA MESIN ATM BCA (SLA &ge; 99.00%)</span>
-                    </div>
-                  </th>
-                  <th colSpan={3} className="px-3 py-1.5 text-center font-bold text-indigo-700 bg-indigo-50/70 border-r-2 border-slate-300">
-                    <div className="flex items-center justify-center gap-1.5">
-                      <span className="w-2 h-2 rounded-full bg-indigo-600"></span>
-                      <span>DATA MESIN CRM / ATS BCA (SLA &ge; 98.50%)</span>
-                    </div>
-                  </th>
-                  <th rowSpan={2} className="px-3 py-2 text-center font-bold text-slate-800 bg-slate-50">
-                    Total Mesin
-                  </th>
-                </tr>
-                {/* Baris 2 Sub Header */}
-                <tr className="bg-[#F8FAFC] text-slate-600 font-semibold border-b border-[#E5EAF2] text-[10px]">
-                  <th className="px-3 py-1 text-center bg-blue-50/30 text-blue-900 font-medium">Populasi</th>
-                  <th className="px-3 py-1 text-center bg-blue-50/30 text-blue-900 font-medium">Uptime (%)</th>
-                  <th className="px-3 py-1 text-center bg-blue-50/30 text-blue-900 font-medium border-r-2 border-slate-300">Status SLA</th>
-                  
-                  <th className="px-3 py-1 text-center bg-indigo-50/30 text-indigo-900 font-medium">Populasi</th>
-                  <th className="px-3 py-1 text-center bg-indigo-50/30 text-indigo-900 font-medium">Uptime (%)</th>
-                  <th className="px-3 py-1 text-center bg-indigo-50/30 text-indigo-900 font-medium border-r-2 border-slate-300">Status SLA</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-[#E5EAF2]">
-                {chartData.length === 0 ? (
-                  <tr>
-                    <td colSpan={8} className="px-3 py-8 text-center text-slate-400">
-                      Tidak ada data bulanan yang tersedia.
-                    </td>
-                  </tr>
-                ) : (
-                  chartData.map((data) => {
-                    const atmAchieved = data.uptimeATM !== null && data.uptimeATM >= SLA_ATM;
-                    const crmAchieved = data.uptimeCRM !== null && data.uptimeCRM >= SLA_CRM;
-
-                    return (
-                      <tr key={data.periodeRaw} className="hover:bg-slate-50/70 transition-colors">
-                        <td className="px-3 py-1.5 font-semibold text-slate-900 border-r-2 border-slate-300 bg-slate-50/30">{data.periodeLabel}</td>
-                        
-                        {/* ATM Info */}
-                        <td className="px-3 py-1.5 text-center text-slate-700 bg-blue-50/10">
-                          {data.mesinATM.toLocaleString()}
-                        </td>
-                        <td className="px-3 py-1.5 text-center font-bold text-blue-600 bg-blue-50/10">
-                          {data.uptimeATM !== null ? `${data.uptimeATM.toFixed(2)}%` : '-'}
-                        </td>
-                        <td className="px-3 py-1.5 text-center border-r-2 border-slate-300 bg-blue-50/10">
-                          {data.uptimeATM !== null ? (
-                            <span className={`inline-flex items-center gap-1 text-[10px] font-semibold px-1.5 py-0.2 rounded ${
-                              atmAchieved ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' : 'bg-rose-50 text-rose-700 border border-rose-200'
-                            }`}>
-                              {atmAchieved ? <CheckCircle2 size={10} /> : <AlertTriangle size={10} />}
-                              {atmAchieved ? 'ACHIEVED' : 'NOT ACHIEVED'}
-                            </span>
-                          ) : '-'}
-                        </td>
-
-                        {/* CRM Info */}
-                        <td className="px-3 py-1.5 text-center text-slate-700 bg-indigo-50/10">
-                          {data.mesinCRM.toLocaleString()}
-                        </td>
-                        <td className="px-3 py-1.5 text-center font-bold text-indigo-600 bg-indigo-50/10">
-                          {data.uptimeCRM !== null ? `${data.uptimeCRM.toFixed(2)}%` : '-'}
-                        </td>
-                        <td className="px-3 py-1.5 text-center border-r-2 border-slate-300 bg-indigo-50/10">
-                          {data.uptimeCRM !== null ? (
-                            <span className={`inline-flex items-center gap-1 text-[10px] font-semibold px-1.5 py-0.2 rounded ${
-                              crmAchieved ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' : 'bg-rose-50 text-rose-700 border border-rose-200'
-                            }`}>
-                              {crmAchieved ? <CheckCircle2 size={10} /> : <AlertTriangle size={10} />}
-                              {crmAchieved ? 'ACHIEVED' : 'NOT ACHIEVED'}
-                            </span>
-                          ) : '-'}
-                        </td>
-
-                        {/* Total */}
-                        <td className="px-3 py-1.5 text-center font-bold text-slate-900 bg-slate-50/30">
-                          {data.totalMesin.toLocaleString()}
-                        </td>
-                      </tr>
-                    );
-                  })
-                )}
-              </tbody>
-            </table>
-          </StickyTableWrapper>
-        )}
-
-        {/* 2. TAMPILAN PISAH 2 TABEL (BERDAMPINGAN / DEDIKASI MASING-MASING) */}
+        {/* 1. TAMPILAN PISAH 2 TABEL (BERDAMPINGAN / DEDIKASI MASING-MASING) */}
         {tableViewMode === 'SPLIT' && (
           <div className="p-3 grid grid-cols-1 lg:grid-cols-2 gap-4">
             {/* Tabel 1: ATM */}

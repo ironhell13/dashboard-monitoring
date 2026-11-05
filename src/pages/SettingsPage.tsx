@@ -1,4 +1,5 @@
 import React, { useState, useMemo, useEffect } from 'react';
+import { Navigate } from 'react-router-dom';
 import {
   Settings,
   Sparkles,
@@ -121,6 +122,16 @@ interface SettingsPageProps {
 type SettingsSubMenu = 'QUICK_CHIPS' | 'ACCOUNTS' | 'DATABASE_CONFIG' | 'SLA_CONFIG' | 'PROBLEM_WHITELIST';
 
 export default function SettingsPage({ userRole = 'KAOPS' }: SettingsPageProps) {
+  const isSuperAdmin =
+    userRole === 'SUPER_ADMIN' ||
+    userRole === 'SUPERADMIN' ||
+    sessionStorage.getItem('USER_ROLE') === 'SUPER_ADMIN' ||
+    sessionStorage.getItem('USERNAME') === 'superadmin';
+
+  if (!isSuperAdmin) {
+    return <Navigate to="/dashboard" replace />;
+  }
+
   const [activeSubMenu, setActiveSubMenu] = useState<SettingsSubMenu>('QUICK_CHIPS');
   const [selectedCategory, setSelectedCategory] = useState<QuickChipCategory | 'ALL'>('ALL');
   const [searchQuery, setSearchQuery] = useState('');

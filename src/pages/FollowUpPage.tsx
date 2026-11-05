@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo, useEffect, useRef } from 'react';
 import {
   Ticket,
   Clock,
@@ -37,9 +37,9 @@ import {
   saveFollowUpTicketModern,
   deleteFollowUpTicketModern
 } from '../utils/spreadsheetService';
-import { cleanSektorName } from '../utils/dailyIncidentParser';
+import { cleanSektorName, getServicePointForSektor, TARGET_EVENT_CODES } from '../utils/dailyIncidentParser';
 import { useQuickChips } from '../utils/quickChipsService';
-import { subscribeFollowUpTicketsSupabase } from '../utils/supabaseService';
+import { subscribeFollowUpTicketsSupabase, getMachinesMap, getMachineMetadata } from '../utils/supabaseService';
 
 interface FollowUpPageProps {
   userRole?: 'KAWIL' | 'KAOPS' | 'MONITORING';
@@ -103,6 +103,10 @@ export default function FollowUpPage({ userRole, isEmbedded = false }: FollowUpP
   const [createCategory, setCreateCategory] = useState<'VENDOR' | 'FLM' | 'SLM' | 'CABANG' | 'JALUR'>('VENDOR');
   const [createNote, setCreateNote] = useState('');
   const [isSubmittingCreate, setIsSubmittingCreate] = useState(false);
+  const [showWsidSuggestions, setShowWsidSuggestions] = useState(false);
+  const [showProblemSuggestions, setShowProblemSuggestions] = useState(false);
+  const wsidBoxRef = useRef<HTMLDivElement>(null);
+  const problemBoxRef = useRef<HTMLDivElement>(null);
 
   // Modal Detail / Progress / Req Close / Validation
   const [activeTicket, setActiveTicket] = useState<FollowUpTicketItem | null>(null);
@@ -271,6 +275,116 @@ export default function FollowUpPage({ userRole, isEmbedded = false }: FollowUpP
     };
   }, []);
 
+  // Catalog seluruh 2.043 mesin BCA untuk instant autocomplete & auto-fill
+  const machinesCatalogList = useMemo(() => {
+    const list: Array<{
+      wsid: string;
+      lokasi: string;
+      servicePoint: string;
+      sektor: string;
+      vendor: string;
+      tipeMesin: string;
+    }> = [];
+
+    try {
+      const map = getMachinesMap();
+      map.forEach((m, k) => {
+        const rawSek = m.sektor_bca || m.sektor || '-';
+        const cleanSek = rawSek !== '-' ? cleanSektorName(rawSek) : '-';
+        const sp = m.service_point || getServicePointForSektor(cleanSek) || 'ACJK';
+        list.push({
+          wsid: k,
+          lokasi: m.lokasi || '-',
+          servicePoint: sp,
+          sektor: cleanSek,
+          vendor: (m.vendor && m.vendor !== '-') ? m.vendor : 'Diebold Nixdorf',
+          tipeMesin: m.tipe_mesin || '-'
+        });
+      });
+    } catch (_) {}
+
+    return list;
+  }, []);
+
+  // Filter WSID Suggestions saat user mengetik
+  const wsidSuggestions = useMemo(() => {
+    const q = createWsid.trim().toUpperCase();
+    if (!q || q.length < 1) return [];
+    return machinesCatalogList
+      .filter((m) => m.wsid.includes(q) || m.lokasi.toUpperCase().includes(q))
+      .slice(0, 10);
+  }, [createWsid, machinesCatalogList]);
+
+  // Daftar Event Problem umum & dari tiket
+  const problemSuggestions = useMemo(() => {
+    const q = createProblem.trim().toLowerCase();
+    if (!q || q.length < 1) return [];
+
+    const extraProblems = [
+      'Cassette 1 Fatal',
+      'Cassette 2 Fatal',
+      'Cassette 3 Fatal',
+      'Cassette 4 Fatal',
+      'cash handlr Hopper 1 Notes LOW',
+      'cash handlr Hopper 2 Notes LOW',
+      'cash handlr Hopper 3 Notes LOW',
+      'cash handlr Hopper 4 Notes LOW',
+      'Out of Service',
+      'Card Reader Fault',
+      'Supervisor Mode Active',
+      'Network Offline / Down',
+      'Receipt Printer Jam',
+      'LLH-Lain-lain hardware'
+    ];
+
+    const allProblems = Array.from(
+      new Set([
+        ...TARGET_EVENT_CODES,
+        ...extraProblems,
+        ...modernTickets.map((t) => t.problem).filter(Boolean)
+      ])
+    );
+
+    return allProblems
+      .filter((p) => p.toLowerCase().includes(q))
+      .slice(0, 10);
+  }, [createProblem, modernTickets]);
+
+  // Close suggestions when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (wsidBoxRef.current && !wsidBoxRef.current.contains(e.target as Node)) {
+        setShowWsidSuggestions(false);
+      }
+      if (problemBoxRef.current && !problemBoxRef.current.contains(e.target as Node)) {
+        setShowProblemSuggestions(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  const handleSelectMachineSuggestion = (m: {
+    wsid: string;
+    lokasi: string;
+    servicePoint: string;
+    sektor: string;
+    vendor: string;
+    tipeMesin: string;
+  }) => {
+    setCreateWsid(m.wsid);
+    setCreateLokasi(m.lokasi);
+    setCreateSektor(m.sektor);
+    setCreateSp(m.servicePoint || 'ACJK');
+    setCreateVendor(m.vendor);
+    setShowWsidSuggestions(false);
+  };
+
+  const handleSelectProblemSuggestion = (prob: string) => {
+    setCreateProblem(prob);
+    setShowProblemSuggestions(false);
+  };
+
   // 1. Action: Buat Tiket Manual
   const handleOpenCreateModal = () => {
     if (!ensurePetugas()) return;
@@ -283,20 +397,26 @@ export default function FollowUpPage({ userRole, isEmbedded = false }: FollowUpP
     setCreatePriority('NORMAL');
     setCreateCategory('VENDOR');
     setCreateNote('');
+    setShowWsidSuggestions(false);
+    setShowProblemSuggestions(false);
     setShowCreateModal(true);
   };
 
-  // Auto-fill Lokasi & Sektor saat input WSID
+  // Auto-fill Service Point, Lokasi & Sektor saat input WSID
   const handleWsidInputChange = (val: string) => {
     const cleanW = val.trim().toUpperCase();
     setCreateWsid(cleanW);
-    if (rawMasterData && rawMasterData.length > 0) {
-      const match = rawMasterData.find((m) => String(m.WSID || '').trim().toUpperCase() === cleanW);
-      if (match) {
-        if (match['Nama Lokasi'] || match.lokasi) setCreateLokasi(match['Nama Lokasi'] || match.lokasi);
-        if (match.Sektor || match.sektor) setCreateSektor(cleanSektorName(match.Sektor || match.sektor));
-        if (match.Vendor || match.vendor) setCreateVendor(match.Vendor || match.vendor);
-      }
+    setShowWsidSuggestions(true);
+
+    // Auto-fill jika persis cocok dengan metadata mesin
+    const meta = getMachineMetadata(cleanW);
+    if (meta) {
+      if (meta.lokasi && meta.lokasi !== '-') setCreateLokasi(meta.lokasi);
+      const cleanSek = meta.sektor_bca && meta.sektor_bca !== '-' ? cleanSektorName(meta.sektor_bca) : '';
+      if (cleanSek) setCreateSektor(cleanSek);
+      const sp = meta.service_point || (cleanSek ? getServicePointForSektor(cleanSek) : '');
+      if (sp && sp !== '-') setCreateSp(sp);
+      if (meta.vendor && meta.vendor !== '-') setCreateVendor(meta.vendor);
     }
   };
 
@@ -1209,15 +1329,54 @@ ${ticket.reqCloseInfo ? `*Catatan Penyelesaian:* ${ticket.reqCloseInfo.catatanPe
 
             <div className="p-4 space-y-3 text-xs overflow-y-auto max-h-[75vh]">
               <div className="grid grid-cols-2 gap-2.5">
-                <div>
-                  <label className="block text-[11px] font-semibold text-slate-700 mb-1">WSID Mesin *</label>
+                <div className="relative" ref={wsidBoxRef}>
+                  <label className="block text-[11px] font-semibold text-slate-700 mb-1">
+                    WSID Mesin * <span className="text-[10px] text-blue-600 font-normal">(Ketik untuk saran)</span>
+                  </label>
                   <input
                     type="text"
-                    placeholder="Contoh: ACJK001"
+                    placeholder="Contoh: Z8VW / ACJK001"
                     value={createWsid}
+                    onFocus={() => { if (createWsid.trim()) setShowWsidSuggestions(true); }}
                     onChange={(e) => handleWsidInputChange(e.target.value)}
                     className="w-full px-2.5 py-1.5 rounded-lg border border-slate-300 font-mono font-bold focus:outline-none focus:ring-1 focus:ring-blue-500 uppercase"
                   />
+                  {showWsidSuggestions && wsidSuggestions.length > 0 && (
+                    <div className="absolute left-0 right-0 top-full mt-1 bg-white rounded-xl shadow-2xl border border-slate-200 z-50 max-h-60 overflow-y-auto divide-y divide-slate-100 animate-in fade-in zoom-in-95 duration-100">
+                      <div className="p-1.5 bg-slate-50 text-[10px] font-semibold text-slate-500 flex items-center justify-between border-b border-slate-100 sticky top-0 z-10">
+                        <span>Pilih WSID Mesin ({wsidSuggestions.length}):</span>
+                        <span className="text-[9px] text-blue-600 font-bold">Auto-fill SP & Lokasi</span>
+                      </div>
+                      {wsidSuggestions.map((m) => (
+                        <button
+                          key={m.wsid}
+                          type="button"
+                          onClick={() => handleSelectMachineSuggestion(m)}
+                          className="w-full px-2.5 py-2 text-left hover:bg-blue-50/80 transition-colors flex items-start justify-between gap-2 cursor-pointer group"
+                        >
+                          <div className="min-w-0">
+                            <div className="flex items-center gap-1.5">
+                              <span className="font-mono font-bold text-slate-900 group-hover:text-blue-700 text-xs">
+                                {m.wsid}
+                              </span>
+                              <span className="text-[10px] px-1 py-0.2 rounded bg-indigo-50 text-indigo-700 font-bold border border-indigo-200">
+                                {m.servicePoint}
+                              </span>
+                              <span className="text-[10px] text-slate-500 truncate">
+                                &bull; {m.sektor}
+                              </span>
+                            </div>
+                            <span className="text-[11px] text-slate-600 block truncate mt-0.5" title={m.lokasi}>
+                              {m.lokasi}
+                            </span>
+                          </div>
+                          <span className="text-[10px] font-semibold text-slate-400 group-hover:text-blue-600 shrink-0 mt-0.5">
+                            Pilih &rarr;
+                          </span>
+                        </button>
+                      ))}
+                    </div>
+                  )}
                 </div>
                 <div>
                   <label className="block text-[11px] font-semibold text-slate-700 mb-1">Service Point *</label>
@@ -1256,15 +1415,40 @@ ${ticket.reqCloseInfo ? `*Catatan Penyelesaian:* ${ticket.reqCloseInfo.catatanPe
                 </div>
               </div>
 
-              <div>
-                <label className="block text-[11px] font-semibold text-slate-700 mb-1">Event Problem / Analisa Masalah *</label>
+              <div className="relative" ref={problemBoxRef}>
+                <label className="block text-[11px] font-semibold text-slate-700 mb-1">
+                  Event Problem / Analisa Masalah * <span className="text-[10px] text-blue-600 font-normal">(Ketik untuk saran problem)</span>
+                </label>
                 <input
                   type="text"
-                  placeholder="Contoh: DSP-Pick Module Failure / Sering Out of Service"
+                  placeholder="Ketik problem, misal: Cassette 1 Fatal / Hopper / DSP / Out of Service..."
                   value={createProblem}
-                  onChange={(e) => setCreateProblem(e.target.value)}
+                  onFocus={() => { if (createProblem.trim()) setShowProblemSuggestions(true); }}
+                  onChange={(e) => {
+                    setCreateProblem(e.target.value);
+                    setShowProblemSuggestions(true);
+                  }}
                   className="w-full px-2.5 py-1.5 rounded-lg border border-slate-300 font-medium focus:outline-none focus:ring-1 focus:ring-blue-500"
                 />
+                {showProblemSuggestions && problemSuggestions.length > 0 && (
+                  <div className="absolute left-0 right-0 top-full mt-1 bg-white rounded-xl shadow-2xl border border-slate-200 z-50 max-h-52 overflow-y-auto divide-y divide-slate-100 animate-in fade-in zoom-in-95 duration-100">
+                    <div className="p-1.5 bg-slate-50 text-[10px] font-semibold text-slate-500 border-b border-slate-100 sticky top-0 z-10 flex items-center justify-between">
+                      <span>Saran Event Problem ({problemSuggestions.length}):</span>
+                      <span className="text-[9px] text-blue-600 font-bold">Standar BCA</span>
+                    </div>
+                    {problemSuggestions.map((prob) => (
+                      <button
+                        key={prob}
+                        type="button"
+                        onClick={() => handleSelectProblemSuggestion(prob)}
+                        className="w-full px-2.5 py-1.5 text-left hover:bg-blue-50/80 transition-colors text-xs text-slate-800 hover:text-blue-700 font-medium cursor-pointer flex items-center justify-between"
+                      >
+                        <span className="truncate">{prob}</span>
+                        <span className="text-[10px] text-slate-400 shrink-0 ml-2">&larr; Pilih</span>
+                      </button>
+                    ))}
+                  </div>
+                )}
               </div>
 
               <div className="grid grid-cols-2 gap-2.5">

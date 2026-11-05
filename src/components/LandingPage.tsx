@@ -84,6 +84,7 @@ export default function LandingPage({ onSelectMode }: LandingPageProps) {
         const effRole = res.role || selectedVerifyRole;
         try {
           sessionStorage.setItem('USER_ROLE', effRole);
+          sessionStorage.setItem('USERNAME', username.trim().toLowerCase());
           if (effRole === 'KAWIL') {
             sessionStorage.setItem('KAWIL_TOKEN', res.token);
             sessionStorage.setItem('APP_MODE', 'KAWIL');

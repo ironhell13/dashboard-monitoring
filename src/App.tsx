@@ -61,6 +61,7 @@ function App() {
       sessionStorage.removeItem('KAWIL_TOKEN');
       sessionStorage.removeItem('APP_MODE');
       sessionStorage.removeItem('USER_ROLE');
+      sessionStorage.removeItem('USERNAME');
     } catch (e) {}
     setAppMode('LANDING');
   };
@@ -72,6 +73,7 @@ function App() {
       sessionStorage.removeItem('KAOPS_TOKEN');
       sessionStorage.removeItem('APP_MODE');
       sessionStorage.removeItem('USER_ROLE');
+      sessionStorage.removeItem('USERNAME');
     } catch (e) {}
     setAppMode('LANDING');
   };
@@ -80,6 +82,7 @@ function App() {
     try {
       sessionStorage.removeItem('APP_MODE');
       sessionStorage.removeItem('USER_ROLE');
+      sessionStorage.removeItem('USERNAME');
     } catch (e) {}
     setAppMode('LANDING');
   };
@@ -319,7 +322,13 @@ function App() {
     );
   }
 
-  const currentRole = appMode === 'KAWIL' ? 'KAWIL' : 'KAOPS';
+  const roleFromStorage = (sessionStorage.getItem('USER_ROLE') as any);
+  const currentRole = roleFromStorage || (appMode === 'KAWIL' ? 'KAWIL' : 'KAOPS');
+  const isSuperAdmin =
+    currentRole === 'SUPER_ADMIN' ||
+    currentRole === 'SUPERADMIN' ||
+    roleFromStorage === 'SUPER_ADMIN' ||
+    sessionStorage.getItem('USERNAME') === 'superadmin';
 
   return (
     <ErrorBoundary>
@@ -338,7 +347,12 @@ function App() {
             <Route path="/service-point" element={<ServicePointPage />} />
             <Route path="/all-wsid" element={<AllWsidPage />} />
             <Route path="/wsid/:wsid" element={<WsidDetailPage />} />
-            <Route path="/settings" element={<SettingsPage userRole={currentRole} />} />
+            <Route
+              path="/settings"
+              element={
+                isSuperAdmin ? <SettingsPage userRole={currentRole} /> : <Navigate to="/dashboard" replace />
+              }
+            />
             <Route path="/total-uptime" element={<Navigate to="/dashboard" replace />} />
           </Route>
 
