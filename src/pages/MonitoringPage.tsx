@@ -100,6 +100,8 @@ import {
   calculateOperationalDuration,
   resolveOperatingSchedule,
   parseDateTime,
+  resolveDayAndMonth,
+  normalizeDateString,
   TARGET_EVENT_CODES,
   cleanSektorName,
   cleanWsid,
@@ -124,6 +126,9 @@ import {
   getMachineMetadata,
   getMachinesMap,
   fetchRecentIncidentsForChronicSupabase,
+  toWibDateTimeString,
+  toWibDateOnly,
+  toWibTimeOnly,
   type RealtimeIncidentPayload
 } from '../utils/supabaseService';
 import { useOpenIncidents } from '../hooks/useOpenIncidents';
@@ -197,176 +202,57 @@ export function isDateLikeString(val: any): boolean {
 /**
  * Parse string tanggal ke Epoch timestamp untuk sorting kronologis akurat
  */
-export function parseToEpoch(dateStr: string, targetMonthHint = 10): number {
+export function parseToEpoch(dateStr: string, targetMonthHint?: number): number {
   if (!dateStr || dateStr === '-') return 0;
-  const m = String(dateStr).match(/^(\d{1,2})[-/](\d{1,2})[-/](\d{2,4})(?:\s+(\d{1,2}):(\d{1,2})(?::(\d{1,2}))?)?/);
+  const s = String(dateStr).trim();
+  if (s.includes('Z') || s.includes('+')) {
+    const d = new Date(s);
+    return isNaN(d.getTime()) ? 0 : d.getTime();
+  }
+  const m = s.match(/^(\d{1,2})[-/](\d{1,2})[-/](\d{2,4})(?:\s+(\d{1,2}):(\d{1,2})(?::(\d{1,2}))?)?/);
   if (m) {
-    let d = parseInt(m[1], 10);
-    let mo = parseInt(m[2], 10);
+    let p1 = parseInt(m[1], 10);
+    let p2 = parseInt(m[2], 10);
     let y = parseInt(m[3], 10);
-    if (m[3].length === 2) y += 2000;
-    if (mo > 12 && d <= 12) {
-      const tmp = d;
-      d = mo;
-      mo = tmp;
-    } else if (d === targetMonthHint && mo !== targetMonthHint && mo <= 12) {
-      const tmp = d;
-      d = mo;
-      mo = tmp;
-    }
+    if (String(y).length === 2) y += 2000;
+    const resolved = resolveDayAndMonth(p1, p2, y, targetMonthHint);
     const h = parseInt(m[4] || '0', 10);
     const min = parseInt(m[5] || '0', 10);
-    const s = parseInt(m[6] || '0', 10);
-    return new Date(y, mo - 1, d, h, min, s).getTime();
+    const sec = parseInt(m[6] || '0', 10);
+    return new Date(y, resolved.month - 1, resolved.day, h, min, sec).getTime();
   }
-  const dt = new Date(dateStr);
+  const dt = new Date(s);
   return isNaN(dt.getTime()) ? 0 : dt.getTime();
 }
 
 /**
  * Helper pemformat tanggal/waktu start problem agar seragam "DD/MM/YYYY HH:mm:ss"
- * Non-destructive: tidak pernah membalik tanggal dan bulan secara keliru.
+ * Memastikan zona waktu selalu WIB (Asia/Jakarta) dan mencegah tanggal masa depan dari swap US.
  */
-export function formatStartProblemTime(raw: any, targetMonthHint: number = 10): string {
+export function formatStartProblemTime(raw: any, targetMonthHint?: number): string {
   if (raw === null || raw === undefined || raw === '' || raw === '-') return '-';
 
   // Pastikan bukan teks deskripsi problem
   if (!isDateLikeString(raw)) return '-';
 
-  const targetMonth = targetMonthHint || 10;
-
-  // 1. Objek Date
-  if (raw instanceof Date) {
-    if (isNaN(raw.getTime())) return '-';
-    let day = raw.getDate();
-    let month = raw.getMonth() + 1;
-    const year = raw.getFullYear();
-    // Deteksi pembalikan US locale oleh Google Sheets:
-    // Jika day === targetMonth (misal 10) dan month !== targetMonth (misal 7 untuk 7 Okt):
-    // Nilai aslinya adalah tanggal 7 bulan 10 (Oktober)!
-    if (day === targetMonth && month !== targetMonth) {
-      day = month;
-      month = targetMonth;
-    }
-    const pad = (n: number) => String(n).padStart(2, '0');
-    return `${pad(day)}/${pad(month)}/${year} ${pad(raw.getHours())}:${pad(raw.getMinutes())}:${pad(raw.getSeconds())}`;
-  }
-
-  // 2. Excel serial number atau epoch (misal 45573.56 atau timestamp)
-  if (typeof raw === 'number') {
-    if (isNaN(raw) || raw <= 0) return '-';
-    const jsDate = raw > 1000000000000
-      ? new Date(raw)
-      : new Date(Math.round((raw - 25569) * 86400 * 1000));
-    if (!isNaN(jsDate.getTime())) {
-      let day = jsDate.getDate();
-      let month = jsDate.getMonth() + 1;
-      const year = jsDate.getFullYear();
-      if (day === targetMonth && month !== targetMonth) {
-        day = month;
-        month = targetMonth;
-      }
-      const pad = (n: number) => String(n).padStart(2, '0');
-      return `${pad(day)}/${pad(month)}/${year} ${pad(jsDate.getHours())}:${pad(jsDate.getMinutes())}:${pad(jsDate.getSeconds())}`;
-    }
-    return '-';
-  }
-
+  // 1. Objek Date, Epoch number, atau ISO/GMT timestamp dengan timezone:
+  // Selalu konversikan ke waktu Indonesia Barat (WIB / Asia/Jakarta)
   const str = String(raw).trim();
-  if (!str || str === '-') return '-';
-
-  // 3. Format GMT / Timezone e.g. "Sat Jul 11 2026 04:10:31 GMT+0700" atau ISO dengan Z/+
-  if (str.includes('GMT') || str.includes('Western Indonesia Time') || (str.includes('T') && (str.includes('Z') || str.includes('+')))) {
-    const d = new Date(str);
-    if (!isNaN(d.getTime())) {
-      let day = d.getDate();
-      let month = d.getMonth() + 1;
-      const year = d.getFullYear();
-      if (day === targetMonth && month !== targetMonth) {
-        day = month;
-        month = targetMonth;
-      }
-      const pad = (n: number) => String(n).padStart(2, '0');
-      return `${pad(day)}/${pad(month)}/${year} ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
-    }
+  if (
+    raw instanceof Date ||
+    typeof raw === 'number' ||
+    str.includes('T') ||
+    str.includes('Z') ||
+    str.includes('+') ||
+    str.includes('GMT') ||
+    str.includes('Western Indonesia Time')
+  ) {
+    const wib = toWibDateTimeString(raw);
+    if (wib && wib !== '-') return wib;
   }
 
-  // 4. ISO string lokal tanpa timezone: "2026-10-04T13:35:59"
-  if (/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}/.test(str)) {
-    const parts = str.split('T');
-    const dParts = parts[0].split('-');
-    if (dParts.length === 3) {
-      const year = dParts[0];
-      const month = dParts[1].padStart(2, '0');
-      const day = dParts[2].padStart(2, '0');
-      let timePart = (parts[1] || '00:00:00').split('.')[0];
-      if (timePart.split(':').length === 2) timePart += ':00';
-      return `${day}/${month}/${year} ${timePart}`;
-    }
-  }
-
-  // 5. Format "YYYY-MM-DD HH:mm:ss" ubah ke standar "DD/MM/YYYY HH:mm:ss"
-  if (/^\d{4}[-/]\d{1,2}[-/]\d{1,2}/.test(str)) {
-    const parts = str.split(' ');
-    const sep = parts[0].includes('-') ? '-' : '/';
-    const dateParts = parts[0].split(sep);
-    const year = dateParts[0];
-    const month = dateParts[1].padStart(2, '0');
-    const day = dateParts[2].padStart(2, '0');
-    let timePart = parts[1] || '00:00:00';
-    if (timePart.split(':').length === 2) timePart += ':00';
-    return `${day}/${month}/${year} ${timePart}`;
-  }
-
-  // 6. Format standar Indonesia "DD/MM/YYYY HH:mm:ss" atau "MM/DD/YYYY" dengan AM/PM
-  const match = str.match(/^(\d{1,2})[-/](\d{1,2})[-/](\d{2,4})(?:\s+(\d{1,2}):(\d{1,2})(?::(\d{1,2}))?(?:\s*(AM|PM))?)?/i);
-  if (match) {
-    const p1 = parseInt(match[1], 10);
-    const p2 = parseInt(match[2], 10);
-    let year = match[3];
-    if (year.length === 2) year = `20${year}`;
-    let hh = match[4] ? parseInt(match[4], 10) : 0;
-    const mm = match[5] ? parseInt(match[5], 10) : 0;
-    const ss = match[6] ? parseInt(match[6], 10) : 0;
-    const ampm = match[7] ? match[7].toUpperCase() : '';
-
-    if (ampm === 'PM' && hh < 12) hh += 12;
-    if (ampm === 'AM' && hh === 12) hh = 0;
-
-    let day = p1;
-    let month = p2;
-
-    // 1. Jika p2 > 12 (format US MM/DD/YYYY di mana p2 adalah hari > 12), pasti swap
-    if (p2 > 12 && p1 <= 12) {
-      day = p2;
-      month = p1;
-    }
-    // 2. Jika p1 === targetMonth (misal 10) dan p2 !== targetMonth (misal 7 untuk 7 Okt):
-    // Nilai aslinya berformat MM/DD/YYYY, maka p1 adalah bulan dan p2 adalah tanggal!
-    else if (p1 === targetMonth && p2 !== targetMonth && p2 <= 12) {
-      day = p2;
-      month = p1;
-    }
-
-    const dayStr = String(day).padStart(2, '0');
-    const monthStr = String(month).padStart(2, '0');
-    const timeStr = `${String(hh).padStart(2, '0')}:${String(mm).padStart(2, '0')}:${String(ss).padStart(2, '0')}`;
-    return `${dayStr}/${monthStr}/${year} ${timeStr}`;
-  }
-
-  // 7. Jika sudah berformat standar DD/MM/YYYY HH:mm:ss, periksa apakah tertukar US (10/07/2026 -> 07/10/2026)
-  if (/^\d{2}\/\d{2}\/\d{4}\s+\d{2}:\d{2}:\d{2}$/.test(str)) {
-    const parts = str.split(' ');
-    const dParts = parts[0].split('/');
-    const p1 = parseInt(dParts[0], 10);
-    const p2 = parseInt(dParts[1], 10);
-    if (p1 === targetMonth && p2 !== targetMonth && p2 <= 12) {
-      return `${String(p2).padStart(2, '0')}/${String(p1).padStart(2, '0')}/${dParts[2]} ${parts[1]}`;
-    }
-    return str;
-  }
-
-  return '-';
+  // 2. Normalisasi string tanggal dengan proteksi tanggal masa depan (US swap disambiguation)
+  return normalizeDateString(str, targetMonthHint);
 }
 
 /**
@@ -635,16 +521,12 @@ export function parseIncidentDateStr(dateStr: string): { day: number; month: num
       if (!isNaN(day) && !isNaN(month) && !isNaN(year)) return { day, month, year };
     } else {
       // DD-MM-YYYY or MM-DD-YYYY
-      let day = parseInt(parts[0], 10);
-      let month = parseInt(parts[1], 10);
+      const day = parseInt(parts[0], 10);
+      const month = parseInt(parts[1], 10);
       const year = parseInt(parts[2], 10);
       if (!isNaN(day) && !isNaN(month) && !isNaN(year)) {
-        if (month > 12 && day <= 12) {
-          const tmp = day;
-          day = month;
-          month = tmp;
-        }
-        return { day, month, year };
+        const resolved = resolveDayAndMonth(day, month, year);
+        return { day: resolved.day, month: resolved.month, year };
       }
     }
   }
@@ -1309,7 +1191,7 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
   // BASIS DATA FREKUENSI & DETEKSI PROBLEM CHRONIC
   // =========================================================================
   const frequencyDataset = useMemo(() => {
-    const sourceRows =
+    const rawSourceRows =
       allDailyIncidents.length > 0
         ? allDailyIncidents
         : chronicDataset.length > 0
@@ -1318,7 +1200,22 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
             ? historyResults
             : openIncidents;
 
-    return sourceRows.map((r: any) => {
+    // Deduplikasi dataset frekuensi agar tidak ada entri ganda
+    const seenFreqKeys = new Set<string>();
+    const deduplicatedRows: any[] = [];
+    for (const r of rawSourceRows) {
+      if (!r) continue;
+      const wsid = (r.wsid || '').trim().toUpperCase();
+      if (!wsid) continue;
+      const incId = (r.incidentNumber && r.incidentNumber !== '-')
+        ? r.incidentNumber
+        : (r.id || `${wsid}__${r.eventCodeDesc || r.problem || ''}__${r.startTime || r.tanggal || r.dateStr || ''}`);
+      if (seenFreqKeys.has(incId)) continue;
+      seenFreqKeys.add(incId);
+      deduplicatedRows.push(r);
+    }
+
+    return deduplicatedRows.map((r: any) => {
       // Normalisasi dateStr menjadi format DD/MM/YYYY (mendukung input ISO, DB, maupun CSV)
       let dStr = r.dateStr;
       if (!dStr || dStr === '-' || dStr === 'N/A') {
@@ -1365,11 +1262,11 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
         detail: r.detail || r.keterangan || '-'
       };
     });
-  }, [allDailyIncidents, historyResults, openIncidents]);
+  }, [allDailyIncidents, chronicDataset, historyResults, openIncidents]);
 
   const chronicInfoMap = useMemo(() => {
-    // Prioritas sumber: allDailyIncidents (jika lengkap) -> chronicDataset (14 hari terakhir, instan <1s) -> historyResults -> openIncidents
-    const sourceRows =
+    // Prioritas sumber: allDailyIncidents (jika lengkap) -> chronicDataset (14 hari terakhir) -> historyResults -> openIncidents
+    const rawSourceRows =
       allDailyIncidents.length > 0
         ? allDailyIncidents
         : chronicDataset.length > 0
@@ -1378,12 +1275,28 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
             ? historyResults
             : (openIncidents as any[]);
 
+    // Deduplikasi dataset chronic agar insiden yang sama tidak terhitung 2 kali
+    const seenIncidentIds = new Set<string>();
+    const sourceRows: any[] = [];
+    for (const r of rawSourceRows) {
+      if (!r) continue;
+      const wsid = (r.wsid || '').trim().toUpperCase();
+      if (!wsid) continue;
+      const pKey = getProblemCanonicalKey(r.eventCodeDesc || r.problem, r.eventCode || r.event_code);
+      const incId = (r.incidentNumber && r.incidentNumber !== '-')
+        ? r.incidentNumber
+        : (r.id || r.ticket_no || `${wsid}__${pKey}__${r.startTime || r.tanggal || r.dateStr || ''}`);
+      if (seenIncidentIds.has(incId)) continue;
+      seenIncidentIds.add(incId);
+      sourceRows.push(r);
+    }
+
     const groupMap = new Map<string, { dateStr: string; normDate: string; epoch: number | null }[]>();
 
     for (const r of sourceRows) {
       const wsid = (r.wsid || '').trim().toUpperCase();
       if (!wsid) continue;
-      const pKey = getProblemCanonicalKey(r.eventCodeDesc, r.eventCode);
+      const pKey = getProblemCanonicalKey(r.eventCodeDesc || r.problem, r.eventCode || r.event_code);
       const groupKey = `${wsid}|||${pKey}`;
 
       let list = groupMap.get(groupKey);
@@ -1450,18 +1363,6 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
         };
       }
 
-      // Fast-path: jika problem ini kurang dari 3 kali muncul di seluruh bulan, mustahil chronic
-      if (occurrences.length < 3) {
-        return {
-          sameDayCount: occurrences.length,
-          is3xSehari: false,
-          fiveDayCount: occurrences.length,
-          is3x5Hari: false,
-          totalOccurrences: occurrences.length,
-          isChronic: false
-        };
-      }
-
       const rawIncDate =
         inc.tanggal && inc.tanggal !== '-'
           ? inc.tanggal.split(' ')[0]
@@ -1473,42 +1374,45 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
       const cached = evalCache.get(cacheKey);
       if (cached) return cached;
 
+      // Fast-path: jika total kejadian problem ini kurang dari 3 kali, mustahil chronic
+      if (occurrences.length < 3) {
+        const sameDay = occurrences.filter((o) => normIncDate && o.normDate === normIncDate).length;
+        const res = {
+          sameDayCount: sameDay,
+          is3xSehari: false,
+          fiveDayCount: occurrences.length,
+          is3x5Hari: false,
+          totalOccurrences: occurrences.length,
+          isChronic: false
+        };
+        evalCache.set(cacheKey, res);
+        return res;
+      }
+
       const incEpoch = parseDateStrToEpochDay(rawIncDate);
 
-      // Hitung per tanggal untuk deteksi 3x sehari
-      const dateCounts: Record<string, number> = {};
+      // Hitung kejadian pada hari yang sama (3x Sehari) dan dalam rolling 5 hari (3x 5 Hari)
       let sameDayCount = 0;
       let fiveDayCount = 0;
 
       for (let i = 0; i < occurrences.length; i++) {
         const occ = occurrences[i];
-        const dKey = occ.normDate || occ.dateStr;
-        if (dKey && dKey !== '-') {
-          dateCounts[dKey] = (dateCounts[dKey] || 0) + 1;
-        }
 
-        // Same day match dengan insiden aktif
+        // Same day match dengan tanggal insiden yang dievaluasi
         if (normIncDate && occ.normDate && occ.normDate === normIncDate) {
           sameDayCount++;
         }
 
-        // Rolling 5 hari: dari incEpoch - 4 sampai incEpoch + 1
+        // Rolling 5 hari mundur: dari incEpoch - 4 sampai incEpoch (5 hari berturut-turut)
         if (incEpoch !== null && occ.epoch !== null) {
-          if (occ.epoch >= incEpoch - 4 && occ.epoch <= incEpoch + 1) {
+          if (occ.epoch >= incEpoch - 4 && occ.epoch <= incEpoch) {
             fiveDayCount++;
           }
         }
       }
 
-      let maxSameDay = 0;
-      for (const dKey in dateCounts) {
-        if (dateCounts[dKey] > maxSameDay) maxSameDay = dateCounts[dKey];
-      }
-      sameDayCount = Math.max(sameDayCount, maxSameDay, 1);
-      fiveDayCount = Math.max(fiveDayCount, sameDayCount, occurrences.length >= 3 ? occurrences.length : 1);
-
       const is3xSehari = sameDayCount >= 3;
-      const is3x5Hari = fiveDayCount >= 3 || occurrences.length >= 3;
+      const is3x5Hari = fiveDayCount >= 3;
       const isChronic = is3xSehari || is3x5Hari;
 
       const res = {
@@ -1534,7 +1438,7 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
     }
 
     return resultMap;
-  }, [openIncidents, allDailyIncidents, chronicDataset]);
+  }, [openIncidents, allDailyIncidents, chronicDataset, historyResults]);
 
   const masterSchedMap = useMemo(() => {
     const map = new Map<string, any>();
@@ -2954,13 +2858,20 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
   const sortedFreqItems = useMemo(() => {
     if (activeTab !== 'FREKUENSI') return [];
     const list = [...filteredFreqItems];
+    const isDateFiltered = freqStartDate !== 'ALL' || freqEndDate !== 'ALL' || freqDateFilter !== 'ALL';
+
+    const getItemCount = (item: any) => {
+      if (!isDateFiltered) return item.totalFrekuensi;
+      return displayedFreqDates.reduce((acc, d) => acc + (item.dateCounts?.[d] || 0), 0);
+    };
+
     list.sort((a, b) => {
       let aVal: any = 0;
       let bVal: any = 0;
 
       if (sortFieldFreq === 'totalFrekuensi') {
-        aVal = a.totalFrekuensi;
-        bVal = b.totalFrekuensi;
+        aVal = getItemCount(a);
+        bVal = getItemCount(b);
       } else if (sortFieldFreq === 'totalDurasi') {
         aVal = a.totalDurasi;
         bVal = b.totalDurasi;
@@ -2981,12 +2892,12 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
         if (aVal !== bVal) {
           return sortDirectionFreq === 'asc' ? aVal - bVal : bVal - aVal;
         }
-        return b.totalFrekuensi - a.totalFrekuensi;
+        return getItemCount(b) - getItemCount(a);
       }
       return 0;
     });
     return list;
-  }, [activeTab, filteredFreqItems, sortFieldFreq, sortDirectionFreq, freqDates]);
+  }, [activeTab, filteredFreqItems, sortFieldFreq, sortDirectionFreq, freqDates, displayedFreqDates, freqStartDate, freqEndDate, freqDateFilter]);
 
   const totalPagesFreq = Math.ceil(sortedFreqItems.length / pageSizeFreq) || 1;
   const paginatedFreqItems = useMemo(() => {
@@ -6978,12 +6889,28 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
 
                             <td className="py-1 px-3 text-center whitespace-nowrap bg-blue-50/30">
                               <span className="px-2.5 py-0.5 rounded-full font-bold font-mono text-xs bg-blue-600 text-white shadow-2xs">
-                                {item.totalFrekuensi}x
+                                {(() => {
+                                  const isDateFiltered = freqStartDate !== 'ALL' || freqEndDate !== 'ALL' || freqDateFilter !== 'ALL';
+                                  const count = isDateFiltered
+                                    ? displayedFreqDates.reduce((acc, d) => acc + (item.dateCounts?.[d] || 0), 0)
+                                    : item.totalFrekuensi;
+                                  return `${count}x`;
+                                })()}
                               </span>
                             </td>
 
                             <td className="py-1 px-3 text-right font-mono font-semibold text-[#555F71] whitespace-nowrap">
-                              {formatDurationHuman(item.totalDurasi)}
+                              {(() => {
+                                const isDateFiltered = freqStartDate !== 'ALL' || freqEndDate !== 'ALL' || freqDateFilter !== 'ALL';
+                                if (!isDateFiltered) return formatDurationHuman(item.totalDurasi);
+                                const countInFiltered = displayedFreqDates.reduce((acc, d) => acc + (item.dateCounts?.[d] || 0), 0);
+                                if (countInFiltered === 0) return '0m';
+                                if (item.totalFrekuensi > 0 && countInFiltered !== item.totalFrekuensi) {
+                                  const proRatedDur = Math.round((item.totalDurasi / item.totalFrekuensi) * countInFiltered);
+                                  return formatDurationHuman(proRatedDur);
+                                }
+                                return formatDurationHuman(item.totalDurasi);
+                              })()}
                             </td>
 
                             <td className="py-1 px-3 text-center whitespace-nowrap border-l border-slate-100">

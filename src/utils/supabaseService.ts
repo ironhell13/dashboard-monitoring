@@ -990,12 +990,74 @@ export async function migrateDailyDataToSupabase(
 // 7. DAILY INCIDENT & MONITORING ACTIONS (OASE INTEGRATION)
 // ==============================================================================
 
+export function toWibDateTimeString(raw?: any): string {
+  if (!raw || raw === '-' || raw === '') return '-';
+  const str = String(raw).trim();
+
+  // Jika sudah format "DD/MM/YYYY HH:mm:ss" tanpa timezone
+  if (/^\d{2}\/\d{2}\/\d{4}\s+\d{2}:\d{2}/.test(str)) return str;
+
+  // Jika berupa timestamp ISO / PostgreSQL (mengandung T, Z, atau offset +)
+  if (str.includes('T') || str.includes('Z') || str.includes('+') || str.includes('GMT')) {
+    try {
+      const d = new Date(str);
+      if (!isNaN(d.getTime())) {
+        const formatter = new Intl.DateTimeFormat('id-ID', {
+          timeZone: 'Asia/Jakarta',
+          year: 'numeric',
+          month: '2-digit',
+          day: '2-digit',
+          hour: '2-digit',
+          minute: '2-digit',
+          second: '2-digit',
+          hour12: false
+        });
+        const parts = formatter.formatToParts(d);
+        const getP = (type: string) => parts.find((p) => p.type === type)?.value || '00';
+        return `${getP('day')}/${getP('month')}/${getP('year')} ${getP('hour')}:${getP('minute')}:${getP('second')}`;
+      }
+    } catch (_) {}
+  }
+
+  // Jika YYYY-MM-DD HH:mm:ss
+  if (/^\d{4}-\d{2}-\d{2}\s+\d{2}:\d{2}/.test(str)) {
+    const parts = str.split(' ');
+    const dp = parts[0].split('-');
+    return `${dp[2]}/${dp[1]}/${dp[0]} ${parts[1]}`;
+  }
+
+  return str;
+}
+
+export function toWibDateOnly(raw?: any): string {
+  if (!raw || raw === '-' || raw === '') return '-';
+  const s = toWibDateTimeString(raw);
+  if (s !== '-') {
+    return s.split(' ')[0] || '-';
+  }
+  return '-';
+}
+
+export function toWibTimeOnly(raw?: any): string {
+  if (!raw || raw === '-' || raw === '') return '00:00:00';
+  const s = toWibDateTimeString(raw);
+  if (s !== '-') {
+    return s.split(' ')[1] || '00:00:00';
+  }
+  return '00:00:00';
+}
+
 function parseToIso(dateStr?: any): string | null {
   if (!dateStr || dateStr === '-' || dateStr === '') return null;
+  const s = String(dateStr).trim();
+  if (s.includes('Z') || s.includes('+')) {
+    const d = new Date(s);
+    if (!isNaN(d.getTime())) return d.toISOString();
+  }
   try {
-    const d = parseDateTime(String(dateStr));
+    const d = parseDateTime(s);
     if (d && !isNaN(d.getTime())) return d.toISOString();
-    const fallback = new Date(dateStr);
+    const fallback = new Date(s);
     if (!isNaN(fallback.getTime())) return fallback.toISOString();
   } catch (e) {}
   return null;
@@ -1166,49 +1228,12 @@ export function mapRowToDailyIncidentRow(row: any, machine?: any): DailyIncident
   const sRaw = row.start_time;
   const eRaw = row.end_time;
 
-  const dateStr = extractDateStrFromRaw(sRaw) !== '-'
-    ? extractDateStrFromRaw(sRaw)
-    : (extractDateStrFromRaw(row.tanggal) !== '-' ? extractDateStrFromRaw(row.tanggal) : '-');
-
-  let hourStr = '00:00';
-  let hourNumber = 0;
-  let formattedStartTime = '-';
-  let formattedEndTime = '-';
-
-  if (sRaw && sRaw !== '-') {
-    const sStr = String(sRaw).trim();
-    if (sStr.includes('T')) {
-      const parts = sStr.split('T');
-      const timePart = parts[1]?.slice(0, 8) || '00:00:00';
-      const h = parseInt(timePart.split(':')[0] || '0', 10);
-      hourNumber = isNaN(h) ? 0 : h;
-      hourStr = `${String(hourNumber).padStart(2, '0')}:00`;
-      formattedStartTime = `${dateStr} ${timePart}`;
-    } else if (sStr.includes(' ')) {
-      const parts = sStr.split(' ');
-      const timePart = parts[1] || '00:00:00';
-      const h = parseInt(timePart.split(':')[0] || '0', 10);
-      hourNumber = isNaN(h) ? 0 : h;
-      hourStr = `${String(hourNumber).padStart(2, '0')}:00`;
-      formattedStartTime = `${dateStr} ${timePart}`;
-    } else {
-      formattedStartTime = dateStr;
-    }
-  }
-
-  if (eRaw && eRaw !== '-') {
-    const eStr = String(eRaw).trim();
-    const eDate = extractDateStrFromRaw(eRaw);
-    if (eStr.includes('T')) {
-      const timePart = eStr.split('T')[1]?.slice(0, 8) || '00:00:00';
-      formattedEndTime = `${eDate} ${timePart}`;
-    } else if (eStr.includes(' ')) {
-      const timePart = eStr.split(' ')[1] || '00:00:00';
-      formattedEndTime = `${eDate} ${timePart}`;
-    } else {
-      formattedEndTime = eDate;
-    }
-  }
+  const formattedStartTime = toWibDateTimeString(sRaw);
+  const formattedEndTime = toWibDateTimeString(eRaw);
+  const dateStr = toWibDateOnly(sRaw);
+  const timeOnly = toWibTimeOnly(sRaw);
+  const hourNumber = parseInt(timeOnly.split(':')[0] || '0', 10) || 0;
+  const hourStr = `${String(hourNumber).padStart(2, '0')}:00`;
 
   const sp = resolveServicePoint(m, row);
   const rawSek = m.sektor_bca || row.sektor || row.sektor_bca || '-';
@@ -1292,18 +1317,25 @@ export function mapRowToOpenIncident(row: any, machine?: any): OpenIncidentItem 
     eventCode: row.event_code || '-',
     eventCodeDesc: row.problem || '-',
     detail: row.keterangan || '-',
-    startTime: row.start_time ? new Date(row.start_time).toISOString().replace('T', ' ').slice(0, 19) : '-',
-    endTime: row.end_time ? new Date(row.end_time).toISOString().replace('T', ' ').slice(0, 19) : '-',
-    tanggal: row.start_time ? new Date(row.start_time).toISOString().slice(0, 10) : '-',
-    jam: row.start_time ? new Date(row.start_time).toISOString().slice(11, 19) : '-',
+    startTime: toWibDateTimeString(row.start_time),
+    endTime: toWibDateTimeString(row.end_time),
+    tanggal: toWibDateOnly(row.start_time),
+    jam: toWibTimeOnly(row.start_time),
     durationRaw: row.duration_minutes || 0,
     durasiOpr: row.duration_minutes || 0,
     status: row.status || 'OPEN',
     actionTerakhir: row.action_taken || '-',
     actionTerakhirOleh: row.action_by || '-',
-    actionTerakhirWaktu: row.action_at ? new Date(row.action_at).toISOString().replace('T', ' ').slice(0, 19) : '-',
+    actionTerakhirWaktu: toWibDateTimeString(row.action_at),
     jumlahAction: row.action_taken ? 1 : 0,
-    monthStr: row.start_time ? new Date(row.start_time).toISOString().slice(0, 7) : '',
+    monthStr: (() => {
+      const dt = toWibDateTimeString(row.start_time);
+      if (dt && dt.includes('/')) {
+        const parts = dt.split(' ')[0].split('/');
+        return `${parts[2]}-${parts[1]}`;
+      }
+      return row.start_time ? String(row.start_time).slice(0, 7) : '';
+    })(),
     closeSource: row.close_source || 'OASE'
   };
 }

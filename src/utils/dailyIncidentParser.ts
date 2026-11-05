@@ -403,7 +403,7 @@ export function extractMonthStr(dateStr?: string | null, fallback?: string): str
 /**
  * Normalisasi format bulan menjadi YYYY-MM (alias untuk extractMonthStr)
  */
-export function normalizeMonthStr(dateStr?: string | null, fallback: string = '2026-10'): string {
+export function normalizeMonthStr(dateStr?: string | null, fallback?: string): string {
   return extractMonthStr(dateStr, fallback);
 }
 
@@ -438,9 +438,68 @@ export function formatServicePointSektor(
 /**
  * Parsing string tanggal DD/MM/YYYY HH:mm:ss menjadi Date
  */
-export function parseDateTime(str?: string | null, targetMonthHint = 10): Date | null {
+/**
+ * Disambiguasi Day dan Month dari format DD/MM vs MM/DD:
+ * 1. Jika salah satu > 12, pasti itu adalah hari
+ * 2. Proteksi masa depan: Insiden tidak mungkin di masa depan (> hari ini), jika DD/MM masa depan tapi MM/DD masa lalu, pasti MM/DD
+ * 3. Menggunakan targetMonthHint jika cocok
+ */
+export function resolveDayAndMonth(
+  p1: number,
+  p2: number,
+  year: number,
+  targetMonthHint?: number
+): { day: number; month: number } {
+  if (p1 > 12 && p2 <= 12) {
+    return { day: p1, month: p2 };
+  }
+  if (p2 > 12 && p1 <= 12) {
+    return { day: p2, month: p1 };
+  }
+
+  const now = new Date();
+  const currentY = now.getFullYear();
+  const currentM = now.getMonth() + 1;
+  const currentD = now.getDate();
+
+  if (year === currentY) {
+    const isP1Future = p2 > currentM || (p2 === currentM && p1 > currentD);
+    const isP2PastOrPresent = p1 < currentM || (p1 === currentM && p2 <= currentD);
+    if (isP1Future && isP2PastOrPresent) {
+      return { day: p2, month: p1 };
+    }
+
+    const isP2Future = p1 > currentM || (p1 === currentM && p2 > currentD);
+    const isP1PastOrPresent = p2 < currentM || (p2 === currentM && p1 <= currentD);
+    if (isP2Future && isP1PastOrPresent) {
+      return { day: p1, month: p2 };
+    }
+  }
+
+  const activeMonth = (targetMonthHint && targetMonthHint >= 1 && targetMonthHint <= 12)
+    ? targetMonthHint
+    : currentM;
+
+  if (p1 === activeMonth && p2 !== activeMonth) {
+    return { day: p2, month: p1 };
+  }
+  if (p2 === activeMonth && p1 !== activeMonth) {
+    return { day: p1, month: p2 };
+  }
+
+  return { day: p1, month: p2 };
+}
+
+/**
+ * Parsing string tanggal waktu CSV/API menjadi objek Date.
+ * Mendukung format:
+ * - "YYYY-MM-DD HH:mm:ss" atau "YYYY-MM-DDTHH:mm:ss"
+ * - "DD/MM/YYYY HH:mm:ss" atau "MM/DD/YYYY HH:mm:ss"
+ */
+export function parseDateTime(str?: string | null, targetMonthHint?: number): Date | null {
   if (!str || str === '-' || str.trim() === '') return null;
-  const parts = str.trim().split(' ');
+  const s = String(str).trim();
+  const parts = s.split(/[T\s]+/);
   const sep = parts[0].includes('-') ? '-' : '/';
   const dParts = parts[0].split(sep);
   if (dParts.length < 3) return null;
@@ -456,11 +515,10 @@ export function parseDateTime(str?: string | null, targetMonthHint = 10): Date |
     day = parseInt(dParts[2], 10);
   } else {
     // DD/MM/YYYY or MM/DD/YYYY
-    if (month > 12 && day <= 12) {
-      const tmp = day;
-      day = month;
-      month = tmp;
-    }
+    if (dParts[2].length === 2) year = 2000 + year;
+    const resolved = resolveDayAndMonth(day, month, year, targetMonthHint);
+    day = resolved.day;
+    month = resolved.month;
   }
 
   if (isNaN(day) || isNaN(month) || isNaN(year)) return null;
@@ -482,7 +540,7 @@ export function parseDateTime(str?: string | null, targetMonthHint = 10): Date |
  * Normalisasi format string tanggal/waktu CSV ke standar baku DD/MM/YYYY HH:mm:ss.
  * Membalik format US (MM/DD/YYYY) menjadi DD/MM/YYYY secara konsisten dan aman.
  */
-export function normalizeDateString(str?: string | null, targetMonthHint = 10): string {
+export function normalizeDateString(str?: string | null, targetMonthHint?: number): string {
   if (!str || str === '-' || str.trim() === '') return '-';
   const s = String(str).trim();
   if (/^(Uns|Sol|Err|ATM|Warn|Info|Status|Tran|COM|DSP|Reject|Multi|SPV|FLM|SLM):/i.test(s)) return '-';
@@ -508,8 +566,8 @@ export function normalizeDateString(str?: string | null, targetMonthHint = 10): 
   if (m) {
     const p1 = parseInt(m[1], 10);
     const p2 = parseInt(m[2], 10);
-    let year = m[3];
-    if (year.length === 2) year = `20${year}`;
+    let year = parseInt(m[3], 10);
+    if (String(year).length === 2) year = 2000 + year;
     let hh = m[4] ? parseInt(m[4], 10) : 0;
     const mm = m[5] ? parseInt(m[5], 10) : 0;
     const ss = m[6] ? parseInt(m[6], 10) : 0;
@@ -518,20 +576,9 @@ export function normalizeDateString(str?: string | null, targetMonthHint = 10): 
     if (ampm === 'PM' && hh < 12) hh += 12;
     if (ampm === 'AM' && hh === 12) hh = 0;
 
-    let day = p1;
-    let month = p2;
-
-    if (p2 > 12 && p1 <= 12) {
-      day = p2;
-      month = p1;
-    } else if (p1 === targetMonthHint && p2 !== targetMonthHint && p2 <= 12) {
-      // Inversi US: p1 adalah bulan (10), p2 adalah tanggal (1..12)
-      day = p2;
-      month = p1;
-    }
-
-    const dStr = String(day).padStart(2, '0');
-    const moStr = String(month).padStart(2, '0');
+    const resolved = resolveDayAndMonth(p1, p2, year, targetMonthHint);
+    const dStr = String(resolved.day).padStart(2, '0');
+    const moStr = String(resolved.month).padStart(2, '0');
     const tStr = `${String(hh).padStart(2, '0')}:${String(mm).padStart(2, '0')}:${String(ss).padStart(2, '0')}`;
     return `${dStr}/${moStr}/${year} ${tStr}`;
   }
@@ -850,7 +897,20 @@ export async function parseDailyIncidentCsv(
 
   let reportDefaultEndDate: Date | null = null;
   let reportDateStr: string | undefined = undefined;
-  let targetMonthHint = 10;
+  const currentMonthNum = (new Date()).getMonth() + 1;
+  let targetMonthHint = currentMonthNum;
+
+  const fnLower = filename.toLowerCase();
+  const monthAbbrs: Record<string, number> = {
+    jan: 1, feb: 2, mar: 3, apr: 4, mei: 5, may: 5, jun: 6,
+    jul: 7, agu: 8, aug: 8, sep: 9, okt: 10, oct: 10, nov: 11, des: 12, dec: 12
+  };
+  for (const [abbr, mNum] of Object.entries(monthAbbrs)) {
+    if (fnLower.includes(abbr)) {
+      targetMonthHint = mNum;
+      break;
+    }
+  }
 
   // Coba ekstrak timestamp snapshot dari pola nama file OASE yang umum
   // 1. DDMMYYYY_HH-mm-ss / DDMMYYYY_HHmmss (contoh: 13102026_14-00-00.csv)
@@ -862,7 +922,7 @@ export async function parseDailyIncidentCsv(
 
   if (matchFn1) {
     const [, d, m, y, hr, min, sec] = matchFn1;
-    targetMonthHint = parseInt(m, 10) || 10;
+    targetMonthHint = parseInt(m, 10) || currentMonthNum;
     reportDateStr = `${d}/${m}/${y}`;
     reportDefaultEndDate = new Date(
       parseInt(y, 10),
@@ -874,7 +934,7 @@ export async function parseDailyIncidentCsv(
     );
   } else if (matchFn2) {
     const [, y, m, d, hr, min, sec] = matchFn2;
-    targetMonthHint = parseInt(m, 10) || 10;
+    targetMonthHint = parseInt(m, 10) || currentMonthNum;
     reportDateStr = `${d}/${m}/${y}`;
     reportDefaultEndDate = new Date(
       parseInt(y, 10),
@@ -886,7 +946,7 @@ export async function parseDailyIncidentCsv(
     );
   } else if (matchFn3) {
     const [, d, m, y, hr, min, sec] = matchFn3;
-    targetMonthHint = parseInt(m, 10) || 10;
+    targetMonthHint = parseInt(m, 10) || currentMonthNum;
     reportDateStr = `${d}/${m}/${y}`;
     reportDefaultEndDate = new Date(
       parseInt(y, 10),
@@ -1059,7 +1119,7 @@ export async function parseDailyIncidentCsv(
       actionTerakhirWaktu: undefined,
       jumlahAction: 0,
       closeSource: isClosed ? 'OASE' : '-',
-      monthStr: normalizeMonthStr(startTimeStr) || '2026-10'
+      monthStr: normalizeMonthStr(startTimeStr) || extractMonthStr(dateStr) || `${new Date().getFullYear()}-${String(new Date().getMonth() + 1).padStart(2, '0')}`
     });
   }
 
@@ -1097,10 +1157,19 @@ export function aggregateByWsidProblemDate(
 } {
   const map: Record<string, WsidProblemDateAggregation> = {};
   const datesSet = new Set<string>();
+  const seenIncidents = new Set<string>();
 
   for (const r of rows) {
     const cleanW = cleanWsid(r.wsid);
     if (!cleanW) continue;
+
+    const incId = (r as any).incidentNumber || (r as any).incident_number || (r as any).id;
+    const incKey = (incId && incId !== '-')
+      ? String(incId)
+      : `${cleanW}__${r.eventCodeDesc || ''}__${r.startTime || r.dateStr || ''}`;
+    if (seenIncidents.has(incKey)) continue;
+    seenIncidents.add(incKey);
+
     const key = `${cleanW}__${r.eventCodeDesc}`;
 
     // Normalisasi tanggal agar selalu berformat DD/MM/YYYY (mendukung ISO & legacy)
