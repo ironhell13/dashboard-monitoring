@@ -52,6 +52,9 @@ export interface OpenIncidentItem {
   actionTerakhirWaktu: string;
   jumlahAction: number;
   monthStr: string;
+  jenisMesin?: 'ATM' | 'CRM' | string;
+  hariOperasional?: string;
+  jamOperasional?: string;
   comment?: string;
   keterangan?: string;
   closeSource?: 'OASE' | 'DASHBOARD' | '-';

@@ -1001,30 +1001,93 @@ function parseToIso(dateStr?: any): string | null {
   return null;
 }
 
+import staticCatalogJson from '../data/staticMachineCatalog.json';
+const staticCatalog = staticCatalogJson as Record<string, {
+  wsid: string;
+  lokasi: string;
+  sektorBCA: string;
+  vendor: string;
+  tipeMesin: string;
+  jenisMesin: string;
+  hari: string;
+  jam: string;
+}>;
+
 export function getMachineMetadata(wsid?: string): any {
   if (!wsid) return null;
+  const w = String(wsid).trim().toUpperCase();
+  const c = staticCatalog[w] || {};
+
   try {
     const store = useDataStore.getState();
     const list = (store.rawMasterData && store.rawMasterData.length > 0) ? store.rawMasterData : (store.machines || []);
-    const w = String(wsid).trim().toUpperCase();
     const found = list.find((m: any) => String(m.wsid || m.WSID || '').trim().toUpperCase() === w);
     if (found) {
       const sp = resolveServicePoint(found);
-      const rawSek = found.sektorBCA || found.sektor || found.Sektor || found.sektor_bca || '-';
+      const rawSek = found.sektorBCA || found.sektor || found.Sektor || found.sektor_bca || c.sektorBCA || '-';
+      const v = (found.vendor && found.vendor !== '-' && found.vendor !== 'N/A')
+        ? found.vendor
+        : (found.Vendor || c.vendor || '-');
+      const t = (found.tipeMesin && found.tipeMesin !== '-')
+        ? found.tipeMesin
+        : (found['Tipe Mesin'] || c.tipeMesin || '-');
+      const j = found.jenisMesin || found.jenis_mesin || c.jenisMesin || 'ATM';
+      const hari = found.hari || c.hari || 'MON-SUN';
+      const jam = found.jam || c.jam || '(00:00 - 23:59)';
+
       return {
-        lokasi: found.lokasi || found['Nama Lokasi'] || '-',
+        wsid: w,
+        lokasi: found.lokasi || found['Nama Lokasi'] || c.lokasi || '-',
         service_point: sp,
         sektor_bca: rawSek,
-        tipe_mesin: found.tipeMesin || found['Tipe Mesin'] || '-',
-        vendor: found.vendor || found.Vendor || '-'
+        tipe_mesin: t,
+        vendor: v,
+        jenis_mesin: j,
+        hari,
+        jam
       };
     }
   } catch (_) {}
+
+  // Fallback ke static catalog jika belum termuat di store
+  if (c && c.wsid) {
+    const sp = getServicePointForSektor(c.sektorBCA) || 'ACJK';
+    return {
+      wsid: w,
+      lokasi: c.lokasi || '-',
+      service_point: sp,
+      sektor_bca: c.sektorBCA || '-',
+      tipe_mesin: c.tipeMesin || '-',
+      vendor: c.vendor || '-',
+      jenis_mesin: c.jenisMesin || 'ATM',
+      hari: c.hari || 'MON-SUN',
+      jam: c.jam || '(00:00 - 23:59)'
+    };
+  }
+
   return null;
 }
 
 export function getMachinesMap(): Map<string, any> {
   const map = new Map<string, any>();
+  // 1. Masukkan seluruh data static catalog sebagai baseline 2.043 mesin
+  for (const k in staticCatalog) {
+    const c = staticCatalog[k];
+    const sp = getServicePointForSektor(c.sektorBCA) || 'ACJK';
+    map.set(k, {
+      wsid: c.wsid,
+      lokasi: c.lokasi,
+      service_point: sp,
+      sektor_bca: c.sektorBCA,
+      tipe_mesin: c.tipeMesin,
+      vendor: c.vendor,
+      jenis_mesin: c.jenisMesin,
+      hari: c.hari,
+      jam: c.jam
+    });
+  }
+
+  // 2. Timpa dengan data store jika user mengunggah file baru
   try {
     const store = useDataStore.getState();
     const list = (store.rawMasterData && store.rawMasterData.length > 0) ? store.rawMasterData : (store.machines || []);
@@ -1034,12 +1097,17 @@ export function getMachinesMap(): Map<string, any> {
       if (w) {
         const sp = resolveServicePoint(m);
         const rawSek = m.sektorBCA || m.sektor || m.Sektor || m.sektor_bca || '-';
+        const existing = map.get(w) || {};
         map.set(w, {
-          lokasi: m.lokasi || m['Nama Lokasi'] || '-',
-          service_point: sp,
-          sektor_bca: rawSek,
-          tipe_mesin: m.tipeMesin || m['Tipe Mesin'] || '-',
-          vendor: m.vendor || m.Vendor || '-'
+          wsid: w,
+          lokasi: m.lokasi || m['Nama Lokasi'] || existing.lokasi || '-',
+          service_point: sp || existing.service_point || 'ACJK',
+          sektor_bca: rawSek !== '-' ? rawSek : (existing.sektor_bca || '-'),
+          tipe_mesin: m.tipeMesin || m['Tipe Mesin'] || existing.tipe_mesin || '-',
+          vendor: (m.vendor && m.vendor !== '-') ? m.vendor : (m.Vendor || existing.vendor || '-'),
+          jenis_mesin: m.jenisMesin || m.jenis_mesin || existing.jenis_mesin || 'ATM',
+          hari: m.hari || existing.hari || 'MON-SUN',
+          jam: m.jam || existing.jam || '(00:00 - 23:59)'
         });
       }
     }
@@ -1199,6 +1267,16 @@ export function mapRowToOpenIncident(row: any, machine?: any): OpenIncidentItem 
   // Resolusi SP:
   const sp = resolveServicePoint(m, row);
 
+  const rawType = (m.tipe_mesin && m.tipe_mesin !== '-' && m.tipe_mesin !== 'N/A')
+    ? m.tipe_mesin
+    : (m.tipeMesin || row.type_mesin || row.tipe_mesin || fallbackMeta.tipe_mesin || '-');
+
+  const rawJenis = m.jenis_mesin || m.jenisMesin || fallbackMeta.jenis_mesin || fallbackMeta.jenisMesin ||
+    (rawType.includes('OMRON') || rawType.includes('RG8') || rawType.includes('8600') || rawType.includes('SR7500') ? 'CRM' : 'ATM');
+
+  const hariOpr = m.hari || fallbackMeta.hari || 'MON-SUN';
+  const jamOpr = m.jam || fallbackMeta.jam || '(00:00 - 23:59)';
+
   return {
     incidentKey: row.incident_key,
     incidentNumber: row.ticket_no || '-',
@@ -1206,8 +1284,11 @@ export function mapRowToOpenIncident(row: any, machine?: any): OpenIncidentItem 
     lokasi: m.lokasi || row.lokasi || fallbackMeta.lokasi || '-',
     servicePoint: sp,
     sektor: sek,
-    typeMesin: m.tipe_mesin || m.tipeMesin || row.type_mesin || row.tipe_mesin || fallbackMeta.tipe_mesin || fallbackMeta.tipeMesin || '-',
+    typeMesin: rawType,
     vendor: rawVendor,
+    jenisMesin: rawJenis,
+    hariOperasional: hariOpr,
+    jamOperasional: jamOpr,
     eventCode: row.event_code || '-',
     eventCodeDesc: row.problem || '-',
     detail: row.keterangan || '-',
@@ -1299,7 +1380,10 @@ export async function fetchOpenIncidentsSupabase(filters?: { forceSync?: boolean
         servicePoint: (row.service_point && row.service_point !== '-') ? row.service_point : (metaLookup.service_point || metaLookup.servicePoint || '-'),
         sektor: (row.sektor_bca && row.sektor_bca !== '-') ? row.sektor_bca : (metaLookup.sektor_bca || metaLookup.sektorBCA || metaLookup.sektor || '-'),
         typeMesin: (row.tipe_mesin && row.tipe_mesin !== '-') ? row.tipe_mesin : (metaLookup.tipe_mesin || metaLookup.tipeMesin || '-'),
-        vendor: (row.vendor && row.vendor !== '-' && row.vendor !== 'N/A') ? row.vendor : (metaLookup.vendor || metaLookup.Vendor || metaLookup.vendorMesin || '-')
+        vendor: (row.vendor && row.vendor !== '-' && row.vendor !== 'N/A') ? row.vendor : (metaLookup.vendor || metaLookup.Vendor || metaLookup.vendorMesin || '-'),
+        jenis_mesin: metaLookup.jenis_mesin || metaLookup.jenisMesin || 'ATM',
+        hari: metaLookup.hari || 'MON-SUN',
+        jam: metaLookup.jam || '(00:00 - 23:59)'
       };
       return mapRowToOpenIncident(row, meta);
     });

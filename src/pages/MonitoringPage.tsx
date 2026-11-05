@@ -122,6 +122,7 @@ import {
   subscribeActiveIncidentsSupabase,
   mapRowToOpenIncident,
   getMachineMetadata,
+  getMachinesMap,
   fetchRecentIncidentsForChronicSupabase,
   type RealtimeIncidentPayload
 } from '../utils/supabaseService';
@@ -1537,14 +1538,15 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
 
   const masterSchedMap = useMemo(() => {
     const map = new Map<string, any>();
-    if (rawMasterData && Array.isArray(rawMasterData)) {
-      for (const m of rawMasterData) {
-        const cleanW = cleanWsid(m.WSID);
+    const list = (masterList && masterList.length > 0) ? masterList : (rawMasterData || []);
+    if (list && Array.isArray(list)) {
+      for (const m of list) {
+        const cleanW = cleanWsid(m.WSID || m.wsid);
         if (cleanW) map.set(cleanW, m);
       }
     }
     return map;
-  }, [rawMasterData]);
+  }, [masterList, rawMasterData]);
 
   // Jaminan ketat & absolut: Hanya problem yang masih OPEN (belum ada End Time yang valid)
   // Dan durasi dihitung REAL-TIME dari awal muncul problem sampai saat ini saat tim monitoring cek di dashboard
@@ -1552,18 +1554,47 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
     return openIncidents
       .filter((inc) => !isEndTimeFilled(inc.endTime))
       .map((inc) => {
-        if (!inc.startTime || inc.startTime === '-') return { ...inc, status: 'OPEN' as const };
+        const meta = getMachineMetadata(inc.wsid);
+        const resolvedVendor = (inc.vendor && inc.vendor !== '-' && inc.vendor !== 'N/A')
+          ? inc.vendor
+          : (meta?.vendor || '-');
+        const resolvedType = (inc.typeMesin && inc.typeMesin !== '-' && inc.typeMesin !== 'N/A')
+          ? inc.typeMesin
+          : (meta?.tipe_mesin || '-');
+        const resolvedJenis = inc.jenisMesin || meta?.jenis_mesin ||
+          (resolvedType.toUpperCase().includes('OMRON') || resolvedType.toUpperCase().includes('RG8') || resolvedType.toUpperCase().includes('8600') || resolvedType.toUpperCase().includes('SR7500') ? 'CRM' : 'ATM');
+        const resolvedHari = inc.hariOperasional && inc.hariOperasional !== '-' ? inc.hariOperasional : (meta?.hari || 'MON-SUN');
+        const resolvedJam = inc.jamOperasional && inc.jamOperasional !== '-' ? inc.jamOperasional : (meta?.jam || '(00:00 - 23:59)');
+        const resolvedSp = (inc.servicePoint && inc.servicePoint !== '-' && inc.servicePoint !== 'N/A')
+          ? inc.servicePoint
+          : (meta?.service_point || resolveServicePoint(null, inc));
+        const resolvedSektor = (inc.sektor && inc.sektor !== '-' && inc.sektor !== 'N/A')
+          ? inc.sektor
+          : (meta?.sektor_bca || inc.sektor || '-');
+
+        const base = {
+          ...inc,
+          vendor: resolvedVendor,
+          typeMesin: resolvedType,
+          jenisMesin: resolvedJenis,
+          hariOperasional: resolvedHari,
+          jamOperasional: resolvedJam,
+          servicePoint: resolvedSp,
+          sektor: resolvedSektor,
+        };
+
+        if (!inc.startTime || inc.startTime === '-') return { ...base, status: 'OPEN' as const };
         const startDate = parseDateTime(inc.startTime);
-        if (!startDate) return { ...inc, status: 'OPEN' as const };
+        if (!startDate) return { ...base, status: 'OPEN' as const };
 
         const targetNow = currentLiveTime;
-        if (targetNow.getTime() <= startDate.getTime()) return { ...inc, status: 'OPEN' as const };
+        if (targetNow.getTime() <= startDate.getTime()) return { ...base, status: 'OPEN' as const };
 
         const sched = resolveOperatingSchedule(inc.wsid, undefined, masterSchedMap);
         const liveDuration = calculateOperationalDuration(startDate, targetNow, sched.hari, sched.jam);
 
         return {
-          ...inc,
+          ...base,
           status: 'OPEN' as const,
           durasiOpr: liveDuration >= 0 ? liveDuration : (inc.durasiOpr || 0)
         };
@@ -2034,17 +2065,27 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
 
       if (selectedOpenVendors.length > 0) {
         const itemVendor = (inc.vendor || '').trim().toUpperCase();
-        if (!selectedOpenVendors.some((vd) => vd.trim().toUpperCase() === itemVendor)) {
-          return false;
-        }
+        const matches = selectedOpenVendors.some((vd) => {
+          const v = vd.trim().toUpperCase();
+          if (v === itemVendor) return true;
+          if ((v === 'ARG' || v === 'ABG' || v === 'OKI') && (itemVendor === 'ARG' || itemVendor === 'ABG' || itemVendor === 'OKI')) return true;
+          if ((v === 'ITM' || v === 'IBM' || v === 'OMRON') && (itemVendor === 'ITM' || itemVendor === 'IBM' || itemVendor === 'OMRON')) return true;
+          if ((v === 'HYO' || v === 'HYOSUNG') && (itemVendor === 'HYO' || itemVendor === 'HYOSUNG')) return true;
+          if ((v === 'ITH' || v === 'HITACHI') && (itemVendor === 'ITH' || itemVendor === 'HITACHI')) return true;
+          if ((v === 'ACH' || v === 'GLORY') && (itemVendor === 'ACH' || itemVendor === 'GLORY')) return true;
+          return itemVendor.includes(v) || v.includes(itemVendor);
+        });
+        if (!matches) return false;
       }
 
       if (selectedOpenTipes.length > 0) {
-        const t = (inc.typeMesin || '').toUpperCase();
+        const modelStr = (inc.typeMesin || '').toUpperCase();
+        const j = (inc.jenisMesin || (modelStr.includes('OMRON') || modelStr.includes('RG8') || modelStr.includes('8600') || modelStr.includes('SR7500') || modelStr.includes('CRM') || modelStr.includes('ATS') || modelStr.includes('CDM') ? 'CRM' : 'ATM')).toUpperCase();
         const matches = selectedOpenTipes.some((tipe) => {
-          if (tipe === 'ATM') return t.includes('ATM');
-          if (tipe === 'CRM') return t.includes('CRM') || t.includes('ATS') || t.includes('CDM');
-          return t.includes(tipe.toUpperCase());
+          const t = tipe.toUpperCase();
+          if (t === 'ATM') return j === 'ATM' || modelStr.includes('ATM');
+          if (t === 'CRM') return j === 'CRM' || j === 'CDM' || j === 'DDM' || j === 'ATS' || modelStr.includes('CRM');
+          return j === t;
         });
         if (!matches) return false;
       }
@@ -2405,6 +2446,12 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
 
   const baseOpenVendors = useMemo(() => {
     const set = new Set<string>();
+    // Ambil vendor dari seluruh master mesin (static catalog & store)
+    try {
+      getMachinesMap().forEach((meta) => {
+        if (meta.vendor && meta.vendor !== '-' && meta.vendor !== 'N/A') set.add(meta.vendor);
+      });
+    } catch (_) {}
     if (masterList && masterList.length > 0) {
       for (let i = 0; i < masterList.length; i++) {
         const m = masterList[i];
@@ -5763,7 +5810,17 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
                           .filter((vd) => vd.toLowerCase().includes(vendorSearchOpen.toLowerCase()))
                           .map((vd) => {
                             const isChecked = selectedOpenVendors.includes(vd);
-                            const activeCount = openIncidents.filter((r) => r.vendor === vd).length;
+                            const activeCount = trulyOpenIncidents.filter((r) => {
+                              const itemVendor = (r.vendor || '').trim().toUpperCase();
+                              const v = vd.trim().toUpperCase();
+                              if (v === itemVendor) return true;
+                              if ((v === 'ARG' || v === 'ABG' || v === 'OKI') && (itemVendor === 'ARG' || itemVendor === 'ABG' || itemVendor === 'OKI')) return true;
+                              if ((v === 'ITM' || v === 'IBM' || v === 'OMRON') && (itemVendor === 'ITM' || itemVendor === 'IBM' || itemVendor === 'OMRON')) return true;
+                              if ((v === 'HYO' || v === 'HYOSUNG') && (itemVendor === 'HYO' || itemVendor === 'HYOSUNG')) return true;
+                              if ((v === 'ITH' || v === 'HITACHI') && (itemVendor === 'ITH' || itemVendor === 'HITACHI')) return true;
+                              if ((v === 'ACH' || v === 'GLORY') && (itemVendor === 'ACH' || itemVendor === 'GLORY')) return true;
+                              return itemVendor.includes(v) || v.includes(itemVendor);
+                            }).length;
                             return (
                               <label
                                 key={vd}
@@ -5848,10 +5905,11 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
                       <div className="divide-y divide-slate-100">
                         {['ATM', 'CRM'].map((tipe) => {
                           const isChecked = selectedOpenTipes.includes(tipe);
-                          const activeCount = openIncidents.filter((r) => {
-                            const t = (r.typeMesin || '').toUpperCase();
-                            if (tipe === 'ATM') return t.includes('ATM');
-                            if (tipe === 'CRM') return t.includes('CRM') || t.includes('ATS') || t.includes('CDM');
+                          const activeCount = trulyOpenIncidents.filter((r) => {
+                            const modelStr = (r.typeMesin || '').toUpperCase();
+                            const j = (r.jenisMesin || (modelStr.includes('OMRON') || modelStr.includes('RG8') || modelStr.includes('8600') || modelStr.includes('SR7500') || modelStr.includes('CRM') || modelStr.includes('ATS') || modelStr.includes('CDM') ? 'CRM' : 'ATM')).toUpperCase();
+                            if (tipe === 'ATM') return j === 'ATM' || modelStr.includes('ATM');
+                            if (tipe === 'CRM') return j === 'CRM' || j === 'CDM' || j === 'DDM' || j === 'ATS' || modelStr.includes('CRM');
                             return false;
                           }).length;
                           return (
@@ -6322,9 +6380,20 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
 
                             {/* 2. Tipe / Vendor */}
                             <td className="px-3 py-1.5 text-xs text-[#555F71]">
-                              <span className="font-semibold text-[#0D1C2E] block">{r.typeMesin || '-'}</span>
-                              <span className="text-[11px] text-[#555F71] block truncate max-w-[140px]" title={r.vendor}>
-                                {r.vendor || '-'}
+                              <div className="flex items-center gap-1.5">
+                                <span className="font-semibold text-[#0D1C2E] block truncate max-w-[130px]" title={r.typeMesin}>
+                                  {r.typeMesin || '-'}
+                                </span>
+                                {r.jenisMesin && (
+                                  <span className={`px-1.5 py-0.2 rounded text-[9px] font-bold ${
+                                    r.jenisMesin === 'CRM' ? 'bg-indigo-100 text-indigo-700' : 'bg-emerald-100 text-emerald-700'
+                                  }`}>
+                                    {r.jenisMesin}
+                                  </span>
+                                )}
+                              </div>
+                              <span className="text-[11px] font-medium text-slate-600 block truncate max-w-[140px]" title={`Vendor: ${r.vendor}`}>
+                                Vendor: <strong className="font-bold text-slate-800">{r.vendor || '-'}</strong>
                               </span>
                             </td>
 
@@ -9628,6 +9697,120 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
                   </div>
                 </div>
               </div>
+
+              {/* Jadwal & Profil Operasional Mesin (Hari & Jam Operasi) */}
+              {(() => {
+                const sched = resolveOperatingSchedule(activeIncidentDetail.wsid, undefined, masterSchedMap);
+                const meta = getMachineMetadata(activeIncidentDetail.wsid);
+                const rawHari = activeIncidentDetail.hariOperasional && activeIncidentDetail.hariOperasional !== '-' 
+                  ? activeIncidentDetail.hariOperasional 
+                  : (meta?.hari || sched.hari || 'MON-SUN');
+                const rawJam = activeIncidentDetail.jamOperasional && activeIncidentDetail.jamOperasional !== '-' 
+                  ? activeIncidentDetail.jamOperasional 
+                  : (meta?.jam || sched.jam || '(00:00 - 23:59)');
+                const is24Jam = rawJam.includes('00:00') && (rawJam.includes('23:59') || rawJam.includes('24:00'));
+                const cleanJam = rawJam.replace(/[()]/g, '').trim();
+
+                const formatHariDisplay = (h: string) => {
+                  const up = (h || '').toUpperCase();
+                  if (up === 'MON-SUN' || up.includes('SENIN - MINGGU') || up.includes('SENIN-MINGGU') || up === 'EVERYDAY') {
+                    return 'Senin – Minggu (Setiap Hari)';
+                  }
+                  if (up === 'MON-FRI' || up.includes('SENIN - JUMAT') || up.includes('SENIN-JUMAT')) {
+                    return 'Senin – Jumat (Hari Kerja)';
+                  }
+                  if (up === 'MON-SAT' || up.includes('SENIN - SABTU') || up.includes('SENIN-SABTU')) {
+                    return 'Senin – Sabtu';
+                  }
+                  return h || 'Senin – Minggu (Setiap Hari)';
+                };
+
+                const vendorName = activeIncidentDetail.vendor && activeIncidentDetail.vendor !== '-' 
+                  ? activeIncidentDetail.vendor 
+                  : (meta?.vendor || '-');
+                const typeName = activeIncidentDetail.typeMesin && activeIncidentDetail.typeMesin !== '-' 
+                  ? activeIncidentDetail.typeMesin 
+                  : (meta?.tipe_mesin || '-');
+                const jenisName = activeIncidentDetail.jenisMesin || meta?.jenis_mesin || 
+                  (typeName.toUpperCase().includes('OMRON') || typeName.toUpperCase().includes('RG8') || typeName.toUpperCase().includes('8600') || typeName.toUpperCase().includes('SR7500') ? 'CRM' : 'ATM');
+                const spName = activeIncidentDetail.servicePoint && activeIncidentDetail.servicePoint !== '-' 
+                  ? activeIncidentDetail.servicePoint 
+                  : (meta?.service_point || resolveServicePoint(null, activeIncidentDetail) || '-');
+                const sektorName = activeIncidentDetail.sektor && activeIncidentDetail.sektor !== '-' 
+                  ? activeIncidentDetail.sektor 
+                  : (meta?.sektor_bca || '-');
+
+                return (
+                  <div className="rounded-xl border border-blue-100 bg-gradient-to-br from-blue-50/60 to-indigo-50/40 p-3.5 space-y-2.5 shadow-xs">
+                    <div className="flex items-center justify-between border-b border-blue-100 pb-2">
+                      <div className="flex items-center gap-1.5 text-xs font-bold text-blue-900">
+                        <Calendar size={13} className="text-blue-600" />
+                        <span>Jadwal & Profil Operasional Mesin</span>
+                      </div>
+                      <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
+                        is24Jam ? 'bg-emerald-100 text-emerald-800 border border-emerald-200' : 'bg-blue-100 text-blue-800 border border-blue-200'
+                      }`}>
+                        {is24Jam ? '24 JAM' : 'JAM TERBATAS'}
+                      </span>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-2 text-xs">
+                      {/* Hari Operasi */}
+                      <div className="bg-white/95 p-2.5 rounded-lg border border-blue-100/70 shadow-[0_1px_2px_rgba(0,0,0,0.03)]">
+                        <span className="text-[10px] text-[#555F71] font-semibold block uppercase tracking-wider mb-0.5">
+                          Hari Operasi
+                        </span>
+                        <span className="font-semibold text-[#0D1C2E] text-[11px] leading-tight block">
+                          {formatHariDisplay(rawHari)}
+                        </span>
+                      </div>
+
+                      {/* Jam Operasi */}
+                      <div className="bg-white/95 p-2.5 rounded-lg border border-blue-100/70 shadow-[0_1px_2px_rgba(0,0,0,0.03)]">
+                        <span className="text-[10px] text-[#555F71] font-semibold block uppercase tracking-wider mb-0.5">
+                          Jam Operasi
+                        </span>
+                        <span className="font-mono font-bold text-[#0D1C2E] text-[11px] leading-tight block">
+                          {cleanJam} {is24Jam ? '(24 Jam)' : 'WIB'}
+                        </span>
+                      </div>
+
+                      {/* Vendor & Tipe */}
+                      <div className="bg-white/95 p-2.5 rounded-lg border border-blue-100/70 shadow-[0_1px_2px_rgba(0,0,0,0.03)]">
+                        <span className="text-[10px] text-[#555F71] font-semibold block uppercase tracking-wider mb-0.5">
+                          Vendor & Tipe
+                        </span>
+                        <div className="flex items-center gap-1.5 mt-0.5 flex-wrap">
+                          <span className="font-bold text-blue-700 text-[11px]">{vendorName}</span>
+                          <span className="text-slate-300">&bull;</span>
+                          <span className="font-medium text-[#0D1C2E] text-[11px] truncate max-w-[85px]" title={typeName}>
+                            {typeName}
+                          </span>
+                          <span className={`px-1 py-0.2 rounded text-[9px] font-bold ${
+                            jenisName === 'CRM' ? 'bg-indigo-100 text-indigo-700' : 'bg-emerald-100 text-emerald-700'
+                          }`}>
+                            {jenisName}
+                          </span>
+                        </div>
+                      </div>
+
+                      {/* Service Point & Sektor */}
+                      <div className="bg-white/95 p-2.5 rounded-lg border border-blue-100/70 shadow-[0_1px_2px_rgba(0,0,0,0.03)]">
+                        <span className="text-[10px] text-[#555F71] font-semibold block uppercase tracking-wider mb-0.5">
+                          SP & Sektor
+                        </span>
+                        <div className="flex items-center gap-1 mt-0.5 text-[11px] truncate">
+                          <span className="font-bold text-indigo-700">{spName}</span>
+                          <span className="text-slate-300">&bull;</span>
+                          <span className="text-[#0D1C2E] truncate font-medium" title={sektorName}>
+                            {sektorName}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })()}
               {/* Chronic Alert Banner if detected */}
               {(() => {
                 const c = chronicInfoMap.get(activeIncidentDetail.incidentKey) || evaluateChronicRef.current?.(activeIncidentDetail);
