@@ -212,6 +212,41 @@ export function normalizeServicePoint(val?: string | null): string {
 }
 
 /**
+ * Mendapatkan kode Service Point resmi (ACJK, ACBT, ACCK, ACSR, ACBS, ACRW, TAG) dari nama sektor.
+ * Memeriksa prefix (misal ACBT-KOTA BUMI) dan peta KNOWN_SEKTOR_SP_MAP secara akurat.
+ */
+export function getServicePointForSektor(sektor?: string | null): string {
+  if (!sektor) return '';
+  const s = String(sektor).trim();
+  if (!s || s === '-' || s === 'N/A' || s === 'UNKNOWN') return '';
+
+  // 1. Jika memiliki prefix SP (misal ACBT-KOTA BUMI, ACCK-RAJEG)
+  if (s.includes('-')) {
+    const prefix = s.split('-')[0].trim().toUpperCase();
+    if (['ACJK', 'ACBT', 'ACCK', 'ACSR', 'ACBS', 'ACRW', 'TAG'].includes(prefix)) {
+      return prefix;
+    }
+  }
+
+  // 2. Cek nama sektor bersih di peta sektor resmi
+  const clean = cleanSektorName(s).toUpperCase();
+  if (KNOWN_SEKTOR_SP_MAP[clean]) {
+    return KNOWN_SEKTOR_SP_MAP[clean];
+  }
+  if (KNOWN_SEKTOR_SP_MAP[s.toUpperCase()]) {
+    return KNOWN_SEKTOR_SP_MAP[s.toUpperCase()];
+  }
+
+  // 3. Normalisasi
+  const norm = normalizeServicePoint(s);
+  if (['ACJK', 'ACBT', 'ACCK', 'ACSR', 'ACBS', 'ACRW', 'TAG'].includes(norm)) {
+    return norm;
+  }
+
+  return '';
+}
+
+/**
  * Resolusi cerdas Service Point (ACJK, ACBT, ACCK, ACSR, ACBS, ACRW, TAG)
  * Mengutamakan data sektor (sektorBCA/sektor) daripada wilayah generic ("ABACUS JAKARTA")
  */
@@ -219,7 +254,7 @@ export function resolveServicePoint(machine?: any, incidentRow?: any): string {
   // 1. Ambil dari sektor mesin (sumber paling spesifik, misal: "ACBT-KOTA BUMI", "ACCK-RAJEG")
   const mSektor = machine?.sektorBCA || machine?.sektor || machine?.Sektor || machine?.sektor_bca || '';
   if (mSektor && typeof mSektor === 'string' && mSektor !== '-') {
-    const spFromSek = normalizeServicePoint(mSektor);
+    const spFromSek = getServicePointForSektor(mSektor);
     if (spFromSek && ['ACJK', 'ACBT', 'ACCK', 'ACSR', 'ACBS', 'ACRW', 'TAG'].includes(spFromSek)) {
       return spFromSek;
     }
@@ -228,7 +263,7 @@ export function resolveServicePoint(machine?: any, incidentRow?: any): string {
   // 2. Ambil dari sektor baris insiden jika mesin tidak ada
   const rSektor = incidentRow?.sektor || incidentRow?.sektor_bca || incidentRow?.servicePointSektor || incidentRow?.service_point_sektor || '';
   if (rSektor && typeof rSektor === 'string' && rSektor !== '-') {
-    const spFromRowSek = normalizeServicePoint(rSektor);
+    const spFromRowSek = getServicePointForSektor(rSektor);
     if (spFromRowSek && ['ACJK', 'ACBT', 'ACCK', 'ACSR', 'ACBS', 'ACRW', 'TAG'].includes(spFromRowSek)) {
       return spFromRowSek;
     }

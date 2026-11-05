@@ -1047,8 +1047,8 @@ export function getMachinesMap(): Map<string, any> {
   return map;
 }
 
-import { isEndTimeFilled, normalizeServicePoint, resolveServicePoint, cleanSektorName } from './dailyIncidentParser';
-export { isEndTimeFilled, normalizeServicePoint, resolveServicePoint, cleanSektorName } from './dailyIncidentParser';
+import { isEndTimeFilled, normalizeServicePoint, resolveServicePoint, cleanSektorName, getServicePointForSektor } from './dailyIncidentParser';
+export { isEndTimeFilled, normalizeServicePoint, resolveServicePoint, cleanSektorName, getServicePointForSektor } from './dailyIncidentParser';
 export type { OpenIncidentItem } from './monitoringService';
 
 export function extractDateStrFromRaw(rawDate: any): string {
@@ -1178,20 +1178,36 @@ export function mapRowToDailyIncidentRow(row: any, machine?: any): DailyIncident
 }
 
 export function mapRowToOpenIncident(row: any, machine?: any): OpenIncidentItem {
-  const m = machine || row.machines || getMachineMetadata(row.wsid) || {};
-  const sp = resolveServicePoint(m, row);
-  const rawSek = m.sektor_bca || row.sektor || row.sektor_bca || '-';
+  const cleanWsid = String(row.wsid || machine?.wsid || '').trim().toUpperCase();
+  const fallbackMeta = getMachineMetadata(cleanWsid) || {};
+  const m = machine || fallbackMeta;
+
+  // Resolusi vendor: jangan sampai bernilai '-' jika di fallbackMeta ada vendor valid
+  const rawVendor = (m.vendor && m.vendor !== '-' && m.vendor !== 'N/A')
+    ? m.vendor
+    : ((row.vendor && row.vendor !== '-' && row.vendor !== 'N/A')
+      ? row.vendor
+      : (fallbackMeta.vendor || fallbackMeta.Vendor || fallbackMeta.vendorMesin || '-'));
+
+  // Resolusi sektor:
+  const rawSek = (m.sektor_bca && m.sektor_bca !== '-')
+    ? m.sektor_bca
+    : (m.sektorBCA || m.sektor || m.Sektor || row.sektor || row.sektor_bca || fallbackMeta.sektor_bca || fallbackMeta.sektorBCA || fallbackMeta.sektor || '-');
   const cleanSek = cleanSektorName(rawSek);
   const sek = cleanSek !== '-' ? cleanSek : (rawSek !== '-' ? rawSek : '-');
+
+  // Resolusi SP:
+  const sp = resolveServicePoint(m, row);
+
   return {
     incidentKey: row.incident_key,
     incidentNumber: row.ticket_no || '-',
     wsid: row.wsid,
-    lokasi: m.lokasi || row.lokasi || '-',
+    lokasi: m.lokasi || row.lokasi || fallbackMeta.lokasi || '-',
     servicePoint: sp,
     sektor: sek,
-    typeMesin: m.tipe_mesin || row.type_mesin || '-',
-    vendor: m.vendor || row.vendor || '-',
+    typeMesin: m.tipe_mesin || m.tipeMesin || row.type_mesin || row.tipe_mesin || fallbackMeta.tipe_mesin || fallbackMeta.tipeMesin || '-',
+    vendor: rawVendor,
     eventCode: row.event_code || '-',
     eventCodeDesc: row.problem || '-',
     detail: row.keterangan || '-',
@@ -1274,21 +1290,17 @@ export async function fetchOpenIncidentsSupabase(filters?: { forceSync?: boolean
     }
 
     const incidents: OpenIncidentItem[] = allRows.map((row: any) => {
-      if (usedView && (row.lokasi || row.service_point || row.sektor_bca)) {
-        // Data metadata sudah langsung dari view v_open_incidents
-        const meta = {
-          wsid: row.wsid || '',
-          lokasi: row.lokasi || '-',
-          servicePoint: row.service_point || '-',
-          sektor: row.sektor_bca || '-',
-          typeMesin: row.tipe_mesin || '-',
-          vendor: row.vendor || '-'
-        };
-        return mapRowToOpenIncident(row, meta);
-      }
-      // O(1) map lookup
       const cleanWsid = (row.wsid || '').trim().toUpperCase();
-      const meta = machinesMap.get(cleanWsid) || getMachineMetadata(row.wsid);
+      const metaLookup = machinesMap.get(cleanWsid) || getMachineMetadata(row.wsid) || {};
+
+      const meta = {
+        wsid: row.wsid || cleanWsid,
+        lokasi: (row.lokasi && row.lokasi !== '-') ? row.lokasi : (metaLookup.lokasi || '-'),
+        servicePoint: (row.service_point && row.service_point !== '-') ? row.service_point : (metaLookup.service_point || metaLookup.servicePoint || '-'),
+        sektor: (row.sektor_bca && row.sektor_bca !== '-') ? row.sektor_bca : (metaLookup.sektor_bca || metaLookup.sektorBCA || metaLookup.sektor || '-'),
+        typeMesin: (row.tipe_mesin && row.tipe_mesin !== '-') ? row.tipe_mesin : (metaLookup.tipe_mesin || metaLookup.tipeMesin || '-'),
+        vendor: (row.vendor && row.vendor !== '-' && row.vendor !== 'N/A') ? row.vendor : (metaLookup.vendor || metaLookup.Vendor || metaLookup.vendorMesin || '-')
+      };
       return mapRowToOpenIncident(row, meta);
     });
 

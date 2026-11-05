@@ -109,6 +109,7 @@ import {
   extractMonthStr,
   normalizeServicePoint,
   resolveServicePoint,
+  getServicePointForSektor,
   type DailyIncidentRow,
   type WsidProblemDateAggregation
 } from '../utils/dailyIncidentParser';
@@ -915,6 +916,8 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
   const tipeDropdownRefOpen = useRef<HTMLDivElement>(null);
   const [openStartDate, setOpenStartDate] = useState<string>('ALL');
   const [openEndDate, setOpenEndDate] = useState<string>('ALL');
+  const openStartDateInputRef = useRef<HTMLInputElement>(null);
+  const openEndDateInputRef = useRef<HTMLInputElement>(null);
   const [openDurationFilter, setOpenDurationFilter] = useState<'ALL' | 'OVER_45' | 'OVER_60' | 'OVER_180'>('ALL');
   const [openActionFilter, setOpenActionFilter] = useState<'ALL' | 'NO_ACTION' | 'HAS_ACTION'>('ALL');
   const [openChronicFilter, setOpenChronicFilter] = useState<'ALL' | 'CHRONIC_ANY' | '3X_SEHARI' | '3X_5_HARI'>('ALL');
@@ -2006,10 +2009,14 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
       }
 
       if (selectedOpenSPs.length > 0) {
-        const normItemSp = normSP(inc.servicePoint);
+        const itemSp = resolveServicePoint(null, inc);
+        const sekSp = getServicePointForSektor(inc.sektor);
+        const normItemSp = normSP(itemSp);
+        const normSekSp = normSP(sekSp);
+        const normRawSp = normSP(inc.servicePoint);
         const matched = selectedOpenSPs.some((sp) => {
           const normSp = normSP(sp);
-          return normItemSp === normSp || (inc.servicePoint || '').toLowerCase().includes(sp.toLowerCase());
+          return normItemSp === normSp || normSekSp === normSp || normRawSp === normSp || (inc.servicePoint || '').toLowerCase().includes(sp.toLowerCase());
         });
         if (!matched) return false;
       }
@@ -2313,6 +2320,8 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
 
   const baseOpenSPs = useMemo(() => {
     const set = new Set<string>();
+    // Baseline daftar resmi seluruh Service Point BCA
+    ['ACJK', 'ACBT', 'ACCK', 'ACSR', 'ACBS', 'ACRW', 'TAG'].forEach((sp) => set.add(sp));
     if (masterList && masterList.length > 0) {
       for (let i = 0; i < masterList.length; i++) {
         const m = masterList[i];
@@ -2338,6 +2347,8 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
       const r = trulyOpenIncidents[i];
       const sp = resolveServicePoint(null, r);
       if (sp && sp !== '-' && sp !== 'N/A') set.add(sp);
+      const sekSp = getServicePointForSektor(r.sektor);
+      if (sekSp && sekSp !== '-' && sekSp !== 'N/A') set.add(sekSp);
     }
     return Array.from(set).filter(Boolean).sort((a, b) => a.localeCompare(b));
   }, [baseOpenSPs, trulyOpenIncidents]);
@@ -2366,31 +2377,59 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
       const sk = cleanSektorName(r.sektor);
       if (sk && sk !== '-') set.add(sk);
     }
-    return Array.from(set).sort((a, b) => a.localeCompare(b));
-  }, [baseOpenSektors, trulyOpenIncidents]);
+    const allList = Array.from(set);
+
+    // KETIKA USER MEMILIH SERVICE POINT, FILTER SEKTOR HANYA TAMPILKAN PILIHAN SEKTOR MILIK SP TERPILIH!
+    if (selectedOpenSPs.length > 0) {
+      const filtered = allList.filter((sk) => {
+        const mappedSp = getServicePointForSektor(sk);
+        return selectedOpenSPs.some((sp) => normSP(sp) === normSP(mappedSp));
+      });
+      return filtered.sort((a, b) => a.localeCompare(b));
+    }
+
+    return allList.sort((a, b) => a.localeCompare(b));
+  }, [baseOpenSektors, trulyOpenIncidents, selectedOpenSPs]);
+
+  // Otomatis bersihkan selectedOpenSektors jika pilihan Service Point berubah
+  useEffect(() => {
+    if (selectedOpenSPs.length > 0 && selectedOpenSektors.length > 0) {
+      setSelectedOpenSektors((prev) =>
+        prev.filter((sk) => {
+          const mappedSp = getServicePointForSektor(sk);
+          return selectedOpenSPs.some((sp) => normSP(sp) === normSP(mappedSp));
+        })
+      );
+    }
+  }, [selectedOpenSPs]);
 
   const baseOpenVendors = useMemo(() => {
     const set = new Set<string>();
     if (masterList && masterList.length > 0) {
-      for (let i = 0; i < rawMasterData.length; i++) {
-        const m = rawMasterData[i];
-        const vd = (m.Vendor || m.vendor || '').trim();
-        if (vd && vd !== '-' && vd !== 'N/A') set.add(vd);
+      for (let i = 0; i < masterList.length; i++) {
+        const m = masterList[i];
+        const vd = (m.vendor || m.Vendor || (m as any).vendorMesin || (m as any)['Vendor'] || '').trim();
+        if (vd && vd !== '-' && vd !== 'N/A' && vd !== 'UNKNOWN') set.add(vd);
       }
     }
     for (let i = 0; i < allDailyIncidents.length; i++) {
       const r = allDailyIncidents[i];
-      const vd = (r.vendorMesin || '').trim();
-      if (vd && vd !== '-' && vd !== 'N/A') set.add(vd);
+      const vd = (r.vendorMesin || r.vendor || '').trim();
+      if (vd && vd !== '-' && vd !== 'N/A' && vd !== 'UNKNOWN') set.add(vd);
     }
     return Array.from(set);
-  }, [rawMasterData, allDailyIncidents]);
+  }, [masterList, allDailyIncidents]);
 
   const openAvailableVendors = useMemo(() => {
     const set = new Set<string>(baseOpenVendors);
     for (let i = 0; i < trulyOpenIncidents.length; i++) {
       const r = trulyOpenIncidents[i];
-      if (r.vendor && r.vendor !== '-') set.add(r.vendor.trim());
+      const vd = (r.vendor || '').trim();
+      if (vd && vd !== '-' && vd !== 'N/A' && vd !== 'UNKNOWN') set.add(vd);
+    }
+    // Fallback daftar vendor umum BCA jika belum terhidrasi
+    if (set.size === 0) {
+      ['ABG', 'ACH', 'ARG', 'Diebold Nixdorf', 'Hitachi', 'HYO', 'IBM', 'ITM', 'NCR', 'OKI'].forEach((v) => set.add(v));
     }
     return Array.from(set).sort((a, b) => a.localeCompare(b));
   }, [baseOpenVendors, trulyOpenIncidents]);
@@ -5495,9 +5534,12 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
                           .filter((sp) => sp.toLowerCase().includes(spSearchOpen.toLowerCase()))
                           .map((sp) => {
                             const isChecked = selectedOpenSPs.includes(sp);
-                            const activeCount = trulyOpenIncidents.filter(
-                              (r) => normSP(r.servicePoint) === normSP(sp) || (r.servicePoint || '').toLowerCase().includes(sp.toLowerCase())
-                            ).length;
+                            const targetNorm = normSP(sp);
+                            const activeCount = trulyOpenIncidents.filter((r) => {
+                              const itemSp = resolveServicePoint(null, r);
+                              const sekSp = getServicePointForSektor(r.sektor);
+                              return normSP(itemSp) === targetNorm || normSP(sekSp) === targetNorm || normSP(r.servicePoint) === targetNorm || (r.servicePoint || '').toLowerCase().includes(sp.toLowerCase());
+                            }).length;
                             return (
                               <label
                                 key={sp}
@@ -5884,41 +5926,81 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
                 </div>
 
                 {/* 8. Filter Periode Tanggal (Dari & Sampai) */}
-                <div className="flex items-center gap-1.5 bg-white border border-[#E5EAF2] rounded-md px-2 h-8 shrink-0">
-                  <Calendar size={12} className="text-slate-400" />
-                  <span className="text-[10px] font-bold text-slate-400 uppercase">Dari:</span>
-                  <input
-                    type="date"
-                    value={openStartDate === 'ALL' ? '' : openStartDate}
-                    onChange={(e) => {
-                      setOpenStartDate(e.target.value || 'ALL');
-                      setCurrentPageOpen(1);
+                <div className="flex items-center gap-2 bg-white border border-[#E5EAF2] hover:border-blue-400 rounded-md px-2.5 h-8 shrink-0 transition-colors shadow-2xs">
+                  <div
+                    onClick={() => {
+                      try {
+                        openStartDateInputRef.current?.showPicker();
+                      } catch (_) {
+                        openStartDateInputRef.current?.focus();
+                      }
                     }}
-                    className="bg-transparent text-xs font-medium text-slate-700 focus:outline-none cursor-pointer"
-                  />
+                    className="flex items-center gap-1.5 cursor-pointer hover:text-blue-600 transition-colors"
+                    title="Pilih tanggal mulai"
+                  >
+                    <Calendar size={12} className={openStartDate !== 'ALL' ? 'text-blue-600' : 'text-slate-400'} />
+                    <span className="text-[10px] font-bold text-slate-400 uppercase">Dari:</span>
+                    <input
+                      ref={openStartDateInputRef}
+                      type="date"
+                      value={openStartDate === 'ALL' ? '' : openStartDate}
+                      onClick={(e) => {
+                        try {
+                          (e.target as any).showPicker?.();
+                        } catch (_) {}
+                      }}
+                      onChange={(e) => {
+                        setOpenStartDate(e.target.value || 'ALL');
+                        setCurrentPageOpen(1);
+                      }}
+                      className="bg-transparent text-xs font-medium text-slate-700 focus:outline-none cursor-pointer"
+                    />
+                  </div>
+
                   <span className="text-slate-300">|</span>
-                  <span className="text-[10px] font-bold text-slate-400 uppercase">Sampai:</span>
-                  <input
-                    type="date"
-                    value={openEndDate === 'ALL' ? '' : openEndDate}
-                    onChange={(e) => {
-                      setOpenEndDate(e.target.value || 'ALL');
-                      setCurrentPageOpen(1);
+
+                  <div
+                    onClick={() => {
+                      try {
+                        openEndDateInputRef.current?.showPicker();
+                      } catch (_) {
+                        openEndDateInputRef.current?.focus();
+                      }
                     }}
-                    className="bg-transparent text-xs font-medium text-slate-700 focus:outline-none cursor-pointer"
-                  />
+                    className="flex items-center gap-1.5 cursor-pointer hover:text-blue-600 transition-colors"
+                    title="Pilih tanggal selesai"
+                  >
+                    <span className="text-[10px] font-bold text-slate-400 uppercase">Sampai:</span>
+                    <input
+                      ref={openEndDateInputRef}
+                      type="date"
+                      value={openEndDate === 'ALL' ? '' : openEndDate}
+                      onClick={(e) => {
+                        try {
+                          (e.target as any).showPicker?.();
+                        } catch (_) {}
+                      }}
+                      onChange={(e) => {
+                        setOpenEndDate(e.target.value || 'ALL');
+                        setCurrentPageOpen(1);
+                      }}
+                      className="bg-transparent text-xs font-medium text-slate-700 focus:outline-none cursor-pointer"
+                    />
+                  </div>
+
                   {(openStartDate !== 'ALL' || openEndDate !== 'ALL') && (
                     <button
                       type="button"
-                      onClick={() => {
+                      onClick={(e) => {
+                        e.stopPropagation();
                         setOpenStartDate('ALL');
                         setOpenEndDate('ALL');
                         setCurrentPageOpen(1);
                       }}
-                      className="text-slate-400 hover:text-slate-600 ml-0.5 cursor-pointer"
+                      className="text-slate-400 hover:text-rose-600 ml-0.5 cursor-pointer transition-colors p-0.5"
                       title="Reset filter tanggal"
                     >
-                      <X size={11} />
+                      <X size={12} />
                     </button>
                   )}
                 </div>
