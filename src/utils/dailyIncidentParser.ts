@@ -120,6 +120,52 @@ export function cleanSektorName(raw?: string | null): string {
   return s;
 }
 
+/**
+ * Normalisasi nama Service Point agar selalu seragam menggunakan singkatan resmi:
+ * ACJK (Jakarta), ACBT (Bintaro), ACCK (Cikande), ACSR (Serang), ACBS (Bekasi), ACRW (Rawamangun), TAG
+ */
+export function normalizeServicePoint(val?: string | null): string {
+  if (!val) return '';
+  const s = String(val).trim().toUpperCase();
+  if (!s || s === '-' || s === 'N/A' || s === 'UNKNOWN' || s === 'NULL') return '';
+
+  // Jika berformat "ACJK - SEKTOR" atau "ACBT - BSD"
+  if (s.includes('-')) {
+    const first = s.split('-')[0].trim();
+    if (['ACJK', 'ACBT', 'ACCK', 'ACSR', 'ACBS', 'ACRW', 'TAG'].includes(first)) {
+      return first;
+    }
+  }
+
+  // Exact matching nama panjang -> singkatan
+  if (s === 'ABACUS JAKARTA' || s === 'JAKARTA' || s === 'PT ABACUS JAKARTA') return 'ACJK';
+  if (s === 'ABACUS BINTARO' || s === 'BINTARO' || s === 'PT ABACUS BINTARO') return 'ACBT';
+  if (s === 'ABACUS CIKANDE' || s === 'CIKANDE' || s === 'PT ABACUS CIKANDE') return 'ACCK';
+  if (s === 'ABACUS SERANG' || s === 'SERANG' || s === 'PT ABACUS SERANG') return 'ACSR';
+  if (s === 'ABACUS BEKASI' || s === 'BEKASI' || s === 'PT ABACUS BEKASI') return 'ACBS';
+  if (s === 'ABACUS RAWAMANGUN' || s === 'RAWAMANGUN' || s === 'PT ABACUS RAWAMANGUN') return 'ACRW';
+  if (s === 'TAG' || s === 'PT TAG' || s === 'TRANS ARTHA GEDUNG') return 'TAG';
+
+  // Prefix matching
+  if (s.startsWith('ACJK')) return 'ACJK';
+  if (s.startsWith('ACBT')) return 'ACBT';
+  if (s.startsWith('ACCK')) return 'ACCK';
+  if (s.startsWith('ACSR')) return 'ACSR';
+  if (s.startsWith('ACBS')) return 'ACBS';
+  if (s.startsWith('ACRW')) return 'ACRW';
+  if (s.startsWith('TAG')) return 'TAG';
+
+  // Substring matching
+  if (s.includes('JAKARTA')) return 'ACJK';
+  if (s.includes('BINTARO')) return 'ACBT';
+  if (s.includes('CIKANDE')) return 'ACCK';
+  if (s.includes('SERANG')) return 'ACSR';
+  if (s.includes('BEKASI')) return 'ACBS';
+  if (s.includes('RAWAMANGUN')) return 'ACRW';
+
+  return s;
+}
+
 export function toComparableDate(str?: string | null, isEnd: boolean = false): string {
   if (!str) return '';
   const clean = str.trim();
@@ -128,7 +174,12 @@ export function toComparableDate(str?: string | null, isEnd: boolean = false): s
     if (parts.length >= 3) {
       const d = parts[0].padStart(2, '0');
       const m = parts[1].padStart(2, '0');
-      const y = parts[2];
+      const y = parts[2].length === 2 ? `20${parts[2]}` : parts[2];
+      return `${y}-${m}-${d}`;
+    } else if (parts.length === 2) {
+      const d = parts[0].padStart(2, '0');
+      const m = parts[1].padStart(2, '0');
+      const y = new Date().getFullYear();
       return `${y}-${m}-${d}`;
     }
   } else if (clean.includes('-')) {
@@ -139,7 +190,7 @@ export function toComparableDate(str?: string | null, isEnd: boolean = false): s
       } else {
         const d = parts[0].padStart(2, '0');
         const m = parts[1].padStart(2, '0');
-        const y = parts[2];
+        const y = parts[2].length === 2 ? `20${parts[2]}` : parts[2];
         return `${y}-${m}-${d}`;
       }
     } else if (parts.length === 2) {
@@ -235,10 +286,9 @@ export function formatServicePointSektor(
   let spCode = '';
 
   if (sektor && sektor.includes('-')) {
-    spCode = sektor.split('-')[0].trim().toUpperCase();
+    spCode = normalizeServicePoint(sektor.split('-')[0].trim());
   } else if (defaultPengelola && defaultPengelola.trim() !== '') {
-    const match = defaultPengelola.trim().match(/^([A-Z]{4})/i);
-    if (match) spCode = match[1].toUpperCase();
+    spCode = normalizeServicePoint(defaultPengelola.trim());
   }
 
   if (spCode && cleanSek && cleanSek !== '-') {
@@ -809,14 +859,14 @@ export async function parseDailyIncidentCsv(
     if (servicePointSektor && servicePointSektor !== '-') {
       if (servicePointSektor.includes(' - ')) {
         const spParts = servicePointSektor.split(' - ');
-        servicePoint = spParts[0].trim().toUpperCase();
+        servicePoint = normalizeServicePoint(spParts[0].trim()) || spParts[0].trim().toUpperCase();
         sektor = cleanSektorName(spParts.slice(1).join(' - '));
       } else if (servicePointSektor.includes('-')) {
         const spParts = servicePointSektor.split('-');
-        servicePoint = spParts[0].trim().toUpperCase();
+        servicePoint = normalizeServicePoint(spParts[0].trim()) || spParts[0].trim().toUpperCase();
         sektor = cleanSektorName(spParts.slice(1).join('-'));
       } else {
-        servicePoint = servicePointSektor.trim().toUpperCase();
+        servicePoint = normalizeServicePoint(servicePointSektor.trim()) || servicePointSektor.trim().toUpperCase();
         sektor = cleanSektorName(servicePointSektor);
       }
     }
@@ -1105,7 +1155,7 @@ export function aggregateByHourDistribution(
       problemMap[pDesc].durasi += dur;
 
       // Service Point & Sektor
-      const sp = r.servicePoint || (r.servicePointSektor.includes('-') ? r.servicePointSektor.split('-')[0].trim().toUpperCase() : r.servicePointSektor || '-');
+      const sp = normalizeServicePoint(r.servicePoint || (r.servicePointSektor.includes('-') ? r.servicePointSektor.split('-')[0].trim() : r.servicePointSektor || '-')) || '-';
       const sName = r.sektor || (r.servicePointSektor.includes('-') ? r.servicePointSektor.split('-').slice(1).join('-').trim().toUpperCase() : r.servicePointSektor || '-');
 
       if (!spMap[sp]) spMap[sp] = { count: 0, durasi: 0, problems: {} };

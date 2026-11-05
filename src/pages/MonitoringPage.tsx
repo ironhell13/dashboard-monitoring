@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useMemo, useRef, useCallback, useDeferredValue } from 'react';
 import * as XLSX from 'xlsx';
 import {
   AlertTriangle,
@@ -107,6 +107,7 @@ import {
   isEndTimeFilled,
   toComparableDate,
   extractMonthStr,
+  normalizeServicePoint,
   type DailyIncidentRow,
   type WsidProblemDateAggregation
 } from '../utils/dailyIncidentParser';
@@ -166,7 +167,7 @@ export const ACTION_PRESETS = [...UPDATE_PRESETS, ...PENANGANAN_PRESETS];
  */
 export function normSP(val?: string): string {
   if (!val) return '';
-  return val.trim().toLowerCase();
+  return normalizeServicePoint(val).toLowerCase();
 }
 
 /**
@@ -963,6 +964,8 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
   const [freqDateFilter, setFreqDateFilter] = useState('ALL');
   const [freqStartDate, setFreqStartDate] = useState('ALL');
   const [freqEndDate, setFreqEndDate] = useState('ALL');
+  const freqStartDateInputRef = useRef<HTMLInputElement>(null);
+  const freqEndDateInputRef = useRef<HTMLInputElement>(null);
   const [sortFieldFreq, setSortFieldFreq] = useState<string>('totalFrekuensi');
   const [sortDirectionFreq, setSortDirectionFreq] = useState<'asc' | 'desc'>('desc');
   const [currentPageFreq, setCurrentPageFreq] = useState(1);
@@ -980,6 +983,8 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
   const [historyMonth, setHistoryMonth] = useState('ALL');
   const [historyStartDate, setHistoryStartDate] = useState('');
   const [historyEndDate, setHistoryEndDate] = useState('');
+  const historyStartDateInputRef = useRef<HTMLInputElement>(null);
+  const historyEndDateInputRef = useRef<HTMLInputElement>(null);
   const [historyStatus, setHistoryStatus] = useState('ALL');
   const [historyQuery, setHistoryQuery] = useState('');
   const [historyEventCode, setHistoryEventCode] = useState('ALL');
@@ -1020,6 +1025,8 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
   const [grafik24Date, setGrafik24Date] = useState<string>('ALL');
   const [grafik24StartDate, setGrafik24StartDate] = useState<string>('ALL');
   const [grafik24EndDate, setGrafik24EndDate] = useState<string>('ALL');
+  const grafik24StartDateInputRef = useRef<HTMLInputElement>(null);
+  const grafik24EndDateInputRef = useRef<HTMLInputElement>(null);
   const [grafik24Search, setGrafik24Search] = useState<string>('');
   const [selectedHour24, setSelectedHour24] = useState<number | null>(null);
   const [grafik24CurrentPage, setGrafik24CurrentPage] = useState<number>(1);
@@ -1038,6 +1045,7 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
   const [isGfProblemOpen, setIsGfProblemOpen] = useState(false);
   const [gfProblemSearch, setGfProblemSearch] = useState('');
   const gfProblemRef = useRef<HTMLDivElement>(null);
+  const gfMonthCacheRef = useRef<Record<string, { rows: DailyIncidentRow[]; availableMonths?: string[] }>>({});
   const [gfServicePoint, setGfServicePoint] = useState('ALL');
   const [gfWsidSearch, setGfWsidSearch] = useState('');
   const [gfChartType, setGfChartType] = useState<'area' | 'bar' | 'line'>('area');
@@ -1240,6 +1248,16 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
     startM: string = gfStartMonth,
     endM: string = gfEndMonth
   ) => {
+    const cacheKey = mode === 'SINGLE' ? `SINGLE_${singleM}` : `RANGE_${startM}_${endM}`;
+    if (gfMonthCacheRef.current[cacheKey]) {
+      const cached = gfMonthCacheRef.current[cacheKey];
+      setGfMultiMonthRows(cached.rows);
+      if (cached.availableMonths && cached.availableMonths.length > 0) {
+        setGfAvailableMonths(cached.availableMonths);
+      }
+      return;
+    }
+
     setIsLoadingGfData(true);
     try {
       let res;
@@ -1253,8 +1271,10 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
         if (res.availableMonths && res.availableMonths.length > 0) {
           setGfAvailableMonths(res.availableMonths);
         }
+        gfMonthCacheRef.current[cacheKey] = { rows: res.rows, availableMonths: res.availableMonths };
       } else if (res && res.rows && res.rows.length === 0) {
         setGfMultiMonthRows([]);
+        gfMonthCacheRef.current[cacheKey] = { rows: [], availableMonths: res?.availableMonths };
       }
     } catch (err) {
       console.warn('Gagal memuat dataset Grafik Frekuensi:', err);
@@ -2289,30 +2309,31 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
     if (rawMasterData && rawMasterData.length > 0) {
       for (let i = 0; i < rawMasterData.length; i++) {
         const m = rawMasterData[i];
-        const sp = (m.servicePoint || m.service_point || m.ServicePoint || '').trim();
+        const raw = (m.servicePoint || m.service_point || m.ServicePoint || m.wilayahOperasional || '').trim();
+        const sp = normalizeServicePoint(raw);
         if (sp && sp !== '-' && sp !== 'N/A') set.add(sp);
       }
     }
     for (let i = 0; i < allDailyIncidents.length; i++) {
       const r = allDailyIncidents[i];
-      const sp = (r.servicePoint || '').trim();
+      const sp = normalizeServicePoint((r.servicePoint || '').trim());
       if (sp && sp !== '-' && sp !== 'N/A') set.add(sp);
       if (r.servicePointSektor && r.servicePointSektor !== '-') {
-        const p = r.servicePointSektor.split('-')[0].trim();
+        const p = normalizeServicePoint(r.servicePointSektor.split('-')[0].trim());
         if (p && p !== '-' && p !== 'N/A') set.add(p);
       }
     }
-    return Array.from(set);
+    return Array.from(set).filter(Boolean);
   }, [rawMasterData, allDailyIncidents]);
 
   const openAvailableSPs = useMemo(() => {
     const set = new Set<string>(baseOpenSPs);
     for (let i = 0; i < trulyOpenIncidents.length; i++) {
       const r = trulyOpenIncidents[i];
-      const sp = (r.servicePoint || '').trim();
+      const sp = normalizeServicePoint((r.servicePoint || '').trim());
       if (sp && sp !== '-' && sp !== 'N/A') set.add(sp);
     }
-    return Array.from(set).sort((a, b) => a.localeCompare(b));
+    return Array.from(set).filter(Boolean).sort((a, b) => a.localeCompare(b));
   }, [baseOpenSPs, trulyOpenIncidents]);
 
   const baseOpenSektors = useMemo(() => {
@@ -2672,29 +2693,30 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
     const set = new Set<string>();
     if (rawMasterData && rawMasterData.length > 0) {
       rawMasterData.forEach((m: any) => {
-        const sp = (m.servicePoint || m.service_point || m.ServicePoint || '').trim();
+        const raw = (m.servicePoint || m.service_point || m.ServicePoint || m.wilayahOperasional || '').trim();
+        const sp = normalizeServicePoint(raw);
         if (sp && sp !== '-' && sp !== 'N/A') set.add(sp);
       });
     }
     allDailyIncidents.forEach((r) => {
-      const sp = (r.servicePoint || '').trim();
+      const sp = normalizeServicePoint((r.servicePoint || '').trim());
       if (sp && sp !== '-' && sp !== 'N/A') set.add(sp);
       if (r.servicePointSektor && r.servicePointSektor !== '-') {
-        const p = r.servicePointSektor.split('-')[0].trim();
+        const p = normalizeServicePoint(r.servicePointSektor.split('-')[0].trim());
         if (p && p !== '-' && p !== 'N/A') set.add(p);
       }
     });
     openIncidents.forEach((r) => {
-      const sp = (r.servicePoint || '').trim();
+      const sp = normalizeServicePoint((r.servicePoint || '').trim());
       if (sp && sp !== '-' && sp !== 'N/A') set.add(sp);
     });
     aggFreqItems.forEach((r) => {
       if (r.servicePointSektor && r.servicePointSektor !== '-') {
-        const sp = r.servicePointSektor.split('-')[0].trim();
+        const sp = normalizeServicePoint(r.servicePointSektor.split('-')[0].trim());
         if (sp && sp !== '-' && sp !== 'N/A') set.add(sp);
       }
     });
-    return Array.from(set).sort((a, b) => a.localeCompare(b));
+    return Array.from(set).filter(Boolean).sort((a, b) => a.localeCompare(b));
   }, [rawMasterData, allDailyIncidents, openIncidents, aggFreqItems]);
 
   // Click outside to close dropdowns
@@ -3414,13 +3436,16 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
   const grafik24AvailableSPs = useMemo(() => {
     const set = new Set<string>();
     if (openAvailableSPs && openAvailableSPs.length > 0) {
-      openAvailableSPs.forEach((sp) => set.add(sp));
+      openAvailableSPs.forEach((sp) => {
+        const s = normalizeServicePoint(sp);
+        if (s) set.add(s);
+      });
     }
     frequencyDataset.forEach((r) => {
-      const sp = (r.servicePoint || '').trim();
+      const sp = normalizeServicePoint((r.servicePoint || '').trim());
       if (sp && sp !== '-' && sp !== 'N/A') set.add(sp);
     });
-    return Array.from(set).sort((a, b) => a.localeCompare(b));
+    return Array.from(set).filter(Boolean).sort((a, b) => a.localeCompare(b));
   }, [openAvailableSPs, frequencyDataset]);
 
   /**
@@ -4177,212 +4202,66 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
     const set = new Set<string>();
     if (rawMasterData && rawMasterData.length > 0) {
       rawMasterData.forEach((m: any) => {
-        const sp = (m.servicePoint || m.service_point || m.ServicePoint || '').trim().toUpperCase();
+        const raw = (m.servicePoint || m.service_point || m.ServicePoint || m.wilayahOperasional || '').trim();
+        const sp = normalizeServicePoint(raw);
         if (sp && sp !== '-' && sp !== 'N/A') set.add(sp);
       });
     }
     rawGfDataset.forEach((r) => {
-      const sp = (r.servicePoint || '').trim().toUpperCase();
+      const sp = normalizeServicePoint((r.servicePoint || '').trim());
       if (sp && sp !== '-' && sp !== 'N/A') set.add(sp);
       if (r.servicePointSektor && r.servicePointSektor !== '-') {
-        const parts = r.servicePointSektor.split(' - ');
-        if (parts[0] && parts[0].trim() !== '-') set.add(parts[0].trim().toUpperCase());
+        const parts = r.servicePointSektor.split('-');
+        if (parts[0] && parts[0].trim() !== '-') {
+          const spPart = normalizeServicePoint(parts[0].trim());
+          if (spPart) set.add(spPart);
+        }
       }
     });
-    return Array.from(set).sort((a, b) => a.localeCompare(b));
+    return Array.from(set).filter(Boolean).sort((a, b) => a.localeCompare(b));
   }, [rawGfDataset, rawMasterData]);
 
-  // Filtered rows for Grafik Frekuensi
-  const filteredGfRows = useMemo(() => {
-    if (activeTab !== 'GRAFIK_FREKUENSI') return [];
-    return rawGfDataset.filter((r) => {
-      // 1. Problem filter
-      if (gfSelectedProblems.length > 0) {
-        const pDesc = (r.eventCodeDesc || '').trim();
-        if (!gfSelectedProblems.includes(pDesc)) return false;
-      }
+  // Deferred values for instant responsive UI when typing or selecting filters
+  const deferredGfProblems = useDeferredValue(gfSelectedProblems);
+  const deferredGfServicePoint = useDeferredValue(gfServicePoint);
+  const deferredGfWsidSearch = useDeferredValue(gfWsidSearch);
 
-      // 2. Service Point filter
-      if (gfServicePoint !== 'ALL') {
-        const sp = (r.servicePoint || '').toUpperCase();
-        const spSek = (r.servicePointSektor || '').toUpperCase();
-        const target = gfServicePoint.toUpperCase();
-        if (!sp.includes(target) && !spSek.includes(target)) return false;
-      }
-
-      // 3. WSID Search filter
-      if (gfWsidSearch.trim()) {
-        const q = gfWsidSearch.toLowerCase().trim();
-        const matchWsid = (r.wsid || '').toLowerCase().includes(q);
-        const matchLok = (r.lokasi || '').toLowerCase().includes(q);
-        if (!matchWsid && !matchLok) return false;
-      }
-
-      return true;
-    });
-  }, [activeTab, rawGfDataset, gfSelectedProblems, gfServicePoint, gfWsidSearch]);
-
-  // KPI summary metrics
-  const gfKpiMetrics = useMemo(() => {
-    const total = filteredGfRows.length;
-    const uniqueWsids = new Set(filteredGfRows.map((r) => r.wsid).filter(Boolean)).size;
-
-    const datesSet = new Set<string>();
-    filteredGfRows.forEach((r) => {
-      if (r.dateStr && r.dateStr !== '-') datesSet.add(r.dateStr);
-    });
-    const dayCount = Math.max(datesSet.size, 1);
-    const avgPerDay = Math.round((total / dayCount) * 10) / 10;
-
-    // Top Problem
-    const pMap: Record<string, number> = {};
-    filteredGfRows.forEach((r) => {
-      const p = (r.eventCodeDesc || 'Unknown').trim();
-      pMap[p] = (pMap[p] || 0) + 1;
-    });
-    const pSorted = Object.entries(pMap).sort((a, b) => b[1] - a[1]);
-    const topProblem = pSorted[0]
-      ? { name: pSorted[0][0], count: pSorted[0][1], pct: Math.round((pSorted[0][1] / Math.max(total, 1)) * 100) }
-      : { name: '-', count: 0, pct: 0 };
-
-    // Top Service Point
-    const spMap: Record<string, number> = {};
-    filteredGfRows.forEach((r) => {
-      let sp = (r.servicePoint && r.servicePoint !== '-')
-        ? r.servicePoint
-        : (r.servicePointSektor && r.servicePointSektor.includes(' - '))
-          ? r.servicePointSektor.split(' - ')[0]
-          : 'Others';
-      sp = sp.trim().toUpperCase();
-      spMap[sp] = (spMap[sp] || 0) + 1;
-    });
-    const spSorted = Object.entries(spMap).sort((a, b) => b[1] - a[1]);
-    const topSp = spSorted[0]
-      ? { name: spSorted[0][0], count: spSorted[0][1], pct: Math.round((spSorted[0][1] / Math.max(total, 1)) * 100) }
-      : { name: '-', count: 0, pct: 0 };
-
-    return { total, uniqueWsids, avgPerDay, topProblem, topSp, dayCount };
-  }, [filteredGfRows]);
-
-  // Trend chart data
-  const gfTrendData = useMemo(() => {
-    if (gfMode === 'RANGE' && gfTrendGrouping === 'monthly') {
-      const mMap: Record<string, number> = {};
-      filteredGfRows.forEach((r) => {
-        const m = extractMonthStr(r.dateStr || r.startTime || (r as any).monthStr);
-        if (m) mMap[m] = (mMap[m] || 0) + 1;
-      });
-      const sortedMonths = Object.keys(mMap).sort();
-      let cum = 0;
-      return sortedMonths.map((m) => {
-        const count = mMap[m] || 0;
-        cum += count;
-        const parts = m.split('-');
-        const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun', 'Jul', 'Agu', 'Sep', 'Okt', 'Nov', 'Des'];
-        const label = `${monthNames[parseInt(parts[1], 10) - 1] || parts[1]} ${parts[0]}`;
-        return {
-          key: m,
-          label,
-          total: gfCumulative ? cum : count,
-          rawTotal: count
-        };
-      });
+  // High-performance single-pass calculation for all Grafik Frekuensi charts & metrics
+  const gfComputedData = useMemo(() => {
+    if (activeTab !== 'GRAFIK_FREKUENSI') {
+      return {
+        gfKpiMetrics: {
+          total: 0,
+          uniqueWsids: 0,
+          avgPerDay: 0,
+          topProblem: { name: '-', count: 0, pct: 0 },
+          topSp: { name: '-', count: 0, pct: 0 },
+          dayCount: 0
+        },
+        gfTrendData: [],
+        gfTopProblemsData: [],
+        gfSpDistributionData: [],
+        gfTopWsidsData: [],
+        gfAggregatedItems: []
+      };
     }
 
-    const dMap: Record<string, number> = {};
-    filteredGfRows.forEach((r) => {
-      const d = r.dateStr;
-      if (d && d !== '-') {
-        dMap[d] = (dMap[d] || 0) + 1;
-      }
-    });
+    const hasProbFilter = deferredGfProblems.length > 0;
+    const probSet = hasProbFilter ? new Set(deferredGfProblems) : null;
+    const hasSpFilter = deferredGfServicePoint !== 'ALL';
+    const targetSpNorm = hasSpFilter ? normalizeServicePoint(deferredGfServicePoint).toUpperCase() : '';
+    const searchQ = deferredGfWsidSearch.trim().toLowerCase();
+    const hasSearch = Boolean(searchQ);
+    const isMonthlyTrend = gfMode === 'RANGE' && gfTrendGrouping === 'monthly';
 
-    const sortedDates = Object.keys(dMap).sort((a, b) => {
-      const da = a.split('/').reverse().join('-');
-      const db = b.split('/').reverse().join('-');
-      return da.localeCompare(db);
-    });
-
-    let cum = 0;
-    return sortedDates.map((d) => {
-      const count = dMap[d] || 0;
-      cum += count;
-      const parts = d.split('/');
-      const label = parts.length >= 2 ? `${parts[0]}/${parts[1]}` : d;
-      return {
-        key: d,
-        label,
-        total: gfCumulative ? cum : count,
-        rawTotal: count
-      };
-    });
-  }, [filteredGfRows, gfMode, gfTrendGrouping, gfCumulative]);
-
-  // Top 10 Problem chart data
-  const gfTopProblemsData = useMemo(() => {
-    const map: Record<string, number> = {};
-    filteredGfRows.forEach((r) => {
-      const p = (r.eventCodeDesc || 'Unknown').trim();
-      map[p] = (map[p] || 0) + 1;
-    });
-    const sorted = Object.entries(map).sort((a, b) => b[1] - a[1]);
-    const total = filteredGfRows.length || 1;
-    return sorted.slice(0, 10).map(([problem, count]) => ({
-      problem: problem.length > 25 ? problem.slice(0, 23) + '...' : problem,
-      fullProblem: problem,
-      count,
-      pct: Math.round((count / total) * 100)
-    }));
-  }, [filteredGfRows]);
-
-  // Service Point distribution chart data
-  const gfSpDistributionData = useMemo(() => {
-    const map: Record<string, number> = {};
-    filteredGfRows.forEach((r) => {
-      let sp = (r.servicePoint && r.servicePoint !== '-')
-        ? r.servicePoint
-        : (r.servicePointSektor && r.servicePointSektor.includes(' - '))
-          ? r.servicePointSektor.split(' - ')[0]
-          : 'Others';
-      sp = sp.trim().toUpperCase();
-      map[sp] = (map[sp] || 0) + 1;
-    });
-    const sorted = Object.entries(map).sort((a, b) => b[1] - a[1]);
-    return sorted.map(([sp, count]) => ({
-      sp,
-      count
-    }));
-  }, [filteredGfRows]);
-
-  // Top 10 WSID chart data
-  const gfTopWsidsData = useMemo(() => {
-    const map: Record<string, { count: number; lokasi: string; sp: string; problems: Record<string, number> }> = {};
-    filteredGfRows.forEach((r) => {
-      const w = (r.wsid || '').trim().toUpperCase();
-      if (!w) return;
-      if (!map[w]) {
-        map[w] = { count: 0, lokasi: r.lokasi || '-', sp: r.servicePoint || '-', problems: {} };
-      }
-      map[w].count += 1;
-      const p = r.eventCodeDesc || '-';
-      map[w].problems[p] = (map[w].problems[p] || 0) + 1;
-    });
-    const sorted = Object.entries(map).sort((a, b) => b[1].count - a[1].count);
-    return sorted.slice(0, 10).map(([wsid, info]) => {
-      const topP = Object.entries(info.problems).sort((a, b) => b[1] - a[1])[0];
-      return {
-        wsid,
-        lokasi: info.lokasi,
-        sp: info.sp,
-        count: info.count,
-        topProblem: topP ? `${topP[0]} (${topP[1]}x)` : '-'
-      };
-    });
-  }, [filteredGfRows]);
-
-  // Table aggregated items
-  const gfAggregatedItems = useMemo(() => {
-    const map: Record<string, {
+    let total = 0;
+    const uniqueWsidsSet = new Set<string>();
+    const datesSet = new Set<string>();
+    const pMap: Record<string, number> = {};
+    const spMap: Record<string, number> = {};
+    const trendMap: Record<string, number> = {};
+    const wsidMap: Record<string, { count: number; lokasi: string; sp: string; problems: Record<string, number> }> = {};
+    const aggMap: Record<string, {
       wsid: string;
       lokasi: string;
       servicePointSektor: string;
@@ -4394,31 +4273,205 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
       actionTerakhir?: string;
     }> = {};
 
-    filteredGfRows.forEach((r) => {
-      if (!r.wsid) return;
-      const key = `${r.wsid}__${r.eventCodeDesc}`;
-      if (!map[key]) {
-        map[key] = {
-          wsid: r.wsid,
-          lokasi: r.lokasi,
-          servicePointSektor: r.servicePointSektor,
-          servicePoint: r.servicePoint || '-',
-          typeMesin: r.typeMesin,
-          eventCodeDesc: r.eventCodeDesc,
-          totalFrekuensi: 0,
-          totalDurasi: 0,
-          actionTerakhir: r.actionTerakhir
+    const len = rawGfDataset.length;
+    for (let i = 0; i < len; i++) {
+      const r = rawGfDataset[i];
+
+      // 1. Problem filter
+      if (hasProbFilter) {
+        const pDesc = (r.eventCodeDesc || '').trim();
+        if (!probSet!.has(pDesc)) continue;
+      }
+
+      // 2. Service Point filter
+      if (hasSpFilter) {
+        const sp = normalizeServicePoint(r.servicePoint || '').toUpperCase();
+        const spSek = normalizeServicePoint((r.servicePointSektor || '').split('-')[0].trim()).toUpperCase();
+        if (sp !== targetSpNorm && spSek !== targetSpNorm) continue;
+      }
+
+      // 3. WSID Search filter
+      if (hasSearch) {
+        const matchWsid = (r.wsid || '').toLowerCase().includes(searchQ);
+        const matchLok = (r.lokasi || '').toLowerCase().includes(searchQ);
+        if (!matchWsid && !matchLok) continue;
+      }
+
+      total++;
+      if (r.wsid) uniqueWsidsSet.add(r.wsid);
+
+      // Date / Trend
+      if (isMonthlyTrend) {
+        const m = extractMonthStr(r.dateStr || r.startTime || (r as any).monthStr);
+        if (m) trendMap[m] = (trendMap[m] || 0) + 1;
+      } else {
+        const d = r.dateStr;
+        if (d && d !== '-') {
+          datesSet.add(d);
+          trendMap[d] = (trendMap[d] || 0) + 1;
+        }
+      }
+
+      // Problem count
+      const p = (r.eventCodeDesc || 'Unknown').trim();
+      pMap[p] = (pMap[p] || 0) + 1;
+
+      // Service Point count
+      let sp = normalizeServicePoint(r.servicePoint || '');
+      if (!sp && r.servicePointSektor && r.servicePointSektor !== '-') {
+        sp = normalizeServicePoint(r.servicePointSektor.split('-')[0].trim());
+      }
+      if (!sp) sp = 'Others';
+      spMap[sp] = (spMap[sp] || 0) + 1;
+
+      // WSID
+      const w = (r.wsid || '').trim().toUpperCase();
+      if (w) {
+        let wEntry = wsidMap[w];
+        if (!wEntry) {
+          wEntry = { count: 0, lokasi: r.lokasi || '-', sp: sp || '-', problems: {} };
+          wsidMap[w] = wEntry;
+        }
+        wEntry.count++;
+        wEntry.problems[p] = (wEntry.problems[p] || 0) + 1;
+      }
+
+      // Aggregated Table Items
+      if (r.wsid) {
+        const key = `${r.wsid}__${r.eventCodeDesc}`;
+        let aEntry = aggMap[key];
+        if (!aEntry) {
+          aEntry = {
+            wsid: r.wsid,
+            lokasi: r.lokasi || '-',
+            servicePointSektor: r.servicePointSektor || '-',
+            servicePoint: sp || '-',
+            typeMesin: r.typeMesin || '-',
+            eventCodeDesc: r.eventCodeDesc || '-',
+            totalFrekuensi: 0,
+            totalDurasi: 0,
+            actionTerakhir: r.actionTerakhir
+          };
+          aggMap[key] = aEntry;
+        }
+        aEntry.totalFrekuensi++;
+        aEntry.totalDurasi += (r.durasi || 0);
+        if (r.actionTerakhir && r.actionTerakhir !== '-') {
+          aEntry.actionTerakhir = r.actionTerakhir;
+        }
+      }
+    }
+
+    // KPI Metrics calculation
+    const dayCount = Math.max(datesSet.size, 1);
+    const avgPerDay = Math.round((total / dayCount) * 10) / 10;
+    const pSorted = Object.entries(pMap).sort((a, b) => b[1] - a[1]);
+    const topProblem = pSorted[0]
+      ? { name: pSorted[0][0], count: pSorted[0][1], pct: Math.round((pSorted[0][1] / Math.max(total, 1)) * 100) }
+      : { name: '-', count: 0, pct: 0 };
+    const spSorted = Object.entries(spMap).sort((a, b) => b[1] - a[1]);
+    const topSp = spSorted[0]
+      ? { name: spSorted[0][0], count: spSorted[0][1], pct: Math.round((spSorted[0][1] / Math.max(total, 1)) * 100) }
+      : { name: '-', count: 0, pct: 0 };
+    const gfKpiMetrics = { total, uniqueWsids: uniqueWsidsSet.size, avgPerDay, topProblem, topSp, dayCount };
+
+    // Trend Data calculation
+    let gfTrendData: any[] = [];
+    if (isMonthlyTrend) {
+      const sortedMonths = Object.keys(trendMap).sort();
+      let cum = 0;
+      const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun', 'Jul', 'Agu', 'Sep', 'Okt', 'Nov', 'Des'];
+      gfTrendData = sortedMonths.map((m) => {
+        const count = trendMap[m] || 0;
+        cum += count;
+        const parts = m.split('-');
+        const label = `${monthNames[parseInt(parts[1], 10) - 1] || parts[1]} ${parts[0]}`;
+        return {
+          key: m,
+          label,
+          total: gfCumulative ? cum : count,
+          rawTotal: count
         };
-      }
-      map[key].totalFrekuensi += 1;
-      map[key].totalDurasi += (r.durasi || 0);
-      if (r.actionTerakhir && r.actionTerakhir !== '-') {
-        map[key].actionTerakhir = r.actionTerakhir;
-      }
+      });
+    } else {
+      const sortedDates = Object.keys(trendMap).sort((a, b) => {
+        const da = a.split('/').reverse().join('-');
+        const db = b.split('/').reverse().join('-');
+        return da.localeCompare(db);
+      });
+      let cum = 0;
+      gfTrendData = sortedDates.map((d) => {
+        const count = trendMap[d] || 0;
+        cum += count;
+        const parts = d.split('/');
+        const label = parts.length >= 2 ? `${parts[0]}/${parts[1]}` : d;
+        return {
+          key: d,
+          label,
+          total: gfCumulative ? cum : count,
+          rawTotal: count
+        };
+      });
+    }
+
+    // Top Problems Data
+    const totalSafe = total || 1;
+    const gfTopProblemsData = pSorted.slice(0, 10).map(([problem, count]) => ({
+      problem: problem.length > 25 ? problem.slice(0, 23) + '...' : problem,
+      fullProblem: problem,
+      count,
+      pct: Math.round((count / totalSafe) * 100)
+    }));
+
+    // SP Distribution Data
+    const gfSpDistributionData = spSorted.map(([spName, count]) => ({
+      sp: spName,
+      count
+    }));
+
+    // Top WSIDs Data
+    const wsidSorted = Object.entries(wsidMap).sort((a, b) => b[1].count - a[1].count);
+    const gfTopWsidsData = wsidSorted.slice(0, 10).map(([wsid, info]) => {
+      const topP = Object.entries(info.problems).sort((a, b) => b[1] - a[1])[0];
+      return {
+        wsid,
+        lokasi: info.lokasi,
+        sp: info.sp,
+        count: info.count,
+        topProblem: topP ? `${topP[0]} (${topP[1]}x)` : '-'
+      };
     });
 
-    return Object.values(map).sort((a, b) => b.totalFrekuensi - a.totalFrekuensi);
-  }, [filteredGfRows]);
+    // Aggregated Table Items
+    const gfAggregatedItems = Object.values(aggMap).sort((a, b) => b.totalFrekuensi - a.totalFrekuensi);
+
+    return {
+      gfKpiMetrics,
+      gfTrendData,
+      gfTopProblemsData,
+      gfSpDistributionData,
+      gfTopWsidsData,
+      gfAggregatedItems
+    };
+  }, [
+    activeTab,
+    rawGfDataset,
+    deferredGfProblems,
+    deferredGfServicePoint,
+    deferredGfWsidSearch,
+    gfMode,
+    gfTrendGrouping,
+    gfCumulative
+  ]);
+
+  const {
+    gfKpiMetrics,
+    gfTrendData,
+    gfTopProblemsData,
+    gfSpDistributionData,
+    gfTopWsidsData,
+    gfAggregatedItems
+  } = gfComputedData;
 
   const totalPagesGf = Math.ceil(gfAggregatedItems.length / gfTablePageSize) || 1;
   const paginatedGfItems = useMemo(() => {
@@ -6491,41 +6544,69 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
                   ))}
                 </select>
 
-                {/* Date Filter: Range Dari & Sampai */}
-                <div className="flex items-center gap-1.5 h-9 px-2.5 rounded-xl bg-white border border-[#E5EAF2] text-xs">
-                  <span className="text-[10px] font-bold text-slate-400 uppercase">Dari:</span>
-                  <select
-                    value={freqStartDate}
-                    onChange={(e) => {
-                      setFreqStartDate(e.target.value);
-                      setCurrentPageFreq(1);
-                    }}
-                    className="bg-transparent text-[#0D1C2E] font-medium outline-none cursor-pointer pr-1"
+                {/* Date Filter: Range Dari & Sampai (Kalender) */}
+                <div className="flex items-center gap-2 h-9 px-2.5 rounded-xl bg-white border border-[#E5EAF2] text-xs shadow-xs hover:border-blue-400 transition-colors">
+                  <div
+                    className="flex items-center gap-1.5 cursor-pointer"
+                    onClick={() => freqStartDateInputRef.current?.showPicker()}
+                    title="Pilih tanggal mulai"
                   >
-                    <option value="ALL">Semua Tanggal</option>
-                    {freqDates.map((d) => (
-                      <option key={d} value={d}>
-                        {d}
-                      </option>
-                    ))}
-                  </select>
+                    <Calendar size={13} className="text-blue-600 shrink-0" />
+                    <span className="text-[10px] font-bold text-slate-400 uppercase">Dari:</span>
+                    <input
+                      ref={freqStartDateInputRef}
+                      type="date"
+                      value={freqStartDate === 'ALL' ? '' : freqStartDate}
+                      onClick={(e) => {
+                        try {
+                          (e.target as any).showPicker?.();
+                        } catch {}
+                      }}
+                      onChange={(e) => {
+                        setFreqStartDate(e.target.value || 'ALL');
+                        setCurrentPageFreq(1);
+                      }}
+                      className="bg-transparent text-[#0D1C2E] font-medium outline-none cursor-pointer text-xs"
+                    />
+                  </div>
                   <span className="text-slate-300">|</span>
-                  <span className="text-[10px] font-bold text-slate-400 uppercase">Sampai:</span>
-                  <select
-                    value={freqEndDate}
-                    onChange={(e) => {
-                      setFreqEndDate(e.target.value);
-                      setCurrentPageFreq(1);
-                    }}
-                    className="bg-transparent text-[#0D1C2E] font-medium outline-none cursor-pointer pr-1"
+                  <div
+                    className="flex items-center gap-1.5 cursor-pointer"
+                    onClick={() => freqEndDateInputRef.current?.showPicker()}
+                    title="Pilih tanggal akhir"
                   >
-                    <option value="ALL">Semua Tanggal</option>
-                    {freqDates.map((d) => (
-                      <option key={d} value={d}>
-                        {d}
-                      </option>
-                    ))}
-                  </select>
+                    <span className="text-[10px] font-bold text-slate-400 uppercase">Sampai:</span>
+                    <input
+                      ref={freqEndDateInputRef}
+                      type="date"
+                      value={freqEndDate === 'ALL' ? '' : freqEndDate}
+                      onClick={(e) => {
+                        try {
+                          (e.target as any).showPicker?.();
+                        } catch {}
+                      }}
+                      onChange={(e) => {
+                        setFreqEndDate(e.target.value || 'ALL');
+                        setCurrentPageFreq(1);
+                      }}
+                      className="bg-transparent text-[#0D1C2E] font-medium outline-none cursor-pointer text-xs"
+                    />
+                  </div>
+                  {(freqStartDate !== 'ALL' || freqEndDate !== 'ALL') && (
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setFreqStartDate('ALL');
+                        setFreqEndDate('ALL');
+                        setCurrentPageFreq(1);
+                      }}
+                      className="text-xs text-rose-500 hover:text-rose-700 font-bold px-1 py-0.5 rounded-md hover:bg-rose-50 transition-colors ml-1 cursor-pointer"
+                      title="Tampilkan Semua Tanggal"
+                    >
+                      ✕
+                    </button>
+                  )}
                 </div>
 
                 {(freqSearch || selectedEventCodesFreq.length > 0 || freqServicePoint !== 'ALL' || freqStartDate !== 'ALL' || freqEndDate !== 'ALL' || freqDateFilter !== 'ALL') && (
@@ -8044,46 +8125,73 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
                   )}
                 </div>
 
-                {/* 4. Filter Periode Tanggal (Dari & Sampai) */}
+                {/* 4. Filter Periode Tanggal (Dari & Sampai - Kalender) */}
                 <div className="space-y-1">
-                  <label className="text-[11px] font-semibold text-[#555F71] flex items-center gap-1">
-                    <Calendar size={11} className="text-blue-600" />
-                    <span>Periode Tanggal:</span>
-                  </label>
-                  <div className="flex items-center gap-1.5 h-9 px-2 bg-[#F8F9FF] border border-slate-200 rounded-xl text-xs">
-                    <span className="text-[10px] font-bold text-slate-400 uppercase">Dari:</span>
-                    <select
-                      value={grafik24StartDate}
-                      onChange={(e) => {
-                        setGrafik24StartDate(e.target.value);
-                        setGrafik24CurrentPage(1);
-                      }}
-                      className="bg-transparent text-xs font-semibold text-[#0D1C2E] outline-none cursor-pointer pr-1 w-full"
+                  <div className="flex items-center justify-between text-[11px] font-semibold text-[#555F71]">
+                    <span className="flex items-center gap-1">
+                      <Calendar size={11} className="text-blue-600" />
+                      <span>Periode Tanggal:</span>
+                    </span>
+                    {(grafik24StartDate !== 'ALL' || grafik24EndDate !== 'ALL') && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setGrafik24StartDate('ALL');
+                          setGrafik24EndDate('ALL');
+                          setGrafik24CurrentPage(1);
+                        }}
+                        className="text-[10px] text-rose-500 hover:text-rose-700 font-bold hover:underline cursor-pointer"
+                      >
+                        Reset
+                      </button>
+                    )}
+                  </div>
+                  <div className="flex items-center gap-1.5 h-9 px-2 bg-white border border-slate-200 rounded-xl text-xs hover:border-blue-400 transition-colors">
+                    <div
+                      className="flex items-center gap-1 cursor-pointer w-full"
+                      onClick={() => grafik24StartDateInputRef.current?.showPicker()}
+                      title="Pilih tanggal mulai"
                     >
-                      <option value="ALL">Semua</option>
-                      {grafik24AvailableDates.map((dt) => (
-                        <option key={dt} value={dt}>
-                          {dt}
-                        </option>
-                      ))}
-                    </select>
+                      <span className="text-[10px] font-bold text-slate-400 uppercase">Dari:</span>
+                      <input
+                        ref={grafik24StartDateInputRef}
+                        type="date"
+                        value={grafik24StartDate === 'ALL' ? '' : grafik24StartDate}
+                        onClick={(e) => {
+                          try {
+                            (e.target as any).showPicker?.();
+                          } catch {}
+                        }}
+                        onChange={(e) => {
+                          setGrafik24StartDate(e.target.value || 'ALL');
+                          setGrafik24CurrentPage(1);
+                        }}
+                        className="bg-transparent text-xs font-semibold text-[#0D1C2E] outline-none cursor-pointer w-full"
+                      />
+                    </div>
                     <span className="text-slate-300">|</span>
-                    <span className="text-[10px] font-bold text-slate-400 uppercase">Sampai:</span>
-                    <select
-                      value={grafik24EndDate}
-                      onChange={(e) => {
-                        setGrafik24EndDate(e.target.value);
-                        setGrafik24CurrentPage(1);
-                      }}
-                      className="bg-transparent text-xs font-semibold text-[#0D1C2E] outline-none cursor-pointer pr-1 w-full"
+                    <div
+                      className="flex items-center gap-1 cursor-pointer w-full"
+                      onClick={() => grafik24EndDateInputRef.current?.showPicker()}
+                      title="Pilih tanggal akhir"
                     >
-                      <option value="ALL">Semua</option>
-                      {grafik24AvailableDates.map((dt) => (
-                        <option key={dt} value={dt}>
-                          {dt}
-                        </option>
-                      ))}
-                    </select>
+                      <span className="text-[10px] font-bold text-slate-400 uppercase">Sampai:</span>
+                      <input
+                        ref={grafik24EndDateInputRef}
+                        type="date"
+                        value={grafik24EndDate === 'ALL' ? '' : grafik24EndDate}
+                        onClick={(e) => {
+                          try {
+                            (e.target as any).showPicker?.();
+                          } catch {}
+                        }}
+                        onChange={(e) => {
+                          setGrafik24EndDate(e.target.value || 'ALL');
+                          setGrafik24CurrentPage(1);
+                        }}
+                        className="bg-transparent text-xs font-semibold text-[#0D1C2E] outline-none cursor-pointer w-full"
+                      />
+                    </div>
                   </div>
                 </div>
               </div>
@@ -8559,37 +8667,62 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
                   />
                 </div>
 
-                {/* Filter Periode Tanggal Dari & Sampai */}
-                <div className="flex items-center gap-1.5 h-9 px-2.5 rounded-xl bg-white border border-[#E5EAF2] text-xs">
-                  <Calendar size={13} className="text-[#555F71]" />
-                  <span className="text-[10px] font-bold text-slate-400 uppercase">Dari:</span>
-                  <input
-                    type="date"
-                    value={historyStartDate}
-                    onChange={(e) => {
-                      const val = e.target.value;
-                      setHistoryStartDate(val);
-                      const m = val.slice(0, 7);
-                      if (m && m !== historyMonth) setHistoryMonth(m);
-                      setCurrentPageHistory(1);
-                    }}
-                    className="bg-transparent text-[#0D1C2E] font-medium outline-none cursor-pointer"
-                  />
+                {/* Filter Periode Tanggal Dari & Sampai (Expanded Click Target) */}
+                <div className="flex items-center gap-2 h-9 px-2.5 rounded-xl bg-white border border-[#E5EAF2] text-xs shadow-xs hover:border-blue-400 transition-colors">
+                  <div
+                    className="flex items-center gap-1.5 cursor-pointer"
+                    onClick={() => historyStartDateInputRef.current?.showPicker()}
+                    title="Pilih tanggal mulai"
+                  >
+                    <Calendar size={13} className="text-blue-600 shrink-0" />
+                    <span className="text-[10px] font-bold text-slate-400 uppercase">Dari:</span>
+                    <input
+                      ref={historyStartDateInputRef}
+                      type="date"
+                      value={historyStartDate}
+                      onClick={(e) => {
+                        try {
+                          (e.target as any).showPicker?.();
+                        } catch {}
+                      }}
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        setHistoryStartDate(val);
+                        const m = val.slice(0, 7);
+                        if (m && m !== historyMonth) setHistoryMonth(m);
+                        setCurrentPageHistory(1);
+                      }}
+                      className="bg-transparent text-[#0D1C2E] font-medium outline-none cursor-pointer text-xs"
+                    />
+                  </div>
                   <span className="text-slate-300">|</span>
-                  <span className="text-[10px] font-bold text-slate-400 uppercase">Sampai:</span>
-                  <input
-                    type="date"
-                    value={historyEndDate}
-                    onChange={(e) => {
-                      setHistoryEndDate(e.target.value);
-                      setCurrentPageHistory(1);
-                    }}
-                    className="bg-transparent text-[#0D1C2E] font-medium outline-none cursor-pointer"
-                  />
+                  <div
+                    className="flex items-center gap-1.5 cursor-pointer"
+                    onClick={() => historyEndDateInputRef.current?.showPicker()}
+                    title="Pilih tanggal akhir"
+                  >
+                    <span className="text-[10px] font-bold text-slate-400 uppercase">Sampai:</span>
+                    <input
+                      ref={historyEndDateInputRef}
+                      type="date"
+                      value={historyEndDate}
+                      onClick={(e) => {
+                        try {
+                          (e.target as any).showPicker?.();
+                        } catch {}
+                      }}
+                      onChange={(e) => {
+                        setHistoryEndDate(e.target.value);
+                        setCurrentPageHistory(1);
+                      }}
+                      className="bg-transparent text-[#0D1C2E] font-medium outline-none cursor-pointer text-xs"
+                    />
+                  </div>
                   {(historyStartDate || historyEndDate) && (
                     <button
                       type="button"
-                      onClick={() => {
+                      onClick={(e) => {
+                        e.stopPropagation();
                         setHistoryStartDate('');
                         setHistoryEndDate('');
                         setHistoryMonth('ALL');
