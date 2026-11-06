@@ -2032,7 +2032,7 @@ export async function fetchDailyIncidentsFromDbSupabase(payload?: {
   if (!client) return { success: false, rows: [], totalCount: 0, message: 'Supabase belum dikonfigurasi.' };
 
   try {
-    const maxLimit = payload?.limit || 100000;
+    const maxLimit = payload?.limit || 10000;
     const chunkSize = 1000;
     const concurrency = 4;
     const allData: any[] = [];

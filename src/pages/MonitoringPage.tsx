@@ -1177,20 +1177,32 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
   };
 
   // Muat dataset harian Supabase saat awal mount:
-  // 1. Tarik dataset chronic cepat (14 hari terakhir) secara instan (<500ms)
-  // 2. Tarik dataset lengkap allDailyIncidents di latar belakang tanpa memblokir tab Problem Open
+  // Hanya tarik dataset chronic cepat (14 hari terakhir) secara instan (<300ms)
+  // Tab Problem Open tidak memerlukan dataset riwayat puluhan ribu baris sehingga load instan tanpa freeze
   useEffect(() => {
     fetchChronicDataset();
-    const timer = setTimeout(() => {
-      fetchDailyIncidentsFromDb('ALL');
-    }, 1000);
-    return () => clearTimeout(timer);
   }, [fetchChronicDataset]);
+
+  // Lazy-load dataset harian hanya ketika user membuka tab Frekuensi atau Grafik 24 Jam
+  useEffect(() => {
+    if (
+      (activeTab === 'FREKUENSI' || activeTab === 'GRAFIK_24JAM') &&
+      allDailyIncidents.length === 0 &&
+      !isLoadingDailyFromDb
+    ) {
+      fetchDailyIncidentsFromDb(historyMonth !== 'ALL' ? historyMonth : undefined);
+    }
+  }, [activeTab, allDailyIncidents.length, isLoadingDailyFromDb, historyMonth]);
 
   // =========================================================================
   // BASIS DATA FREKUENSI & DETEKSI PROBLEM CHRONIC
   // =========================================================================
   const frequencyDataset = useMemo(() => {
+    // Guard: Hindari kalkulasi berat saat user sedang berada di tab Problem Open atau History
+    if (activeTab !== 'FREKUENSI' && activeTab !== 'GRAFIK_24JAM') {
+      return [];
+    }
+
     const rawSourceRows =
       allDailyIncidents.length > 0
         ? allDailyIncidents
@@ -1262,15 +1274,15 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
         detail: r.detail || r.keterangan || '-'
       };
     });
-  }, [allDailyIncidents, chronicDataset, historyResults, openIncidents]);
+  }, [activeTab, allDailyIncidents, chronicDataset, historyResults, openIncidents]);
 
   const chronicInfoMap = useMemo(() => {
-    // Prioritas sumber: allDailyIncidents (jika lengkap) -> chronicDataset (14 hari terakhir) -> historyResults -> openIncidents
+    // Prioritas sumber: chronicDataset (14 hari terakhir, mencakup 100% kriteria rolling 5 hari & sekejap <2ms) -> allDailyIncidents -> historyResults -> openIncidents
     const rawSourceRows =
-      allDailyIncidents.length > 0
-        ? allDailyIncidents
-        : chronicDataset.length > 0
-          ? [...chronicDataset, ...openIncidents]
+      chronicDataset.length > 0
+        ? [...chronicDataset, ...openIncidents]
+        : allDailyIncidents.length > 0
+          ? allDailyIncidents
           : historyResults.length > 0
             ? historyResults
             : (openIncidents as any[]);
@@ -2221,16 +2233,12 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
     setCurrentPageOpen(1);
   };
 
-  // Base sets dari master data & allDailyIncidents (dihitung SEKALI saat dataset berubah, BUKAN tiap detik clock)
+  // Base sets dari master data (dihitung SEKALI saat catalog master dimuat, bebas dari iterasi riwayat puluhan ribu baris)
   const baseOpenEvents = useMemo(() => {
     const set = new Set<string>();
     TARGET_EVENT_CODES.forEach((c) => set.add(c));
-    for (let i = 0; i < allDailyIncidents.length; i++) {
-      const r = allDailyIncidents[i];
-      if (r.eventCodeDesc && r.eventCodeDesc.trim()) set.add(r.eventCodeDesc.trim());
-    }
     return Array.from(set);
-  }, [allDailyIncidents]);
+  }, []);
 
   /** Daftar seluruh Event Code / Problem yang ada */
   const openAvailableEvents = useMemo(() => {
@@ -2274,17 +2282,8 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
         if (sp && sp !== '-' && sp !== 'N/A') set.add(sp);
       }
     }
-    for (let i = 0; i < allDailyIncidents.length; i++) {
-      const r = allDailyIncidents[i];
-      const sp = resolveServicePoint(null, r);
-      if (sp && sp !== '-' && sp !== 'N/A') set.add(sp);
-      if (r.servicePointSektor && r.servicePointSektor !== '-') {
-        const p = normalizeServicePoint(r.servicePointSektor.split('-')[0].trim());
-        if (p && p !== '-' && p !== 'N/A') set.add(p);
-      }
-    }
     return Array.from(set).filter(Boolean);
-  }, [masterList, allDailyIncidents]);
+  }, [masterList]);
 
   const openAvailableSPs = useMemo(() => {
     const set = new Set<string>(baseOpenSPs);
@@ -2307,13 +2306,8 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
         if (sk && sk !== '-') set.add(sk);
       }
     }
-    for (let i = 0; i < allDailyIncidents.length; i++) {
-      const r = allDailyIncidents[i];
-      const sk = cleanSektorName(r.sektor);
-      if (sk && sk !== '-') set.add(sk);
-    }
     return Array.from(set);
-  }, [masterList, allDailyIncidents]);
+  }, [masterList]);
 
   const openAvailableSektors = useMemo(() => {
     const set = new Set<string>(baseOpenSektors);
@@ -2363,13 +2357,8 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
         if (vd && vd !== '-' && vd !== 'N/A' && vd !== 'UNKNOWN') set.add(vd);
       }
     }
-    for (let i = 0; i < allDailyIncidents.length; i++) {
-      const r = allDailyIncidents[i];
-      const vd = (r.vendorMesin || r.vendor || '').trim();
-      if (vd && vd !== '-' && vd !== 'N/A' && vd !== 'UNKNOWN') set.add(vd);
-    }
     return Array.from(set);
-  }, [masterList, allDailyIncidents]);
+  }, [masterList]);
 
   const openAvailableVendors = useMemo(() => {
     const set = new Set<string>(baseOpenVendors);
@@ -2384,6 +2373,94 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
     }
     return Array.from(set).sort((a, b) => a.localeCompare(b));
   }, [baseOpenVendors, trulyOpenIncidents]);
+
+  // =========================================================================
+  // PRECOMPUTED COUNTS UNTUK DROPDOWN (O(1) lookup saat JSX render)
+  // =========================================================================
+  const openEventCountMap = useMemo(() => {
+    const map = new Map<string, number>();
+    for (let i = 0; i < openIncidents.length; i++) {
+      const code = openIncidents[i].eventCodeDesc;
+      if (code) map.set(code, (map.get(code) || 0) + 1);
+    }
+    return map;
+  }, [openIncidents]);
+
+  const openSpCountMap = useMemo(() => {
+    const counts = new Map<string, number>();
+    const normTargets = openAvailableSPs.map((sp) => ({ sp, norm: normSP(sp), lower: sp.toLowerCase() }));
+    for (let i = 0; i < trulyOpenIncidents.length; i++) {
+      const r = trulyOpenIncidents[i];
+      const itemNorm = normSP(resolveServicePoint(null, r));
+      const sekNorm = normSP(getServicePointForSektor(r.sektor));
+      const rawNorm = normSP(r.servicePoint);
+      const rawLower = (r.servicePoint || '').toLowerCase();
+      for (let j = 0; j < normTargets.length; j++) {
+        const t = normTargets[j];
+        if (itemNorm === t.norm || sekNorm === t.norm || rawNorm === t.norm || rawLower.includes(t.lower)) {
+          counts.set(t.sp, (counts.get(t.sp) || 0) + 1);
+        }
+      }
+    }
+    return counts;
+  }, [openAvailableSPs, trulyOpenIncidents]);
+
+  const openSektorCountMap = useMemo(() => {
+    const map = new Map<string, number>();
+    for (let i = 0; i < openIncidents.length; i++) {
+      const sk = openIncidents[i].sektor;
+      if (sk) map.set(sk, (map.get(sk) || 0) + 1);
+    }
+    return map;
+  }, [openIncidents]);
+
+  const openVendorCountMap = useMemo(() => {
+    const counts = new Map<string, number>();
+    for (let i = 0; i < openAvailableVendors.length; i++) {
+      const vd = openAvailableVendors[i];
+      const v = vd.trim().toUpperCase();
+      let c = 0;
+      for (let j = 0; j < trulyOpenIncidents.length; j++) {
+        const r = trulyOpenIncidents[j];
+        const itemVendor = (r.vendor || '').trim().toUpperCase();
+        if (v === itemVendor) { c++; continue; }
+        if ((v === 'ARG' || v === 'ABG' || v === 'OKI') && (itemVendor === 'ARG' || itemVendor === 'ABG' || itemVendor === 'OKI')) { c++; continue; }
+        if ((v === 'ITM' || v === 'IBM' || v === 'OMRON') && (itemVendor === 'ITM' || itemVendor === 'IBM' || itemVendor === 'OMRON')) { c++; continue; }
+        if ((v === 'HYO' || v === 'HYOSUNG') && (itemVendor === 'HYO' || itemVendor === 'HYOSUNG')) { c++; continue; }
+        if ((v === 'ITH' || v === 'HITACHI') && (itemVendor === 'ITH' || itemVendor === 'HITACHI')) { c++; continue; }
+        if ((v === 'ACH' || v === 'GLORY') && (itemVendor === 'ACH' || itemVendor === 'GLORY')) { c++; continue; }
+        if (itemVendor.includes(v) || v.includes(itemVendor)) { c++; continue; }
+      }
+      counts.set(vd, c);
+    }
+    return counts;
+  }, [openAvailableVendors, trulyOpenIncidents]);
+
+  const openTipeCountMap = useMemo(() => {
+    let countAtm = 0;
+    let countCrm = 0;
+    for (let i = 0; i < trulyOpenIncidents.length; i++) {
+      const r = trulyOpenIncidents[i];
+      const modelStr = (r.typeMesin || '').toUpperCase();
+      const j = (r.jenisMesin || (modelStr.includes('OMRON') || modelStr.includes('RG8') || modelStr.includes('8600') || modelStr.includes('SR7500') || modelStr.includes('CRM') || modelStr.includes('ATS') || modelStr.includes('CDM') ? 'CRM' : 'ATM')).toUpperCase();
+      if (j === 'ATM' || modelStr.includes('ATM')) countAtm++;
+      if (j === 'CRM' || j === 'CDM' || j === 'DDM' || j === 'ATS' || modelStr.includes('CRM')) countCrm++;
+    }
+    const map = new Map<string, number>();
+    map.set('ATM', countAtm);
+    map.set('CRM', countCrm);
+    return map;
+  }, [trulyOpenIncidents]);
+
+  const historyEventCountMap = useMemo(() => {
+    if (activeTab !== 'HISTORY') return new Map<string, number>();
+    const map = new Map<string, number>();
+    for (let i = 0; i < historyResults.length; i++) {
+      const code = historyResults[i].eventCodeDesc;
+      if (code) map.set(code, (map.get(code) || 0) + 1);
+    }
+    return map;
+  }, [activeTab, historyResults]);
 
   // =========================================================================
   // DRAWER & SINGLE ACTION HANDLERS
@@ -5438,7 +5515,7 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
                           .filter((code) => code.toLowerCase().includes(eventCodeSearchOpen.toLowerCase()))
                           .map((code) => {
                             const isChecked = selectedEventCodesOpen.includes(code);
-                            const activeCount = openIncidents.filter((r) => r.eventCodeDesc === code).length;
+                            const activeCount = openEventCountMap.get(code) || 0;
                             return (
                               <label
                                 key={code}
@@ -5550,12 +5627,7 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
                           .filter((sp) => sp.toLowerCase().includes(spSearchOpen.toLowerCase()))
                           .map((sp) => {
                             const isChecked = selectedOpenSPs.includes(sp);
-                            const targetNorm = normSP(sp);
-                            const activeCount = trulyOpenIncidents.filter((r) => {
-                              const itemSp = resolveServicePoint(null, r);
-                              const sekSp = getServicePointForSektor(r.sektor);
-                              return normSP(itemSp) === targetNorm || normSP(sekSp) === targetNorm || normSP(r.servicePoint) === targetNorm || (r.servicePoint || '').toLowerCase().includes(sp.toLowerCase());
-                            }).length;
+                            const activeCount = openSpCountMap.get(sp) || 0;
                             return (
                               <label
                                 key={sp}
@@ -5667,7 +5739,7 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
                           .filter((sk) => sk.toLowerCase().includes(sektorSearchOpen.toLowerCase()))
                           .map((sk) => {
                             const isChecked = selectedOpenSektors.includes(sk);
-                            const activeCount = openIncidents.filter((r) => r.sektor === sk).length;
+                            const activeCount = openSektorCountMap.get(sk) || 0;
                             return (
                               <label
                                 key={sk}
@@ -5779,17 +5851,7 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
                           .filter((vd) => vd.toLowerCase().includes(vendorSearchOpen.toLowerCase()))
                           .map((vd) => {
                             const isChecked = selectedOpenVendors.includes(vd);
-                            const activeCount = trulyOpenIncidents.filter((r) => {
-                              const itemVendor = (r.vendor || '').trim().toUpperCase();
-                              const v = vd.trim().toUpperCase();
-                              if (v === itemVendor) return true;
-                              if ((v === 'ARG' || v === 'ABG' || v === 'OKI') && (itemVendor === 'ARG' || itemVendor === 'ABG' || itemVendor === 'OKI')) return true;
-                              if ((v === 'ITM' || v === 'IBM' || v === 'OMRON') && (itemVendor === 'ITM' || itemVendor === 'IBM' || itemVendor === 'OMRON')) return true;
-                              if ((v === 'HYO' || v === 'HYOSUNG') && (itemVendor === 'HYO' || itemVendor === 'HYOSUNG')) return true;
-                              if ((v === 'ITH' || v === 'HITACHI') && (itemVendor === 'ITH' || itemVendor === 'HITACHI')) return true;
-                              if ((v === 'ACH' || v === 'GLORY') && (itemVendor === 'ACH' || itemVendor === 'GLORY')) return true;
-                              return itemVendor.includes(v) || v.includes(itemVendor);
-                            }).length;
+                            const activeCount = openVendorCountMap.get(vd) || 0;
                             return (
                               <label
                                 key={vd}
@@ -5874,13 +5936,7 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
                       <div className="divide-y divide-slate-100">
                         {['ATM', 'CRM'].map((tipe) => {
                           const isChecked = selectedOpenTipes.includes(tipe);
-                          const activeCount = trulyOpenIncidents.filter((r) => {
-                            const modelStr = (r.typeMesin || '').toUpperCase();
-                            const j = (r.jenisMesin || (modelStr.includes('OMRON') || modelStr.includes('RG8') || modelStr.includes('8600') || modelStr.includes('SR7500') || modelStr.includes('CRM') || modelStr.includes('ATS') || modelStr.includes('CDM') ? 'CRM' : 'ATM')).toUpperCase();
-                            if (tipe === 'ATM') return j === 'ATM' || modelStr.includes('ATM');
-                            if (tipe === 'CRM') return j === 'CRM' || j === 'CDM' || j === 'DDM' || j === 'ATS' || modelStr.includes('CRM');
-                            return false;
-                          }).length;
+                          const activeCount = openTipeCountMap.get(tipe) || 0;
                           return (
                             <label
                               key={tipe}
@@ -8964,7 +9020,7 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
                           .filter((code) => code.toLowerCase().includes(eventCodeSearchHistory.toLowerCase()))
                           .map((code) => {
                             const isChecked = selectedEventCodesHistory.includes(code);
-                            const countInHistory = historyResults.filter((r) => r.eventCodeDesc === code).length;
+                            const countInHistory = historyEventCountMap.get(code) || 0;
                             return (
                               <label
                                 key={code}

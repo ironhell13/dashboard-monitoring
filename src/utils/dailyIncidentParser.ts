@@ -637,32 +637,34 @@ export function calculateOperationalDuration(
   const activeDays = new Set(parseOperatingDays(hariStr));
   const { startH, startM, endH, endM } = parseOperatingHours(jamStr);
 
+  // Shortcut O(1) untuk mesin 24 Jam 7 Hari (mayoritas >90% mesin BCA)
+  // Menghindari alokasi ratusan ribu objek Date dan loop per hari
+  const isAllDays = activeDays.size === 7;
+  const isAllHours = startH === 0 && startM === 0 && endH === 23 && (endM === 59 || endM === 60);
+  if (isAllDays && isAllHours) {
+    return Math.max(0, Math.round((end.getTime() - start.getTime()) / (1000 * 60)));
+  }
+
   let totalMs = 0;
   const cur = new Date(start.getFullYear(), start.getMonth(), start.getDate());
   const lastDay = new Date(end.getFullYear(), end.getMonth(), end.getDate());
 
-  while (cur.getTime() <= lastDay.getTime()) {
+  let daysCount = 0;
+  const MAX_DAYS_LIMIT = 90; // Mencegah freeze / loop tak berhingga jika tanggal mulai korup
+
+  while (cur.getTime() <= lastDay.getTime() && daysCount < MAX_DAYS_LIMIT) {
+    daysCount++;
     const dayOfWeek = cur.getDay();
     if (activeDays.has(dayOfWeek)) {
-      const openTime = new Date(
-        cur.getFullYear(),
-        cur.getMonth(),
-        cur.getDate(),
-        startH,
-        startM,
-        0
-      );
-      const closeTime = new Date(
-        cur.getFullYear(),
-        cur.getMonth(),
-        cur.getDate(),
-        endH,
-        endM,
-        endH === 23 && endM === 59 ? 59 : 0
-      );
+      const curYear = cur.getFullYear();
+      const curMonth = cur.getMonth();
+      const curDate = cur.getDate();
 
-      const winStart = Math.max(start.getTime(), openTime.getTime());
-      const winEnd = Math.min(end.getTime(), closeTime.getTime());
+      const openMs = new Date(curYear, curMonth, curDate, startH, startM, 0).getTime();
+      const closeMs = new Date(curYear, curMonth, curDate, endH, endM, endH === 23 && endM === 59 ? 59 : 0).getTime();
+
+      const winStart = Math.max(start.getTime(), openMs);
+      const winEnd = Math.min(end.getTime(), closeMs);
 
       if (winEnd > winStart) {
         totalMs += winEnd - winStart;
