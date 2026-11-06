@@ -1047,7 +1047,7 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
           actionTerakhirOleh: actionOleh,
           actionTerakhirWaktu: actionWaktu,
           jumlahAction: hasAction ? (r.jumlahAction || 1) : 0,
-          monthStr: extractMonthStr(r.dateStr || r.startTime, '2026-10'),
+          monthStr: extractMonthStr(r.dateStr || r.startTime, r.monthStr),
           comment: r.comment || undefined,
           keterangan: actionText !== '-' ? actionText : undefined
         };
@@ -1059,7 +1059,7 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
     setIsLoadingDailyFromDb(true);
     try {
       const res = await getDailyIncidentsFromDbApi({ monthStr: month });
-      if (res.success && res.rows && res.rows.length > 0) {
+      if (res.success && res.rows) {
         setAllDailyIncidents(res.rows);
 
         // Langsung perbarui cache riwayat problem bulanan
@@ -1205,9 +1205,12 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
       allDailyIncidents.length === 0 &&
       !isLoadingDailyFromDb
     ) {
-      fetchDailyIncidentsFromDb(historyMonth !== 'ALL' ? historyMonth : undefined);
+      const targetM = activeTab === 'FREKUENSI'
+        ? (freqMonth !== 'ALL' ? freqMonth : undefined)
+        : (historyMonth !== 'ALL' ? historyMonth : undefined);
+      fetchDailyIncidentsFromDb(targetM);
     }
-  }, [activeTab, allDailyIncidents.length, isLoadingDailyFromDb, historyMonth]);
+  }, [activeTab, allDailyIncidents.length, isLoadingDailyFromDb, historyMonth, freqMonth]);
 
   // =========================================================================
   // BASIS DATA FREKUENSI & DETEKSI PROBLEM CHRONIC
@@ -1273,7 +1276,7 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
               const p2 = parseInt(parts[1], 10);
               let y = parseInt(parts[2], 10);
               if (String(y).length === 2) y = 2000 + y;
-              const dis = disambiguateFutureDate(p1, p2, y);
+              const dis = resolveDayAndMonth(p1, p2, y);
               dStr = `${String(dis.day).padStart(2, '0')}/${String(dis.month).padStart(2, '0')}/${y}`;
             }
           }
@@ -1294,7 +1297,7 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
           const p2 = parseInt(parts[1], 10);
           let y = parseInt(parts[2], 10);
           if (String(y).length === 2) y = 2000 + y;
-          const dis = disambiguateFutureDate(p1, p2, y);
+          const dis = resolveDayAndMonth(p1, p2, y);
           dStr = `${String(dis.day).padStart(2, '0')}/${String(dis.month).padStart(2, '0')}/${y}`;
         }
       }
@@ -2884,15 +2887,16 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
     set.add('2026-09');
     set.add('2026-08');
     set.add('2026-07');
-    allDailyIncidents.forEach((r) => {
+    const scanList = allDailyIncidents.length > 0 ? allDailyIncidents : [...chronicDataset, ...historyResults];
+    scanList.forEach((r) => {
       const raw = r.dateStr || r.startTime || (r as any).tanggal;
       if (raw && raw.length >= 7) {
-        const m = extractMonthStr(raw, '');
+        const m = extractMonthStr(raw, r.monthStr || '');
         if (m && m.length === 7) set.add(m);
       }
     });
     return Array.from(set).sort((a, b) => b.localeCompare(a));
-  }, [allDailyIncidents]);
+  }, [allDailyIncidents, chronicDataset, historyResults]);
 
   const freqAvailableSPs = useMemo(() => {
     const set = new Set<string>();

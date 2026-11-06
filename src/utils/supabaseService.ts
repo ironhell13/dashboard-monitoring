@@ -13,7 +13,7 @@ import {
   loadLocalActions
 } from './dbCache';
 import { type OpenIncidentItem, unpackCompactTabular } from './monitoringService';
-import { cleanWsid, parseDateTime, disambiguateFutureDate } from './dailyIncidentParser';
+import { cleanWsid, parseDateTime, disambiguateFutureDate, resolveDayAndMonth } from './dailyIncidentParser';
 
 // ==============================================================================
 // 1. QUICK CHIPS (PILIHAN CEPAT) & REALTIME
@@ -1045,7 +1045,7 @@ export function toWibDateTimeString(raw?: any): string {
     const p1 = parseInt(dp[0], 10);
     const p2 = parseInt(dp[1], 10);
     const y = parseInt(dp[2], 10);
-    const dis = disambiguateFutureDate(p1, p2, y);
+    const dis = resolveDayAndMonth(p1, p2, y);
     const dStr = String(dis.day).padStart(2, '0');
     const moStr = String(dis.month).padStart(2, '0');
     return `${dStr}/${moStr}/${y} ${parts[1] || '00:00:00'}`;
@@ -2085,7 +2085,7 @@ export async function fetchDailyIncidentsFromDbSupabase(payload?: {
   if (!client) return { success: false, rows: [], totalCount: 0, message: 'Supabase belum dikonfigurasi.' };
 
   try {
-    const maxLimit = payload?.limit || 10000;
+    const maxLimit = payload?.limit || 20000;
     const chunkSize = 1000;
     const concurrency = 4;
     const allData: any[] = [];
@@ -2108,9 +2108,30 @@ export async function fetchDailyIncidentsFromDbSupabase(payload?: {
           .range(cFrom, cTo);
 
         if (payload?.monthStr && payload.monthStr !== 'ALL') {
-          query = query.eq('periode_bulan', payload.monthStr);
+          const [yStr, mStr] = payload.monthStr.split('-');
+          const y = parseInt(yStr, 10);
+          const m = parseInt(mStr, 10);
+          if (!isNaN(y) && !isNaN(m)) {
+            const startIso = new Date(Date.UTC(y, m - 1, 1, 0, 0, 0)).toISOString();
+            const endIso = new Date(Date.UTC(m === 12 ? y + 1 : y, m === 12 ? 0 : m, 1, 0, 0, 0)).toISOString();
+            query = query.or(`periode_bulan.eq.${payload.monthStr},and(start_time.gte.${startIso},start_time.lt.${endIso})`);
+          } else {
+            query = query.eq('periode_bulan', payload.monthStr);
+          }
         } else if (payload?.startMonth && payload?.endMonth) {
-          query = query.gte('periode_bulan', payload.startMonth).lte('periode_bulan', payload.endMonth);
+          const [syStr, smStr] = payload.startMonth.split('-');
+          const [eyStr, emStr] = payload.endMonth.split('-');
+          const sy = parseInt(syStr, 10);
+          const sm = parseInt(smStr, 10);
+          const ey = parseInt(eyStr, 10);
+          const em = parseInt(emStr, 10);
+          if (!isNaN(sy) && !isNaN(sm) && !isNaN(ey) && !isNaN(em)) {
+            const startIso = new Date(Date.UTC(sy, sm - 1, 1, 0, 0, 0)).toISOString();
+            const endIso = new Date(Date.UTC(em === 12 ? ey + 1 : ey, em === 12 ? 0 : em, 1, 0, 0, 0)).toISOString();
+            query = query.or(`and(periode_bulan.gte.${payload.startMonth},periode_bulan.lte.${payload.endMonth}),and(start_time.gte.${startIso},start_time.lt.${endIso})`);
+          } else {
+            query = query.gte('periode_bulan', payload.startMonth).lte('periode_bulan', payload.endMonth);
+          }
         }
 
         chunkPromises.push(query);

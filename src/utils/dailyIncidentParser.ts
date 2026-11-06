@@ -386,13 +386,25 @@ export function extractMonthStr(dateStr?: string | null, fallback?: string): str
   if (s.includes('/')) {
     const parts = s.split(' ')[0].split('/');
     if (parts.length >= 3) {
-      const y = parts[2].length === 2 ? `20${parts[2]}` : parts[2];
-      const m = parts[1].padStart(2, '0');
-      return `${y}-${m}`;
+      const p1 = parseInt(parts[0], 10);
+      const p2 = parseInt(parts[1], 10);
+      let y = parseInt(parts[2], 10);
+      if (isNaN(y)) return defaultFallback;
+      if (y < 100) y = 2000 + y;
+
+      let targetHint: number | undefined;
+      if (fallback && fallback.includes('-')) {
+        const hintM = parseInt(fallback.split('-')[1], 10);
+        if (!isNaN(hintM) && hintM >= 1 && hintM <= 12) targetHint = hintM;
+      }
+
+      const resolved = resolveDayAndMonth(p1, p2, y, targetHint);
+      const mStr = String(resolved.month).padStart(2, '0');
+      return `${y}-${mStr}`;
     }
   }
   if (s.includes('-')) {
-    const parts = s.split(' ')[0].split('-');
+    const parts = s.split('T')[0].split(' ')[0].split('-');
     if (parts.length >= 2 && parts[0].length === 4) {
       return `${parts[0]}-${parts[1].padStart(2, '0')}`;
     }
@@ -474,7 +486,7 @@ export function resolveDayAndMonth(
   year: number,
   targetMonthHint?: number
 ): { day: number; month: number } {
-  let resolved: { day: number; month: number };
+  let resolved: { day: number; month: number } | undefined;
 
   if (p1 > 12 && p2 <= 12) {
     resolved = { day: p1, month: p2 };
@@ -486,7 +498,17 @@ export function resolveDayAndMonth(
     const currentM = now.getMonth() + 1;
     const currentD = now.getDate();
 
-    if (year === currentY) {
+    // 1. Cek targetMonthHint jika disediakan
+    if (targetMonthHint && targetMonthHint >= 1 && targetMonthHint <= 12) {
+      if (p1 === targetMonthHint && p2 !== targetMonthHint) {
+        resolved = { day: p2, month: p1 };
+      } else if (p2 === targetMonthHint && p1 !== targetMonthHint) {
+        resolved = { day: p1, month: p2 };
+      }
+    }
+
+    // 2. Proteksi masa depan: jika salah satu kombinasi berada di masa depan, pilih kombinasi masa lalu/sekarang
+    if (!resolved && year === currentY) {
       const isP1Future = p2 > currentM || (p2 === currentM && p1 > currentD);
       const isP2PastOrPresent = p1 < currentM || (p1 === currentM && p2 <= currentD);
       if (isP1Future && isP2PastOrPresent) {
@@ -496,29 +518,24 @@ export function resolveDayAndMonth(
         const isP1PastOrPresent = p2 < currentM || (p2 === currentM && p1 <= currentD);
         if (isP2Future && isP1PastOrPresent) {
           resolved = { day: p1, month: p2 };
-        } else {
-          const activeMonth = (targetMonthHint && targetMonthHint >= 1 && targetMonthHint <= 12)
-            ? targetMonthHint
-            : currentM;
-
-          if (p1 === activeMonth && p2 !== activeMonth) {
-            resolved = { day: p2, month: p1 };
-          } else if (p2 === activeMonth && p1 !== activeMonth) {
-            resolved = { day: p1, month: p2 };
-          } else {
-            resolved = { day: p1, month: p2 };
-          }
         }
       }
-    } else {
-      const activeMonth = (targetMonthHint && targetMonthHint >= 1 && targetMonthHint <= 12)
-        ? targetMonthHint
-        : (now.getMonth() + 1);
+    }
 
-      if (p1 === activeMonth && p2 !== activeMonth) {
-        resolved = { day: p2, month: p1 };
-      } else if (p2 === activeMonth && p1 !== activeMonth) {
-        resolved = { day: p1, month: p2 };
+    // 3. Deteksi bulan historis/aktif jika salah satu angka adalah 10 (Oktober) atau 11 (November)
+    if (!resolved) {
+      if (p1 === 10 && p2 !== 10) {
+        resolved = { day: p2, month: 10 };
+      } else if (p2 === 10 && p1 !== 10) {
+        resolved = { day: p1, month: 10 };
+      } else if (p1 === 11 && p2 !== 11) {
+        resolved = { day: p2, month: 11 };
+      } else if (p2 === 11 && p1 !== 11) {
+        resolved = { day: p1, month: 11 };
+      } else if (p1 === currentM && p2 !== currentM) {
+        resolved = { day: p2, month: currentM };
+      } else if (p2 === currentM && p1 !== currentM) {
+        resolved = { day: p1, month: currentM };
       } else {
         resolved = { day: p1, month: p2 };
       }
@@ -1241,7 +1258,7 @@ export function aggregateByWsidProblemDate(
         const p2 = parseInt(parts[1], 10);
         let y = parseInt(parts[2], 10);
         if (String(y).length === 2) y = 2000 + y;
-        const dis = disambiguateFutureDate(p1, p2, y);
+        const dis = resolveDayAndMonth(p1, p2, y);
         d = `${String(dis.day).padStart(2, '0')}/${String(dis.month).padStart(2, '0')}/${y}`;
       }
     }
