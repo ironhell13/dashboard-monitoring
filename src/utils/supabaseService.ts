@@ -1956,6 +1956,7 @@ export async function searchIncidentsSupabase(filters: {
   query?: string;
   status?: string;
   eventCodeDesc?: string;
+  eventCodes?: string[];
   limit?: number;
 }): Promise<{
   success: boolean;
@@ -1971,15 +1972,26 @@ export async function searchIncidentsSupabase(filters: {
       .from('incident_logs')
       .select('*')
       .order('start_time', { ascending: false })
-      .limit(filters.limit || 2500);
+      .limit(filters.limit || 5000);
 
     if (filters.monthStr && filters.monthStr !== 'ALL') {
-      query = query.eq('periode_bulan', filters.monthStr);
+      const [yStr, mStr] = filters.monthStr.split('-');
+      const y = parseInt(yStr, 10);
+      const m = parseInt(mStr, 10);
+      if (!isNaN(y) && !isNaN(m)) {
+        const startIso = new Date(Date.UTC(y, m - 1, 1, 0, 0, 0)).toISOString();
+        const endIso = new Date(Date.UTC(m === 12 ? y + 1 : y, m === 12 ? 0 : m, 1, 0, 0, 0)).toISOString();
+        query = query.or(`periode_bulan.eq.${filters.monthStr},and(start_time.gte.${startIso},start_time.lt.${endIso})`);
+      } else {
+        query = query.eq('periode_bulan', filters.monthStr);
+      }
     }
     if (filters.status && filters.status !== 'ALL') {
       query = query.eq('status', filters.status);
     }
-    if (filters.eventCodeDesc && filters.eventCodeDesc !== 'ALL') {
+    if (filters.eventCodes && filters.eventCodes.length > 0) {
+      query = query.in('problem', filters.eventCodes);
+    } else if (filters.eventCodeDesc && filters.eventCodeDesc !== 'ALL') {
       query = query.eq('problem', filters.eventCodeDesc);
     }
     if (filters.query) {

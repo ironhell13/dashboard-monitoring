@@ -1063,8 +1063,10 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
         setAllDailyIncidents(res.rows);
 
         // Langsung perbarui cache riwayat problem bulanan
-        const mappedHistory = res.rows.map((r) => {
-          const key = (r.incidentNumber && r.incidentNumber !== '-') ? r.incidentNumber : `${r.wsid}|${r.eventCodeDesc}|${r.startTime}`;
+        const mappedHistory = res.rows.map((r, idx) => {
+          const key = (r.incidentNumber && r.incidentNumber !== '-' && r.incidentNumber !== 'N/A')
+            ? `${r.incidentNumber}__${r.wsid}__${idx}`
+            : `${r.wsid}|${r.eventCodeDesc}|${r.startTime}|${idx}`;
           const sTime = formatStartProblemTime(r.startTime) !== '-' ? formatStartProblemTime(r.startTime) : getDisplayStartTime(r);
           const eTime = formatStartProblemTime(r.endTime);
           const dText = (!r.detail || r.detail === '-' || isDateLikeString(r.detail)) ? '-' : r.detail;
@@ -2329,7 +2331,11 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
   };
 
   const selectAllEventCodesOpen = () => {
-    setSelectedEventCodesOpen([...openAvailableEvents]);
+    const q = eventCodeSearchOpen.trim().toLowerCase();
+    const toSelect = q
+      ? openAvailableEvents.filter((c) => c.toLowerCase().includes(q))
+      : openAvailableEvents;
+    setSelectedEventCodesOpen((prev) => Array.from(new Set([...prev, ...toSelect])));
     setCurrentPageOpen(1);
   };
 
@@ -3015,7 +3021,11 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
   };
 
   const selectAllEventCodesFreq = () => {
-    setSelectedEventCodesFreq([...freqAvailableEvents]);
+    const q = eventCodeSearchFreq.trim().toLowerCase();
+    const toSelect = q
+      ? freqAvailableEvents.filter((c) => c.toLowerCase().includes(q))
+      : freqAvailableEvents;
+    setSelectedEventCodesFreq((prev) => Array.from(new Set([...prev, ...toSelect])));
     setCurrentPageFreq(1);
   };
 
@@ -3523,8 +3533,10 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
     }
 
     if (!forceRefresh && allDailyIncidents.length > 0) {
-      const mappedLocal = allDailyIncidents.map((r) => {
-        const key = (r.incidentNumber && r.incidentNumber !== '-') ? r.incidentNumber : `${r.wsid}|${r.eventCodeDesc}|${r.startTime}`;
+      const mappedLocal = allDailyIncidents.map((r, idx) => {
+        const key = (r.incidentNumber && r.incidentNumber !== '-' && r.incidentNumber !== 'N/A')
+          ? `${r.incidentNumber}__${r.wsid}__${idx}`
+          : `${r.wsid}|${r.eventCodeDesc}|${r.startTime}|${idx}`;
         const sTime = formatStartProblemTime(r.startTime) !== '-' ? formatStartProblemTime(r.startTime) : getDisplayStartTime(r);
         const eTime = formatStartProblemTime(r.endTime);
         const dText = (!r.detail || r.detail === '-' || isDateLikeString(r.detail)) ? '-' : r.detail;
@@ -3585,10 +3597,11 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
         monthStr: historyMonth,
         query: historyQuery,
         status: historyStatus,
-        eventCodeDesc: selectedEventCodesHistory.length === 1 ? selectedEventCodesHistory[0] : 'ALL'
+        eventCodeDesc: selectedEventCodesHistory.length === 1 ? selectedEventCodesHistory[0] : 'ALL',
+        eventCodes: selectedEventCodesHistory.length > 0 ? selectedEventCodesHistory : undefined
       });
       if (res.success && res.incidents) {
-        const clean = res.incidents.map((it) => {
+        const clean = res.incidents.map((it, idx) => {
           const sTime = formatStartProblemTime(it.startTime) !== '-' ? formatStartProblemTime(it.startTime) : getDisplayStartTime(it);
           const eTime = formatStartProblemTime(it.endTime);
           const dText = (!it.detail || it.detail === '-' || isDateLikeString(it.detail)) ? '-' : it.detail;
@@ -3602,8 +3615,12 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
           const epochStart = parseToEpoch(sTime);
           const epochEnd = parseToEpoch(eTime);
           const searchIdx = `${it.wsid || ''} ${it.lokasi || ''} ${it.eventCodeDesc || ''} ${it.servicePoint || ''} ${it.sektor || ''} ${it.vendor || ''} ${it.typeMesin || ''} ${it.actionTerakhir || ''} ${dText}`.toLowerCase();
+          const key = (it.incidentNumber && it.incidentNumber !== '-' && it.incidentNumber !== 'N/A')
+            ? `${it.incidentNumber}__${it.wsid}__${idx}`
+            : `${it.wsid}|${it.eventCodeDesc}|${sTime}|${idx}`;
           return {
             ...it,
+            incidentKey: key,
             detail: dText,
             startTime: sTime,
             endTime: eTime,
@@ -4067,7 +4084,11 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
   };
 
   const selectAllEventCodesHistory = () => {
-    setSelectedEventCodesHistory([...historyAvailableEvents]);
+    const q = eventCodeSearchHistory.trim().toLowerCase();
+    const toSelect = q
+      ? historyAvailableEvents.filter((c) => c.toLowerCase().includes(q))
+      : historyAvailableEvents;
+    setSelectedEventCodesHistory((prev) => Array.from(new Set([...prev, ...toSelect])));
     setCurrentPageHistory(1);
   };
 
@@ -4080,21 +4101,54 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
     if (activeTab !== 'HISTORY') return [];
     const hasStatus = historyStatus !== 'ALL';
     const hasEvents = selectedEventCodesHistory.length > 0;
-    const eventsSet = hasEvents ? new Set(selectedEventCodesHistory) : null;
+    const eventsSet = hasEvents ? new Set(selectedEventCodesHistory.map((s) => s.trim().toUpperCase())) : null;
     const compStart = historyStartDate ? toComparableDate(historyStartDate, false) : '';
     const compEnd = historyEndDate ? toComparableDate(historyEndDate, true) : '';
     const q = historyQuery.trim().toLowerCase();
+    const qTokens = q ? q.split(/\s+/).filter(Boolean) : [];
 
     return historyResults.filter((r: any) => {
       if (hasStatus && r.status !== historyStatus) return false;
       if (eventsSet) {
-        const desc = (r.eventCodeDesc || '').trim();
-        const code = (r.eventCode || '').trim();
+        const desc = (r.eventCodeDesc || '').trim().toUpperCase();
+        const code = (r.eventCode || '').trim().toUpperCase();
         if (!eventsSet.has(desc) && !eventsSet.has(code)) return false;
       }
       if (compStart && r._compDate && r._compDate < compStart) return false;
       if (compEnd && r._compDate && r._compDate > compEnd) return false;
-      if (q && r._search && !r._search.includes(q)) return false;
+
+      if (qTokens.length > 0) {
+        const wsidStr = (r.wsid || '').toLowerCase();
+        const lokStr = (r.lokasi || '').toLowerCase();
+        const evtStr = (r.eventCodeDesc || '').toLowerCase();
+        const spStr = (r.servicePoint || '').toLowerCase();
+        const sekStr = (r.sektor || '').toLowerCase();
+        const venStr = (r.vendor || r.vendorMesin || '').toLowerCase();
+        const tipeStr = (r.typeMesin || '').toLowerCase();
+        const actStr = (r.actionTerakhir || '').toLowerCase();
+        const detStr = (r.detail || '').toLowerCase();
+        const incNumStr = (r.incidentNumber || '').toLowerCase();
+
+        const combinedSearch = (
+          r._search ||
+          `${wsidStr} ${lokStr} ${evtStr} ${spStr} ${sekStr} ${venStr} ${tipeStr} ${actStr} ${detStr} ${incNumStr}`
+        ).toLowerCase();
+
+        const matchesAllTokens = qTokens.every((token) =>
+          wsidStr.includes(token) ||
+          lokStr.includes(token) ||
+          evtStr.includes(token) ||
+          spStr.includes(token) ||
+          sekStr.includes(token) ||
+          venStr.includes(token) ||
+          tipeStr.includes(token) ||
+          actStr.includes(token) ||
+          detStr.includes(token) ||
+          incNumStr.includes(token) ||
+          combinedSearch.includes(token)
+        );
+        if (!matchesAllTokens) return false;
+      }
       return true;
     });
   }, [activeTab, historyResults, historyStatus, selectedEventCodesHistory, historyQuery, historyStartDate, historyEndDate]);
@@ -9408,10 +9462,10 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
                         </td>
                       </tr>
                     ) : (
-                      paginatedHistory.map((r) => {
+                      paginatedHistory.map((r, idx) => {
                         const chronic = chronicInfoMap.get(r.incidentKey) || evaluateChronicRef.current?.(r);
                         return (
-                          <tr key={r.incidentKey} className="h-10 hover:bg-[#F8F9FF] transition-colors">
+                          <tr key={r.incidentKey || `${r.wsid}_${r.startTime}_${idx}`} className="h-10 hover:bg-[#F8F9FF] transition-colors">
                             {/* 1. WSID / Lokasi */}
                             <td className="px-3 py-1.5">
                               <div className="flex items-center gap-1.5 flex-wrap">

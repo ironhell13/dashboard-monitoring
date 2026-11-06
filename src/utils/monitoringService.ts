@@ -346,6 +346,7 @@ export const searchIncidentsApi = async (filters: {
   query?: string;
   status?: string;
   eventCodeDesc?: string;
+  eventCodes?: string[];
 }): Promise<{
   success: boolean;
   incidents: OpenIncidentItem[];
