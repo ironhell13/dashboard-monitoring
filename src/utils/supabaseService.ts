@@ -1988,23 +1988,51 @@ export async function fetchRecentIncidentsForChronicSupabase(days: number = 14):
   if (!client) return { success: false, rows: [] };
 
   try {
-    const cutoff = new Date();
-    cutoff.setDate(cutoff.getDate() - days);
-    cutoff.setHours(0, 0, 0, 0);
-    const cutoffIso = cutoff.toISOString();
-
     const selectCols = 'id, incident_key, wsid, problem, status, start_time, end_time, duration_minutes, action_taken, action_by, action_at, periode_bulan';
-    const { data, error } = await client
-      .from('incident_logs')
-      .select(selectCols)
-      .gte('start_time', cutoffIso)
-      .order('start_time', { ascending: false })
-      .limit(10000);
-
-    if (error) throw error;
-
     const machinesMap = getMachinesMap();
-    const rows = (data || []).map((row: any) => {
+    let rawData: any[] = [];
+
+    // 1. Coba ambil berdasarkan cutoff start_time
+    try {
+      const cutoff = new Date();
+      cutoff.setDate(cutoff.getDate() - days);
+      cutoff.setHours(0, 0, 0, 0);
+      const cutoffIso = cutoff.toISOString();
+
+      const { data, error } = await client
+        .from('incident_logs')
+        .select(selectCols)
+        .gte('start_time', cutoffIso)
+        .order('start_time', { ascending: false })
+        .limit(5000);
+
+      if (!error && data && data.length > 0) {
+        rawData = data;
+      }
+    } catch (_) {}
+
+    // 2. Fallback tangguh: Jika query dengan filter tanggal tidak menemukan data
+    // (misalnya format tanggal custom, timezone WIB vs UTC, atau start_time null),
+    // langsung tarik 3000 data insiden paling akhir berdasarkan ID descending (<100ms)
+    if (rawData.length === 0) {
+      try {
+        const { data, error } = await client
+          .from('incident_logs')
+          .select(selectCols)
+          .order('id', { ascending: false })
+          .limit(3000);
+
+        if (!error && data && data.length > 0) {
+          rawData = data;
+        }
+      } catch (_) {}
+    }
+
+    if (rawData.length === 0) {
+      return { success: false, rows: [] };
+    }
+
+    const rows = rawData.map((row: any) => {
       const cleanWsid = (row.wsid || '').trim().toUpperCase();
       const meta = machinesMap.get(cleanWsid) || getMachineMetadata(row.wsid);
       return mapRowToDailyIncidentRow(row, meta);

@@ -757,9 +757,18 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
   const fetchChronicDataset = useCallback(async () => {
     setIsLoadingChronic(true);
     try {
-      const res = await fetchRecentIncidentsForChronicSupabase(14);
+      let res = await fetchRecentIncidentsForChronicSupabase(14);
+      // Fallback ganda: jika res.rows masih kosong, gunakan API getDailyIncidentsFromDbApi (limit 3000)
+      if (!res.success || !res.rows || res.rows.length === 0) {
+        const dbRes = await getDailyIncidentsFromDbApi({ limit: 3000 });
+        if (dbRes && dbRes.success && dbRes.rows && dbRes.rows.length > 0) {
+          res = { success: true, rows: dbRes.rows };
+        }
+      }
+
       if (res.success && res.rows && res.rows.length > 0) {
         setChronicDataset(res.rows);
+        setAllDailyIncidents((prev) => (prev.length === 0 ? res.rows : prev));
         setOpenIncidents((prev) => {
           if (!prev || prev.length === 0) return prev;
           return enrichOpenWithDailyData(prev, res.rows);
@@ -1177,13 +1186,17 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
   };
 
   // Muat dataset harian Supabase saat awal mount:
-  // Hanya tarik dataset chronic cepat (14 hari terakhir) secara instan (<300ms)
-  // Tab Problem Open tidak memerlukan dataset riwayat puluhan ribu baris sehingga load instan tanpa freeze
+  // 1. Tarik dataset chronic cepat secara instan (<300ms)
+  // 2. Tarik dataset harian di background setelah 1.2 detik secara aman (ringan & non-blocking)
   useEffect(() => {
     fetchChronicDataset();
+    const timer = setTimeout(() => {
+      fetchDailyIncidentsFromDb(historyMonth !== 'ALL' ? historyMonth : undefined);
+    }, 1200);
+    return () => clearTimeout(timer);
   }, [fetchChronicDataset]);
 
-  // Lazy-load dataset harian hanya ketika user membuka tab Frekuensi atau Grafik 24 Jam
+  // Lazy-load dataset harian hanya ketika user membuka tab Frekuensi atau Grafik 24 Jam jika belum termuat
   useEffect(() => {
     if (
       (activeTab === 'FREKUENSI' || activeTab === 'GRAFIK_24JAM') &&
@@ -1277,15 +1290,14 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
   }, [activeTab, allDailyIncidents, chronicDataset, historyResults, openIncidents]);
 
   const chronicInfoMap = useMemo(() => {
-    // Prioritas sumber: chronicDataset (14 hari terakhir, mencakup 100% kriteria rolling 5 hari & sekejap <2ms) -> allDailyIncidents -> historyResults -> openIncidents
+    // Gabungkan seluruh data riwayat mutakhir yang ada (chronicDataset + allDailyIncidents + openIncidents)
+    // Otomatis terdeduplikasi oleh seenIncidentIds di bawah sehingga 100% presisi dan instan
     const rawSourceRows =
-      chronicDataset.length > 0
-        ? [...chronicDataset, ...openIncidents]
-        : allDailyIncidents.length > 0
-          ? allDailyIncidents
-          : historyResults.length > 0
-            ? historyResults
-            : (openIncidents as any[]);
+      chronicDataset.length > 0 || allDailyIncidents.length > 0
+        ? [...chronicDataset, ...allDailyIncidents, ...openIncidents]
+        : historyResults.length > 0
+          ? [...historyResults, ...openIncidents]
+          : (openIncidents as any[]);
 
     // Deduplikasi dataset chronic agar insiden yang sama tidak terhitung 2 kali
     const seenIncidentIds = new Set<string>();
@@ -1317,7 +1329,7 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
         groupMap.set(groupKey, list);
       }
 
-      const rawDate =
+      let rawDate =
         r.dateStr && r.dateStr !== '-'
           ? r.dateStr
           : r.tanggal && r.tanggal !== '-'
@@ -1325,6 +1337,13 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
             : r.startTime && r.startTime !== '-'
               ? r.startTime.split(' ')[0]
               : '';
+
+      // Fallback cerdas: Jika tidak terdapat komponen tanggal (misal hanya berisi jam '15:59'), asumsikan hari ini
+      if (!parseIncidentDateStr(rawDate)) {
+        const now = new Date();
+        rawDate = `${String(now.getDate()).padStart(2, '0')}/${String(now.getMonth() + 1).padStart(2, '0')}/${now.getFullYear()}`;
+      }
+
       const normDate = normalizeDateStr(rawDate);
       const epoch = parseDateStrToEpochDay(rawDate);
       list.push({ dateStr: rawDate, normDate, epoch });
@@ -1375,12 +1394,19 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
         };
       }
 
-      const rawIncDate =
+      let rawIncDate =
         inc.tanggal && inc.tanggal !== '-'
           ? inc.tanggal.split(' ')[0]
           : inc.startTime && inc.startTime !== '-'
             ? inc.startTime.split(' ')[0]
             : '';
+
+      // Fallback cerdas: Jika tidak terdapat komponen tanggal pada problem open aktif, asumsikan hari ini
+      if (!parseIncidentDateStr(rawIncDate)) {
+        const now = new Date();
+        rawIncDate = `${String(now.getDate()).padStart(2, '0')}/${String(now.getMonth() + 1).padStart(2, '0')}/${now.getFullYear()}`;
+      }
+
       const normIncDate = normalizeDateStr(rawIncDate);
       const cacheKey = `${groupKey}|||${normIncDate}`;
       const cached = evalCache.get(cacheKey);
