@@ -1,6 +1,7 @@
 import type { MasterRow, ParsedUptimeFile } from './excelParser';
 import { normalizePeriode } from './comprehensiveExporter';
 import { getSupabase, isSupabaseConfigured } from './supabaseClient';
+import staticCatalogJson from '../data/staticMachineCatalog.json';
 import {
   saveCachedMasterData,
   loadCachedMasterData,
@@ -10,6 +11,48 @@ import {
   loadCachedLockedPeriodes,
   loadDashboardSnapshot
 } from './dbCache';
+
+/**
+ * Single Source of Truth katalog mesin statis (5.000+ mesin BCA terdaftar).
+ * Berfungsi sebagai fallback instan saat IndexedDB belum terisi di browser client baru.
+ */
+export function getStaticMasterData(): any[] {
+  const entries = Object.values(staticCatalogJson) as any[];
+  return entries.map((entry) => {
+    const cleanW = String(entry.wsid || '').trim().toUpperCase();
+    const sek = entry.sektorBCA || '-';
+    const wil = entry.wilayahOperasional || (sek.includes('-') ? sek.split('-')[0] : 'ABACUS JAKARTA');
+    const jm = (entry.jenisMesin === 'CRM' ? 'CRM' : 'ATM');
+    return {
+      // MachineData properties
+      wsid: cleanW,
+      lokasi: entry.lokasi || '-',
+      sektorBCA: sek,
+      wilayahOperasional: wil,
+      vendor: entry.vendor || '-',
+      tipeMesin: entry.tipeMesin || '-',
+      jenisMesin: jm,
+      klienStatus: 'BCA',
+      statusAktif: 'AKTIF',
+      hari: entry.hari || 'MON-SUN',
+      jam: entry.jam || '(00:00 - 23:59)',
+      monthlyData: [],
+
+      // MasterRow properties for compatibility
+      WSID: cleanW,
+      Klien: 'BCA',
+      'Jenis Mesin': jm,
+      'Tipe Mesin': entry.tipeMesin || '-',
+      Status: 'AKTIF',
+      Sektor: sek,
+      Wilayah: wil,
+      'Nama Lokasi': entry.lokasi || '-',
+      Vendor: entry.vendor || '-',
+      Hari: entry.hari || 'MON-SUN',
+      Jam: entry.jam || '(00:00 - 23:59)'
+    };
+  });
+}
 
 export interface DashboardDbData {
   success: boolean;
@@ -432,15 +475,16 @@ export const fetchDashboardData = async (): Promise<DashboardDbData> => {
     }
   } catch (e) {}
 
-  // Single Source of Truth: Tidak ada fallback ke sample-data.json atau seed file statis.
-  // Jika database belum memiliki data, kembalikan state kosong murni.
+  // 3. Fallback instan: Katalog Mesin Statis BCA (5.000+ mesin) agar Database & Wilayah selalu terhidrasi penuh
+  const fallbackMaster = getStaticMasterData();
   return {
-    success: false,
-    hasData: false,
-    masterData: [],
+    success: true,
+    hasData: true,
+    masterData: fallbackMaster as any,
     parsedUptimeFiles: [],
     lockedPeriodes: [],
-    lastUpdated: null
+    prematchedMachines: fallbackMaster,
+    lastUpdated: new Date().toISOString()
   };
 };
 

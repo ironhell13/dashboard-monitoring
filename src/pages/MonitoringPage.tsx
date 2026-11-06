@@ -102,6 +102,7 @@ import {
   parseDateTime,
   resolveDayAndMonth,
   normalizeDateString,
+  disambiguateFutureDate,
   TARGET_EVENT_CODES,
   cleanSektorName,
   cleanWsid,
@@ -857,6 +858,7 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
   const [isUploadModalOpen, setIsUploadModalOpen] = useState(false);
 
   // 4. Tab 2: Frekuensi per Tanggal State
+  const [freqMonth, setFreqMonth] = useState('ALL');
   const [freqSearch, setFreqSearch] = useState('');
   const [selectedEventCodesFreq, setSelectedEventCodesFreq] = useState<string[]>([]);
   const [isEventCodeDropdownOpenFreq, setIsEventCodeDropdownOpenFreq] = useState(false);
@@ -1240,7 +1242,15 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
       deduplicatedRows.push(r);
     }
 
-    return deduplicatedRows.map((r: any) => {
+    const filteredByMonth = freqMonth === 'ALL'
+      ? deduplicatedRows
+      : deduplicatedRows.filter((r) => {
+          const raw = r.dateStr || r.tanggal || r.startTime;
+          const m = extractMonthStr(raw, r.monthStr || '');
+          return m === freqMonth || (r.monthStr && r.monthStr === freqMonth);
+        });
+
+    return filteredByMonth.map((r: any) => {
       // Normalisasi dateStr menjadi format DD/MM/YYYY (mendukung input ISO, DB, maupun CSV)
       let dStr = r.dateStr;
       if (!dStr || dStr === '-' || dStr === 'N/A') {
@@ -1250,15 +1260,43 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
           if (dateOnly.includes('-')) {
             const parts = dateOnly.split('-');
             if (parts.length === 3 && parts[0].length === 4) {
-              dStr = `${parts[2].padStart(2, '0')}/${parts[1].padStart(2, '0')}/${parts[0]}`;
+              const y = parseInt(parts[0], 10);
+              const m = parseInt(parts[1], 10);
+              const d = parseInt(parts[2], 10);
+              const dis = disambiguateFutureDate(d, m, y);
+              dStr = `${String(dis.day).padStart(2, '0')}/${String(dis.month).padStart(2, '0')}/${y}`;
             }
           } else if (dateOnly.includes('/')) {
-            dStr = dateOnly;
+            const parts = dateOnly.split('/');
+            if (parts.length === 3) {
+              const p1 = parseInt(parts[0], 10);
+              const p2 = parseInt(parts[1], 10);
+              let y = parseInt(parts[2], 10);
+              if (String(y).length === 2) y = 2000 + y;
+              const dis = disambiguateFutureDate(p1, p2, y);
+              dStr = `${String(dis.day).padStart(2, '0')}/${String(dis.month).padStart(2, '0')}/${y}`;
+            }
           }
         }
       } else if (dStr.includes('-') && dStr.split('-')[0].length === 4) {
         const parts = dStr.split('-');
-        dStr = `${parts[2].padStart(2, '0')}/${parts[1].padStart(2, '0')}/${parts[0]}`;
+        if (parts.length === 3) {
+          const y = parseInt(parts[0], 10);
+          const m = parseInt(parts[1], 10);
+          const d = parseInt(parts[2], 10);
+          const dis = disambiguateFutureDate(d, m, y);
+          dStr = `${String(dis.day).padStart(2, '0')}/${String(dis.month).padStart(2, '0')}/${y}`;
+        }
+      } else if (dStr.includes('/')) {
+        const parts = dStr.split(' ')[0].split('/');
+        if (parts.length === 3) {
+          const p1 = parseInt(parts[0], 10);
+          const p2 = parseInt(parts[1], 10);
+          let y = parseInt(parts[2], 10);
+          if (String(y).length === 2) y = 2000 + y;
+          const dis = disambiguateFutureDate(p1, p2, y);
+          dStr = `${String(dis.day).padStart(2, '0')}/${String(dis.month).padStart(2, '0')}/${y}`;
+        }
       }
 
       const sp = r.servicePoint || (r.servicePointSektor ? r.servicePointSektor.split('-')[0].trim() : '-');
@@ -1287,7 +1325,7 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
         detail: r.detail || r.keterangan || '-'
       };
     });
-  }, [activeTab, allDailyIncidents, chronicDataset, historyResults, openIncidents]);
+  }, [activeTab, allDailyIncidents, chronicDataset, historyResults, openIncidents, freqMonth]);
 
   const chronicInfoMap = useMemo(() => {
     // Gabungkan seluruh data riwayat mutakhir yang ada (chronicDataset + allDailyIncidents + openIncidents)
@@ -2839,6 +2877,23 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
     return Array.from(set).sort((a, b) => a.localeCompare(b));
   }, [aggFreqItems, frequencyDataset]);
 
+  const freqAvailableMonths = useMemo(() => {
+    const set = new Set<string>();
+    set.add('2026-11');
+    set.add('2026-10');
+    set.add('2026-09');
+    set.add('2026-08');
+    set.add('2026-07');
+    allDailyIncidents.forEach((r) => {
+      const raw = r.dateStr || r.startTime || (r as any).tanggal;
+      if (raw && raw.length >= 7) {
+        const m = extractMonthStr(raw, '');
+        if (m && m.length === 7) set.add(m);
+      }
+    });
+    return Array.from(set).sort((a, b) => b.localeCompare(a));
+  }, [allDailyIncidents]);
+
   const freqAvailableSPs = useMemo(() => {
     const set = new Set<string>();
     if (masterList && masterList.length > 0) {
@@ -3889,6 +3944,38 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
     return displayed24hRows.slice(start, start + grafik24PageSize);
   }, [activeTab, displayed24hRows, grafik24CurrentPage, grafik24PageSize]);
 
+  const handleExportOpenToExcel = () => {
+    const dateStamp = new Date().toISOString().slice(0, 10);
+    const fileName = `Problem_Open_${dateStamp}.xlsx`;
+    exportDailyIncidentsToExcel(
+      filteredOpenIncidents.map((r: any) => {
+        const cInfo = chronicInfoMap.get(r.wsid.trim().toUpperCase());
+        return {
+          wsid: r.wsid,
+          lokasi: r.lokasi || '-',
+          servicePointSektor: r.servicePoint && r.sektor ? `${r.servicePoint} - ${r.sektor}` : (r.servicePoint || r.sektor || '-'),
+          servicePoint: r.servicePoint || '',
+          sektor: r.sektor || '',
+          typeMesin: r.typeMesin || '-',
+          vendorMesin: r.vendor || '-',
+          startTime: r.startTime || '-',
+          endTime: r.endTime || '-',
+          durasi: r.durasiOpr || r.durationRaw || 0,
+          rawDuration: r.durationRaw || 0,
+          eventCodeDesc: r.eventCodeDesc || '-',
+          eventCode: r.eventCode || '-',
+          detail: r.detail || '-',
+          actionTerakhir: r.actionTerakhir || '-',
+          actionTerakhirOleh: r.actionTerakhirOleh || '-',
+          actionTerakhirWaktu: r.actionTerakhirWaktu || '-',
+          status: 'OPEN',
+          chronic: cInfo ? `CHRONIC (${cInfo.count}x)` : 'NORMAL'
+        };
+      }) as any,
+      fileName
+    );
+  };
+
   const handleExport24hToExcel = () => {
     const hourLabel = selectedHour24 !== null ? `Jam_${String(selectedHour24).padStart(2, '0')}` : '24_Jam';
     const dateStamp = new Date().toISOString().slice(0, 10);
@@ -3996,7 +4083,11 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
 
     return historyResults.filter((r: any) => {
       if (hasStatus && r.status !== historyStatus) return false;
-      if (eventsSet && !eventsSet.has(r.eventCodeDesc)) return false;
+      if (eventsSet) {
+        const desc = (r.eventCodeDesc || '').trim();
+        const code = (r.eventCode || '').trim();
+        if (!eventsSet.has(desc) && !eventsSet.has(code)) return false;
+      }
       if (compStart && r._compDate && r._compDate < compStart) return false;
       if (compEnd && r._compDate && r._compDate > compEnd) return false;
       if (q && r._search && !r._search.includes(q)) return false;
@@ -4068,8 +4159,20 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
   const historyAvailableEvents = useMemo(() => {
     const set = new Set<string>();
     TARGET_EVENT_CODES.forEach((c) => set.add(c));
+    for (let i = 0; i < historyResults.length; i++) {
+      const desc = (historyResults[i].eventCodeDesc || '').trim();
+      if (desc && desc !== '-' && desc !== 'N/A') set.add(desc);
+      const code = (historyResults[i].eventCode || '').trim();
+      if (code && code !== '-' && code !== 'N/A') set.add(code);
+    }
+    for (let i = 0; i < allDailyIncidents.length; i++) {
+      const desc = (allDailyIncidents[i].eventCodeDesc || '').trim();
+      if (desc && desc !== '-' && desc !== 'N/A') set.add(desc);
+      const code = (allDailyIncidents[i].eventCode || '').trim();
+      if (code && code !== '-' && code !== 'N/A') set.add(code);
+    }
     return Array.from(set).sort((a, b) => a.localeCompare(b));
-  }, []);
+  }, [historyResults, allDailyIncidents]);
 
   // =========================================================================
   // TAB 4: LOGIC UPLOAD CSV
@@ -5434,6 +5537,17 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
                 </div>
 
                 <div className="flex items-center gap-2 shrink-0 self-end md:self-auto flex-wrap">
+                  {/* Export Excel Button */}
+                  <button
+                    type="button"
+                    onClick={handleExportOpenToExcel}
+                    className="inline-flex items-center gap-1.5 h-8 px-3 rounded-md bg-[#EFF4FF] hover:bg-[#E5EEFF] text-blue-600 text-xs font-semibold shadow-2xs border border-blue-200/60 transition-all cursor-pointer"
+                    title="Ekspor daftar Problem Open ke Excel"
+                  >
+                    <Download size={13} />
+                    <span>Export Excel</span>
+                  </button>
+
                   {/* Sort Dropdown */}
                   <div className="relative">
                     <select
@@ -6740,6 +6854,30 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
                   )}
                 </div>
 
+                {/* Month Filter */}
+                <select
+                  value={freqMonth}
+                  onChange={async (e) => {
+                    const newMonth = e.target.value;
+                    setFreqMonth(newMonth);
+                    setCurrentPageFreq(1);
+                    await fetchDailyIncidentsFromDb(newMonth);
+                  }}
+                  className="h-9 px-3 rounded-xl bg-[#F8F9FF] hover:bg-[#EFF4FF] text-[#0D1C2E] text-xs font-semibold border border-[#EFF4FF] outline-none cursor-pointer"
+                >
+                  <option value="ALL">Semua Bulan</option>
+                  {freqAvailableMonths.map((m) => {
+                    const [y, mo] = m.split('-');
+                    const monthNames = ['', 'Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni', 'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember'];
+                    const label = `${monthNames[parseInt(mo, 10)] || mo} ${y}`;
+                    return (
+                      <option key={m} value={m}>
+                        Bulan: {label} ({m})
+                      </option>
+                    );
+                  })}
+                </select>
+
                 {/* Service Point Filter */}
                 <select
                   value={freqServicePoint}
@@ -6820,13 +6958,14 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
                   )}
                 </div>
 
-                {(freqSearch || selectedEventCodesFreq.length > 0 || freqServicePoint !== 'ALL' || freqStartDate !== 'ALL' || freqEndDate !== 'ALL' || freqDateFilter !== 'ALL') && (
+                {(freqSearch || selectedEventCodesFreq.length > 0 || freqServicePoint !== 'ALL' || freqMonth !== 'ALL' || freqStartDate !== 'ALL' || freqEndDate !== 'ALL' || freqDateFilter !== 'ALL') && (
                   <button
                     type="button"
                     onClick={() => {
                       setFreqSearch('');
                       setSelectedEventCodesFreq([]);
                       setFreqServicePoint('ALL');
+                      setFreqMonth('ALL');
                       setFreqDateFilter('ALL');
                       setFreqStartDate('ALL');
                       setFreqEndDate('ALL');
@@ -6846,7 +6985,7 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
                 {/* Sync Database Button */}
                 <button
                   type="button"
-                  onClick={() => fetchDailyIncidentsFromDb('ALL')}
+                  onClick={() => fetchDailyIncidentsFromDb(freqMonth)}
                   disabled={isLoadingDailyFromDb}
                   className="inline-flex items-center gap-1.5 h-9 px-3 rounded-xl bg-[#EFF4FF] hover:bg-[#E5EEFF] text-blue-600 text-xs font-semibold shadow-2xs transition-all cursor-pointer"
                   title="Sinkronkan data frekuensi dari database spreadsheet"

@@ -2,6 +2,7 @@ import { useMemo } from 'react';
 import { useDataStore, type MachineData } from '../store/useDataStore';
 import { normalizePeriode } from '../utils/comprehensiveExporter';
 import { cleanSektorName } from '../utils/dailyIncidentParser';
+import { getStaticMasterData } from '../utils/spreadsheetService';
 
 export function useFilteredData() {
   const {
@@ -15,8 +16,12 @@ export function useFilteredData() {
     selectedSektorWilayah
   } = useDataStore();
 
+  const sourceMachines = useMemo(() => {
+    return machines.length > 0 ? machines : (getStaticMasterData() as MachineData[]);
+  }, [machines]);
+
   return useMemo(() => {
-    let filtered = machines;
+    let filtered = sourceMachines;
 
     // 1. Filter Klien
     if (selectedKlien !== 'ALL') {

@@ -13,7 +13,7 @@ import {
   loadLocalActions
 } from './dbCache';
 import { type OpenIncidentItem, unpackCompactTabular } from './monitoringService';
-import { cleanWsid, parseDateTime } from './dailyIncidentParser';
+import { cleanWsid, parseDateTime, disambiguateFutureDate } from './dailyIncidentParser';
 
 // ==============================================================================
 // 1. QUICK CHIPS (PILIHAN CEPAT) & REALTIME
@@ -1014,16 +1014,41 @@ export function toWibDateTimeString(raw?: any): string {
         });
         const parts = formatter.formatToParts(d);
         const getP = (type: string) => parts.find((p) => p.type === type)?.value || '00';
-        return `${getP('day')}/${getP('month')}/${getP('year')} ${getP('hour')}:${getP('minute')}:${getP('second')}`;
+        const rawDay = parseInt(getP('day'), 10);
+        const rawMonth = parseInt(getP('month'), 10);
+        const rawYear = parseInt(getP('year'), 10);
+        const dis = disambiguateFutureDate(rawDay, rawMonth, rawYear);
+        const dStr = String(dis.day).padStart(2, '0');
+        const moStr = String(dis.month).padStart(2, '0');
+        return `${dStr}/${moStr}/${dis.year} ${getP('hour')}:${getP('minute')}:${getP('second')}`;
       }
     } catch (_) {}
   }
 
   // Jika YYYY-MM-DD HH:mm:ss
-  if (/^\d{4}-\d{2}-\d{2}\s+\d{2}:\d{2}/.test(str)) {
+  if (/^\d{4}-\d{2}-\d{2}/.test(str)) {
     const parts = str.split(' ');
     const dp = parts[0].split('-');
-    return `${dp[2]}/${dp[1]}/${dp[0]} ${parts[1]}`;
+    const y = parseInt(dp[0], 10);
+    const m = parseInt(dp[1], 10);
+    const d = parseInt(dp[2], 10);
+    const dis = disambiguateFutureDate(d, m, y);
+    const dStr = String(dis.day).padStart(2, '0');
+    const moStr = String(dis.month).padStart(2, '0');
+    return `${dStr}/${moStr}/${y} ${parts[1] || '00:00:00'}`;
+  }
+
+  // Jika DD/MM/YYYY atau MM/DD/YYYY
+  if (/^\d{1,2}\/\d{1,2}\/\d{4}/.test(str)) {
+    const parts = str.split(' ');
+    const dp = parts[0].split('/');
+    const p1 = parseInt(dp[0], 10);
+    const p2 = parseInt(dp[1], 10);
+    const y = parseInt(dp[2], 10);
+    const dis = disambiguateFutureDate(p1, p2, y);
+    const dStr = String(dis.day).padStart(2, '0');
+    const moStr = String(dis.month).padStart(2, '0');
+    return `${dStr}/${moStr}/${y} ${parts[1] || '00:00:00'}`;
   }
 
   return str;
@@ -1946,7 +1971,7 @@ export async function searchIncidentsSupabase(filters: {
       .from('incident_logs')
       .select('*')
       .order('start_time', { ascending: false })
-      .limit(filters.limit || 500);
+      .limit(filters.limit || 2500);
 
     if (filters.monthStr && filters.monthStr !== 'ALL') {
       query = query.eq('periode_bulan', filters.monthStr);

@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { useDataStore } from '../store/useDataStore';
 import { Filter, Calendar, MonitorSmartphone, FileSpreadsheet, RefreshCw, CheckCircle2, AlertCircle } from 'lucide-react';
 import { exportComprehensiveExcel, formatBulanTahun } from '../utils/comprehensiveExporter';
-import { fetchDashboardData, fetchFollowUpTickets, fetchFollowUpTicketsModern } from '../utils/spreadsheetService';
+import { fetchDashboardData, fetchFollowUpTickets, fetchFollowUpTicketsModern, getStaticMasterData } from '../utils/spreadsheetService';
 import { saveDashboardSnapshot } from '../utils/dbCache';
 import { matchData } from '../utils/dataMatcher';
 
@@ -60,8 +60,14 @@ export default function FilterBar() {
         } catch (e) {}
       }
 
-      if (dbData && dbData.hasData && dbData.masterData?.length > 0) {
-        const matchedMachines = matchData(dbData.masterData, dbData.parsedUptimeFiles || []);
+      const effectiveMaster = (dbData && dbData.masterData && dbData.masterData.length > 0)
+        ? dbData.masterData
+        : getStaticMasterData();
+
+      if (effectiveMaster && effectiveMaster.length > 0) {
+        const matchedMachines = (dbData.prematchedMachines && dbData.prematchedMachines.length > 0)
+          ? dbData.prematchedMachines
+          : matchData(effectiveMaster, dbData.parsedUptimeFiles || []);
         const periods = new Set<string>();
         const trendData: any[] = [];
 

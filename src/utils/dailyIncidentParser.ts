@@ -439,6 +439,30 @@ export function formatServicePointSektor(
  * Parsing string tanggal DD/MM/YYYY HH:mm:ss menjadi Date
  */
 /**
+ * Validasi dan disambiguasi tanggal masa depan (e.g. 10/11/2026 saat hari ini 06/11/2026).
+ * Jika tanggal berada di masa depan dan menukar Day & Month menghasilkan tanggal valid di masa lalu / sekarang,
+ * maka otomatis ditukar (10/11 -> 11/10 = 11 Oktober).
+ */
+export function disambiguateFutureDate(day: number, month: number, year: number): { day: number; month: number; year: number } {
+  const now = new Date();
+  const currentY = now.getFullYear();
+  const currentM = now.getMonth() + 1;
+  const currentD = now.getDate();
+
+  if (year > currentY || (year === currentY && (month > currentM || (month === currentM && day > currentD)))) {
+    const swappedDay = month;
+    const swappedMonth = day;
+    if (swappedMonth >= 1 && swappedMonth <= 12 && swappedDay >= 1 && swappedDay <= 31) {
+      const isSwappedPastOrPresent = year < currentY || (year === currentY && (swappedMonth < currentM || (swappedMonth === currentM && swappedDay <= currentD)));
+      if (isSwappedPastOrPresent) {
+        return { day: swappedDay, month: swappedMonth, year };
+      }
+    }
+  }
+  return { day, month, year };
+}
+
+/**
  * Disambiguasi Day dan Month dari format DD/MM vs MM/DD:
  * 1. Jika salah satu > 12, pasti itu adalah hari
  * 2. Proteksi masa depan: Insiden tidak mungkin di masa depan (> hari ini), jika DD/MM masa depan tapi MM/DD masa lalu, pasti MM/DD
@@ -450,44 +474,59 @@ export function resolveDayAndMonth(
   year: number,
   targetMonthHint?: number
 ): { day: number; month: number } {
+  let resolved: { day: number; month: number };
+
   if (p1 > 12 && p2 <= 12) {
-    return { day: p1, month: p2 };
-  }
-  if (p2 > 12 && p1 <= 12) {
-    return { day: p2, month: p1 };
-  }
+    resolved = { day: p1, month: p2 };
+  } else if (p2 > 12 && p1 <= 12) {
+    resolved = { day: p2, month: p1 };
+  } else {
+    const now = new Date();
+    const currentY = now.getFullYear();
+    const currentM = now.getMonth() + 1;
+    const currentD = now.getDate();
 
-  const now = new Date();
-  const currentY = now.getFullYear();
-  const currentM = now.getMonth() + 1;
-  const currentD = now.getDate();
+    if (year === currentY) {
+      const isP1Future = p2 > currentM || (p2 === currentM && p1 > currentD);
+      const isP2PastOrPresent = p1 < currentM || (p1 === currentM && p2 <= currentD);
+      if (isP1Future && isP2PastOrPresent) {
+        resolved = { day: p2, month: p1 };
+      } else {
+        const isP2Future = p1 > currentM || (p1 === currentM && p2 > currentD);
+        const isP1PastOrPresent = p2 < currentM || (p2 === currentM && p1 <= currentD);
+        if (isP2Future && isP1PastOrPresent) {
+          resolved = { day: p1, month: p2 };
+        } else {
+          const activeMonth = (targetMonthHint && targetMonthHint >= 1 && targetMonthHint <= 12)
+            ? targetMonthHint
+            : currentM;
 
-  if (year === currentY) {
-    const isP1Future = p2 > currentM || (p2 === currentM && p1 > currentD);
-    const isP2PastOrPresent = p1 < currentM || (p1 === currentM && p2 <= currentD);
-    if (isP1Future && isP2PastOrPresent) {
-      return { day: p2, month: p1 };
+          if (p1 === activeMonth && p2 !== activeMonth) {
+            resolved = { day: p2, month: p1 };
+          } else if (p2 === activeMonth && p1 !== activeMonth) {
+            resolved = { day: p1, month: p2 };
+          } else {
+            resolved = { day: p1, month: p2 };
+          }
+        }
+      }
+    } else {
+      const activeMonth = (targetMonthHint && targetMonthHint >= 1 && targetMonthHint <= 12)
+        ? targetMonthHint
+        : (now.getMonth() + 1);
+
+      if (p1 === activeMonth && p2 !== activeMonth) {
+        resolved = { day: p2, month: p1 };
+      } else if (p2 === activeMonth && p1 !== activeMonth) {
+        resolved = { day: p1, month: p2 };
+      } else {
+        resolved = { day: p1, month: p2 };
+      }
     }
-
-    const isP2Future = p1 > currentM || (p1 === currentM && p2 > currentD);
-    const isP1PastOrPresent = p2 < currentM || (p2 === currentM && p1 <= currentD);
-    if (isP2Future && isP1PastOrPresent) {
-      return { day: p1, month: p2 };
-    }
   }
 
-  const activeMonth = (targetMonthHint && targetMonthHint >= 1 && targetMonthHint <= 12)
-    ? targetMonthHint
-    : currentM;
-
-  if (p1 === activeMonth && p2 !== activeMonth) {
-    return { day: p2, month: p1 };
-  }
-  if (p2 === activeMonth && p1 !== activeMonth) {
-    return { day: p1, month: p2 };
-  }
-
-  return { day: p1, month: p2 };
+  const dis = disambiguateFutureDate(resolved.day, resolved.month, year);
+  return { day: dis.day, month: dis.month };
 }
 
 /**
@@ -553,12 +592,15 @@ export function normalizeDateString(str?: string | null, targetMonthHint?: numbe
     const parts = s.split(/[T\s]+/);
     const sep = parts[0].includes('-') ? '-' : '/';
     const dp = parts[0].split(sep);
-    const y = dp[0];
-    const m = dp[1].padStart(2, '0');
-    const d = dp[2].padStart(2, '0');
+    const y = parseInt(dp[0], 10);
+    const m = parseInt(dp[1], 10);
+    const d = parseInt(dp[2], 10);
+    const dis = disambiguateFutureDate(d, m, y);
+    const dStr = String(dis.day).padStart(2, '0');
+    const moStr = String(dis.month).padStart(2, '0');
     let t = parts[1] || '00:00:00';
     if (t.split(':').length === 2) t += ':00';
-    return `${d}/${m}/${y} ${t.split('.')[0]}`;
+    return `${dStr}/${moStr}/${y} ${t.split('.')[0]}`;
   }
 
   // DD/MM/YYYY atau MM/DD/YYYY dengan kemungkinan AM/PM
@@ -1186,7 +1228,21 @@ export function aggregateByWsidProblemDate(
     if (d && d.includes('-') && d.split('-')[0].length === 4) {
       const parts = d.split('T')[0].split(' ')[0].split('-');
       if (parts.length === 3) {
-        d = `${parts[2].padStart(2, '0')}/${parts[1].padStart(2, '0')}/${parts[0]}`;
+        const y = parseInt(parts[0], 10);
+        const m = parseInt(parts[1], 10);
+        const day = parseInt(parts[2], 10);
+        const dis = disambiguateFutureDate(day, m, y);
+        d = `${String(dis.day).padStart(2, '0')}/${String(dis.month).padStart(2, '0')}/${y}`;
+      }
+    } else if (d && d.includes('/')) {
+      const parts = d.split(' ')[0].split('/');
+      if (parts.length === 3) {
+        const p1 = parseInt(parts[0], 10);
+        const p2 = parseInt(parts[1], 10);
+        let y = parseInt(parts[2], 10);
+        if (String(y).length === 2) y = 2000 + y;
+        const dis = disambiguateFutureDate(p1, p2, y);
+        d = `${String(dis.day).padStart(2, '0')}/${String(dis.month).padStart(2, '0')}/${y}`;
       }
     }
 
