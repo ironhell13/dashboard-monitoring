@@ -12,7 +12,7 @@ export interface CachedSnapshot {
   matchedMachines?: any[];
 }
 
-export const CACHE_SCHEMA_VERSION = 2;
+export const CACHE_SCHEMA_VERSION = 3;
 const CACHE_VERSION_TAG = 'EMONS_CACHE_VERSION_TAG';
 
 const DB_NAME = 'DOWNTIME_BCA_CACHE_DB';
@@ -484,4 +484,84 @@ export async function clearMonitoringCache(): Promise<boolean> {
 export async function loadMonitoringSnapshot(): Promise<MonitoringSnapshot | null> {
   return null;
 }
+
+/**
+ * Menyimpan cache matriks frekuensi per bulan ke IndexedDB (stale-while-revalidate)
+ */
+export async function saveFrequencyMatrixCache(
+  month: string,
+  data: { items: any[]; allDates: string[]; totalCount?: number }
+): Promise<boolean> {
+  try {
+    const db = await openIndexedDB();
+    const cacheKey = getScopedCacheKey(`freq_matrix_${month}`);
+
+    const payload = {
+      version: CACHE_SCHEMA_VERSION,
+      month,
+      savedAt: Date.now(),
+      items: Array.isArray(data.items) ? data.items : [],
+      allDates: Array.isArray(data.allDates) ? data.allDates : [],
+      totalCount: data.totalCount ?? data.items?.length ?? 0
+    };
+
+    await new Promise<void>((resolve, reject) => {
+      const tx = db.transaction(STORE_NAME, 'readwrite');
+      const store = tx.objectStore(STORE_NAME);
+      const req = store.put(payload, cacheKey);
+      req.onsuccess = () => resolve();
+      req.onerror = () => reject(req.error);
+      tx.oncomplete = () => resolve();
+    });
+    return true;
+  } catch (err) {
+    console.warn('[dbCache] Gagal menyimpan cache matriks frekuensi:', err);
+    return false;
+  }
+}
+
+/**
+ * Memuat cache matriks frekuensi per bulan dari IndexedDB untuk tampilan instan (<15ms)
+ */
+export async function loadFrequencyMatrixCache(
+  month: string
+): Promise<{ items: any[]; allDates: string[]; totalCount?: number; savedAt: number } | null> {
+  try {
+    // Purge otomatis jika versi schema cache lama
+    const storedVer = localStorage.getItem(CACHE_VERSION_TAG);
+    if (!storedVer || parseInt(storedVer, 10) !== CACHE_SCHEMA_VERSION) {
+      await clearMonitoringCache();
+      localStorage.setItem(CACHE_VERSION_TAG, String(CACHE_SCHEMA_VERSION));
+      return null;
+    }
+
+    const db = await openIndexedDB();
+    const cacheKey = getScopedCacheKey(`freq_matrix_${month}`);
+
+    const result: any = await new Promise((resolve) => {
+      try {
+        const tx = db.transaction(STORE_NAME, 'readonly');
+        const store = tx.objectStore(STORE_NAME);
+        const req = store.get(cacheKey);
+        req.onsuccess = () => resolve(req.result || null);
+        req.onerror = () => resolve(null);
+      } catch (_) {
+        resolve(null);
+      }
+    });
+
+    if (result && result.version === CACHE_SCHEMA_VERSION && result.month === month && Array.isArray(result.items)) {
+      return {
+        items: result.items,
+        allDates: result.allDates || [],
+        totalCount: result.totalCount ?? result.items.length,
+        savedAt: result.savedAt || 0
+      };
+    }
+    return null;
+  } catch (_) {
+    return null;
+  }
+}
+
 

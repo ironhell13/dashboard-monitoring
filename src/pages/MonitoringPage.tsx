@@ -88,6 +88,8 @@ import {
   uploadIncidentChunkApi,
   getUploadLogApi,
   getDailyIncidentsFromDbApi,
+  getFrequencyMatrixApi,
+  getFrequencyDetailApi,
   type OpenIncidentItem,
   type IncidentHistoryItem,
   type UploadLogItem
@@ -116,7 +118,12 @@ import {
   type DailyIncidentRow,
   type WsidProblemDateAggregation
 } from '../utils/dailyIncidentParser';
-import { loadLocalActions, clearMonitoringCache } from '../utils/dbCache';
+import {
+  loadLocalActions,
+  clearMonitoringCache,
+  saveFrequencyMatrixCache,
+  loadFrequencyMatrixCache
+} from '../utils/dbCache';
 import { useDataStore } from '../store/useDataStore';
 import FollowUpPage from './FollowUpPage';
 import { useQuickChips } from '../utils/quickChipsService';
@@ -127,6 +134,7 @@ import {
   getMachineMetadata,
   getMachinesMap,
   fetchRecentIncidentsForChronicSupabase,
+  fetchDistinctIncidentMonthsSupabase,
   toWibDateTimeString,
   toWibDateOnly,
   toWibTimeOnly,
@@ -858,7 +866,22 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
   const [isUploadModalOpen, setIsUploadModalOpen] = useState(false);
 
   // 4. Tab 2: Frekuensi per Tanggal State
-  const [freqMonth, setFreqMonth] = useState('ALL');
+  const getCurrentWibMonth = () => {
+    const now = new Date();
+    const wib = new Date(now.getTime() + 7 * 3600 * 1000);
+    const y = wib.getUTCFullYear();
+    const m = String(wib.getUTCMonth() + 1).padStart(2, '0');
+    return `${y}-${m}`;
+  };
+
+  const [freqMonth, setFreqMonth] = useState<string>(() => getCurrentWibMonth());
+  const [freqMatrix, setFreqMatrix] = useState<WsidProblemDateAggregation[]>([]);
+  const [freqDates, setFreqDates] = useState<string[]>([]);
+  const [isLoadingFreq, setIsLoadingFreq] = useState(false);
+  const [freqError, setFreqError] = useState<string | null>(null);
+  const [freqSuccessMsg, setFreqSuccessMsg] = useState<string | null>(null);
+  const [availableFreqMonths, setAvailableFreqMonths] = useState<string[]>([]);
+  const [freqDetailIncidents, setFreqDetailIncidents] = useState<DailyIncidentRow[]>([]);
   const [freqSearch, setFreqSearch] = useState('');
   const [selectedEventCodesFreq, setSelectedEventCodesFreq] = useState<string[]>([]);
   const [isEventCodeDropdownOpenFreq, setIsEventCodeDropdownOpenFreq] = useState(false);
@@ -1189,37 +1212,91 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
     }
   };
 
-  // Muat dataset harian Supabase saat awal mount:
-  // 1. Tarik dataset chronic cepat secara instan (<300ms)
-  // 2. Tarik dataset harian di background setelah 1.2 detik secara aman (ringan & non-blocking)
+  // Muat daftar periode bulan dari Supabase
+  useEffect(() => {
+    let mounted = true;
+    fetchDistinctIncidentMonthsSupabase().then((months) => {
+      if (mounted && Array.isArray(months) && months.length > 0) {
+        setAvailableFreqMonths(months);
+      }
+    });
+    return () => { mounted = false; };
+  }, []);
+
+  // Muat dataset chronic cepat secara instan (<300ms) saat mount
   useEffect(() => {
     fetchChronicDataset();
-    const timer = setTimeout(() => {
-      fetchDailyIncidentsFromDb(historyMonth !== 'ALL' ? historyMonth : undefined);
-    }, 1200);
-    return () => clearTimeout(timer);
   }, [fetchChronicDataset]);
 
-  // Lazy-load dataset harian hanya ketika user membuka tab Frekuensi atau Grafik 24 Jam jika belum termuat
+  // Fungsi loader data matriks Frekuensi (RPC Database Server-side + Cache Stale-while-revalidate)
+  const loadFrequencyData = useCallback(async (targetMonth: string, forceRefresh = false) => {
+    if (!targetMonth || targetMonth === 'ALL') return;
+    setIsLoadingFreq(true);
+    setFreqError(null);
+    const t0 = performance.now();
+
+    try {
+      // 1. Stale-while-revalidate: Cek cache IndexedDB terlebih dahulu untuk first-paint cepat (<15ms)
+      if (!forceRefresh) {
+        const cached = await loadFrequencyMatrixCache(targetMonth);
+        if (cached && Array.isArray(cached.items) && cached.items.length > 0) {
+          setFreqMatrix(cached.items);
+          setFreqDates(cached.allDates || []);
+          console.info(`[Frekuensi] Loaded from IndexedDB cache in ${(performance.now() - t0).toFixed(1)}ms (${cached.items.length} items)`);
+        }
+      }
+
+      // 2. Fetch fresh data dari database via RPC get_frequency_matrix
+      console.time(`fetchFrequencyMatrix-${targetMonth}`);
+      const res = await getFrequencyMatrixApi(targetMonth);
+      console.timeEnd(`fetchFrequencyMatrix-${targetMonth}`);
+
+      if (res.success && res.items) {
+        setFreqMatrix(res.items);
+        setFreqDates(res.allDates || []);
+        setFreqSuccessMsg(`${res.items.length.toLocaleString('id-ID')} kombinasi WSID-problem untuk ${targetMonth} berhasil dimuat.`);
+        // Simpan ke cache IndexedDB
+        await saveFrequencyMatrixCache(targetMonth, {
+          items: res.items,
+          allDates: res.allDates,
+          totalCount: res.totalIncidents
+        });
+      } else {
+        setFreqError(res.message || `Gagal memuat data frekuensi bulan ${targetMonth}`);
+      }
+    } catch (err: any) {
+      console.error('[Frekuensi] Error loading matrix:', err);
+      setFreqError(err.message || 'Terjadi kesalahan saat memuat data frekuensi.');
+    } finally {
+      setIsLoadingFreq(false);
+    }
+  }, []);
+
+  // Auto-fetch data matriks Frekuensi saat tab Frekuensi aktif atau bulan berubah
+  useEffect(() => {
+    if (activeTab === 'FREKUENSI') {
+      loadFrequencyData(freqMonth);
+    }
+  }, [activeTab, freqMonth, loadFrequencyData]);
+
+  // Lazy-load dataset harian hanya ketika user membuka tab Grafik 24 Jam jika belum termuat
   useEffect(() => {
     if (
-      (activeTab === 'FREKUENSI' || activeTab === 'GRAFIK_24JAM') &&
+      activeTab === 'GRAFIK_24JAM' &&
       allDailyIncidents.length === 0 &&
       !isLoadingDailyFromDb
     ) {
-      const targetM = activeTab === 'FREKUENSI'
-        ? (freqMonth !== 'ALL' ? freqMonth : undefined)
-        : (historyMonth !== 'ALL' ? historyMonth : undefined);
+      const targetM = historyMonth !== 'ALL' ? historyMonth : getCurrentWibMonth();
       fetchDailyIncidentsFromDb(targetM);
     }
-  }, [activeTab, allDailyIncidents.length, isLoadingDailyFromDb, historyMonth, freqMonth]);
+  }, [activeTab, allDailyIncidents.length, isLoadingDailyFromDb, historyMonth]);
 
   // =========================================================================
   // BASIS DATA FREKUENSI & DETEKSI PROBLEM CHRONIC
   // =========================================================================
   const frequencyDataset = useMemo(() => {
-    // Guard: Hindari kalkulasi berat saat user sedang berada di tab Problem Open atau History
-    if (activeTab !== 'FREKUENSI' && activeTab !== 'GRAFIK_24JAM') {
+    // Guard: Hindari kalkulasi berat saat user sedang berada di tab Problem Open, History, atau Frekuensi
+    if (activeTab !== 'GRAFIK_24JAM') {
       return [];
     }
 
@@ -2865,44 +2942,28 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
   // =========================================================================
   // TAB 2: LOGIC FREKUENSI
   // =========================================================================
-  const { items: aggFreqItems, allDates: freqDates } = useMemo(() => {
-    return aggregateByWsidProblemDate(frequencyDataset);
-  }, [frequencyDataset]);
+  const aggFreqItems = freqMatrix;
 
   const freqAvailableEvents = useMemo(() => {
     const set = new Set<string>();
-    aggFreqItems.forEach((r) => {
+    freqMatrix.forEach((r) => {
       if (r.eventCodeDesc && r.eventCodeDesc.trim()) {
         set.add(r.eventCodeDesc.trim());
       }
-    });
-    frequencyDataset.forEach((r) => {
-      const code = (r.eventCodeDesc || r.eventCode || '').trim();
-      if (code && code !== '-' && code !== 'N/A') set.add(code);
     });
     if (set.size === 0) {
       TARGET_EVENT_CODES.forEach((c) => set.add(c));
     }
     return Array.from(set).sort((a, b) => a.localeCompare(b));
-  }, [aggFreqItems, frequencyDataset]);
+  }, [freqMatrix]);
 
   const freqAvailableMonths = useMemo(() => {
-    const set = new Set<string>();
-    set.add('2026-11');
+    const set = new Set<string>(availableFreqMonths);
+    set.add(getCurrentWibMonth());
     set.add('2026-10');
     set.add('2026-09');
-    set.add('2026-08');
-    set.add('2026-07');
-    const scanList = allDailyIncidents.length > 0 ? allDailyIncidents : [...chronicDataset, ...historyResults];
-    scanList.forEach((r) => {
-      const raw = r.dateStr || r.startTime || (r as any).tanggal;
-      if (raw && raw.length >= 7) {
-        const m = extractMonthStr(raw, r.monthStr || '');
-        if (m && m.length === 7) set.add(m);
-      }
-    });
     return Array.from(set).sort((a, b) => b.localeCompare(a));
-  }, [allDailyIncidents, chronicDataset, historyResults]);
+  }, [availableFreqMonths]);
 
   const freqAvailableSPs = useMemo(() => {
     const set = new Set<string>();
@@ -3188,15 +3249,30 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
     setIsLoadingFreqDetail(true);
 
     try {
-      const res = await getWsidPenangananHistoryApi(item.wsid);
-      if (res.success && res.history) {
-        setFreqDetailHistory(res.history);
+      const [histRes, rawRes] = await Promise.all([
+        getWsidPenangananHistoryApi(item.wsid),
+        getFrequencyDetailApi({
+          wsid: item.wsid,
+          problem: item.eventCodeDesc,
+          month: freqMonth !== 'ALL' ? freqMonth : undefined
+        })
+      ]);
+
+      if (histRes.success && histRes.history) {
+        setFreqDetailHistory(histRes.history);
       } else {
         setFreqDetailHistory([]);
+      }
+
+      if (rawRes.success && rawRes.rows) {
+        setFreqDetailIncidents(rawRes.rows);
+      } else {
+        setFreqDetailIncidents([]);
       }
     } catch (e) {
       console.warn('Gagal memuat riwayat penanganan server:', e);
       setFreqDetailHistory([]);
+      setFreqDetailIncidents([]);
     } finally {
       setIsLoadingFreqDetail(false);
     }
@@ -3205,6 +3281,7 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
   const handleCloseFreqDetail = () => {
     setSelectedFreqItemForDetail(null);
     setFreqDetailHistory([]);
+    setFreqDetailIncidents([]);
     setShowAddPenangananInModal(false);
   };
 
@@ -3285,7 +3362,7 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
     const targetWsid = selectedFreqItemForDetail.wsid.trim().toUpperCase();
     const map = new Map<string, number>();
 
-    frequencyDataset.forEach((r: any) => {
+    freqDetailIncidents.forEach((r: any) => {
       if ((r.wsid || '').trim().toUpperCase() !== targetWsid) return;
       const act = r.actionTerakhir && r.actionTerakhir !== '-' ? r.actionTerakhir : (r.comment || r.keterangan || '');
       if (act && act.trim() !== '' && act.trim() !== '-') {
@@ -3308,14 +3385,14 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
     });
 
     return map;
-  }, [selectedFreqItemForDetail, frequencyDataset, freqDetailHistory]);
+  }, [selectedFreqItemForDetail, freqDetailIncidents, freqDetailHistory]);
 
   const freqDetailRows = useMemo(() => {
     if (!selectedFreqItemForDetail) return [];
     const targetWsid = selectedFreqItemForDetail.wsid.trim().toUpperCase();
     const targetProblem = (selectedFreqItemForDetail.eventCodeDesc || '').trim().toLowerCase();
 
-    const matched = frequencyDataset.filter((r) => {
+    const matched = freqDetailIncidents.filter((r) => {
       const matchWsid = r.wsid.trim().toUpperCase() === targetWsid;
       const matchProblem = !targetProblem || (r.eventCodeDesc || '').trim().toLowerCase() === targetProblem;
       if (!matchWsid || !matchProblem) return false;
@@ -6915,15 +6992,14 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
                 {/* Month Filter */}
                 <select
                   value={freqMonth}
-                  onChange={async (e) => {
+                  onChange={(e) => {
                     const newMonth = e.target.value;
                     setFreqMonth(newMonth);
                     setCurrentPageFreq(1);
-                    await fetchDailyIncidentsFromDb(newMonth);
+                    loadFrequencyData(newMonth);
                   }}
                   className="h-9 px-3 rounded-xl bg-[#F8F9FF] hover:bg-[#EFF4FF] text-[#0D1C2E] text-xs font-semibold border border-[#EFF4FF] outline-none cursor-pointer"
                 >
-                  <option value="ALL">Semua Bulan</option>
                   {freqAvailableMonths.map((m) => {
                     const [y, mo] = m.split('-');
                     const monthNames = ['', 'Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni', 'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember'];
@@ -7043,13 +7119,13 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
                 {/* Sync Database Button */}
                 <button
                   type="button"
-                  onClick={() => fetchDailyIncidentsFromDb(freqMonth)}
-                  disabled={isLoadingDailyFromDb}
+                  onClick={() => loadFrequencyData(freqMonth, true)}
+                  disabled={isLoadingFreq}
                   className="inline-flex items-center gap-1.5 h-9 px-3 rounded-xl bg-[#EFF4FF] hover:bg-[#E5EEFF] text-blue-600 text-xs font-semibold shadow-2xs transition-all cursor-pointer"
-                  title="Sinkronkan data frekuensi dari database spreadsheet"
+                  title="Sinkronkan data frekuensi dari database Supabase"
                 >
-                  <RefreshCw size={13} className={isLoadingDailyFromDb ? 'animate-spin' : ''} />
-                  <span>Sync DB ({allDailyIncidents.length > 0 ? `${allDailyIncidents.length} Data` : 'Muat Data'})</span>
+                  <RefreshCw size={13} className={isLoadingFreq ? 'animate-spin' : ''} />
+                  <span>Sync DB</span>
                 </button>
 
                 {/* Export Excel Button */}
@@ -7064,6 +7140,38 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
                 </button>
               </div>
             </div>
+
+            {/* Status & Banner Notifikasi Frekuensi */}
+            {freqError && (
+              <div className="w-full bg-rose-50 border border-rose-200 text-rose-700 px-4 py-2.5 rounded-xl text-xs flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <AlertTriangle size={15} className="text-rose-600 shrink-0" />
+                  <span>{freqError}</span>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => loadFrequencyData(freqMonth, true)}
+                  className="text-xs font-bold underline hover:text-rose-900 cursor-pointer"
+                >
+                  Coba Lagi
+                </button>
+              </div>
+            )}
+            {freqSuccessMsg && !freqError && (
+              <div className="w-full bg-emerald-50 border border-emerald-200 text-emerald-800 px-4 py-2 rounded-xl text-xs flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <CheckCircle2 size={15} className="text-emerald-600 shrink-0" />
+                  <span>{freqSuccessMsg}</span>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setFreqSuccessMsg(null)}
+                  className="text-xs text-emerald-600 hover:text-emerald-900 cursor-pointer font-bold"
+                >
+                  ✕
+                </button>
+              </div>
+            )}
 
             {/* Matrix Table Card */}
             <div className="bg-white rounded-2xl shadow-sm border border-[#EFF4FF] overflow-hidden">
@@ -7159,10 +7267,34 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-[#EFF4FF]">
-                    {paginatedFreqItems.length === 0 ? (
+                    {isLoadingFreq && paginatedFreqItems.length === 0 ? (
+                      <tr>
+                        <td colSpan={7 + displayedFreqDates.length} className="text-center py-16 text-slate-500">
+                          <div className="flex flex-col items-center justify-center gap-2">
+                            <RefreshCw size={24} className="animate-spin text-blue-600" />
+                            <span className="font-semibold text-xs text-[#0D1C2E]">Memuat matriks frekuensi bulan {freqMonth}...</span>
+                            <span className="text-[11px] text-slate-400">Mengambil data agregasi dari database Supabase</span>
+                          </div>
+                        </td>
+                      </tr>
+                    ) : paginatedFreqItems.length === 0 ? (
                       <tr>
                         <td colSpan={7 + displayedFreqDates.length} className="text-center py-12 text-slate-400">
-                          Tidak ada data frekuensi yang cocok dengan filter saat ini.
+                          {freqError ? (
+                            <div className="flex flex-col items-center gap-2 text-rose-600">
+                              <AlertTriangle size={20} />
+                              <span className="text-xs font-semibold">{freqError}</span>
+                              <button
+                                type="button"
+                                onClick={() => loadFrequencyData(freqMonth, true)}
+                                className="px-3 py-1 bg-rose-100 hover:bg-rose-200 text-rose-800 rounded-lg text-xs font-semibold cursor-pointer"
+                              >
+                                Coba Lagi
+                              </button>
+                            </div>
+                          ) : (
+                            `Tidak ada data frekuensi untuk bulan ${freqMonth} yang cocok dengan filter saat ini.`
+                          )}
                         </td>
                       </tr>
                     ) : (

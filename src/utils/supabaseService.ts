@@ -13,7 +13,14 @@ import {
   loadLocalActions
 } from './dbCache';
 import { type OpenIncidentItem, unpackCompactTabular } from './monitoringService';
-import { cleanWsid, parseDateTime, disambiguateFutureDate, resolveDayAndMonth } from './dailyIncidentParser';
+import {
+  cleanWsid,
+  parseDateTime,
+  disambiguateFutureDate,
+  resolveDayAndMonth,
+  type WsidProblemDateAggregation,
+  type DailyIncidentRow
+} from './dailyIncidentParser';
 
 // ==============================================================================
 // 1. QUICK CHIPS (PILIHAN CEPAT) & REALTIME
@@ -2097,84 +2104,89 @@ export async function fetchDailyIncidentsFromDbSupabase(payload?: {
   if (!client) return { success: false, rows: [], totalCount: 0, message: 'Supabase belum dikonfigurasi.' };
 
   try {
-    const maxLimit = payload?.limit || 20000;
+    const userLimit = payload?.limit;
     const chunkSize = 1000;
-    const concurrency = 4;
     const allData: any[] = [];
     const selectCols = 'id, incident_key, wsid, problem, status, start_time, end_time, duration_minutes, action_taken, action_by, action_at, periode_bulan';
     const machinesMap = getMachinesMap();
 
-    // Tarik data secara chunked range pagination dengan concurrency 4 agar 4x lebih cepat
-    for (let from = 0; from < maxLimit; from += chunkSize * concurrency) {
-      const chunkPromises = [];
-      for (let c = 0; c < concurrency; c++) {
-        const cFrom = from + c * chunkSize;
-        if (cFrom >= maxLimit) break;
-        const cTo = Math.min(cFrom + chunkSize - 1, maxLimit - 1);
+    // Hitung rentang start_time dalam ISO berbasis zona waktu WIB (UTC+7)
+    let wibStartIso: string | null = null;
+    let wibEndIso: string | null = null;
 
-        let query = client
-          .from('incident_logs')
-          .select(selectCols)
-          .order('start_time', { ascending: false })
-          .order('id', { ascending: false })
-          .range(cFrom, cTo);
-
-        if (payload?.monthStr && payload.monthStr !== 'ALL') {
-          const [yStr, mStr] = payload.monthStr.split('-');
-          const y = parseInt(yStr, 10);
-          const m = parseInt(mStr, 10);
-          if (!isNaN(y) && !isNaN(m)) {
-            const startIso = new Date(Date.UTC(y, m - 1, 1, 0, 0, 0)).toISOString();
-            const endIso = new Date(Date.UTC(m === 12 ? y + 1 : y, m === 12 ? 0 : m, 1, 0, 0, 0)).toISOString();
-            query = query.or(`periode_bulan.eq.${payload.monthStr},and(start_time.gte.${startIso},start_time.lt.${endIso})`);
-          } else {
-            query = query.eq('periode_bulan', payload.monthStr);
-          }
-        } else if (payload?.startMonth && payload?.endMonth) {
-          const [syStr, smStr] = payload.startMonth.split('-');
-          const [eyStr, emStr] = payload.endMonth.split('-');
-          const sy = parseInt(syStr, 10);
-          const sm = parseInt(smStr, 10);
-          const ey = parseInt(eyStr, 10);
-          const em = parseInt(emStr, 10);
-          if (!isNaN(sy) && !isNaN(sm) && !isNaN(ey) && !isNaN(em)) {
-            const startIso = new Date(Date.UTC(sy, sm - 1, 1, 0, 0, 0)).toISOString();
-            const endIso = new Date(Date.UTC(em === 12 ? ey + 1 : ey, em === 12 ? 0 : em, 1, 0, 0, 0)).toISOString();
-            query = query.or(`and(periode_bulan.gte.${payload.startMonth},periode_bulan.lte.${payload.endMonth}),and(start_time.gte.${startIso},start_time.lt.${endIso})`);
-          } else {
-            query = query.gte('periode_bulan', payload.startMonth).lte('periode_bulan', payload.endMonth);
-          }
-        }
-
-        chunkPromises.push(query);
+    if (payload?.monthStr && payload.monthStr !== 'ALL') {
+      const [yStr, mStr] = payload.monthStr.split('-');
+      const y = parseInt(yStr, 10);
+      const m = parseInt(mStr, 10);
+      if (!isNaN(y) && !isNaN(m)) {
+        wibStartIso = new Date(Date.UTC(y, m - 1, 1, -7, 0, 0)).toISOString();
+        wibEndIso = new Date(Date.UTC(m === 12 ? y + 1 : y, m === 12 ? 0 : m, 1, -7, 0, 0)).toISOString();
       }
-
-      const results = await Promise.all(chunkPromises);
-      let reachedEnd = false;
-
-      for (const res of results) {
-        if (res.error) {
-          console.error('fetchDailyIncidentsFromDbSupabase error:', res.error);
-          throw res.error;
-        }
-        if (res.data && res.data.length > 0) {
-          allData.push(...res.data);
-          if (res.data.length < chunkSize) {
-            reachedEnd = true;
-            break;
-          }
-        } else {
-          reachedEnd = true;
-          break;
-        }
+    } else if (payload?.startMonth && payload?.endMonth) {
+      const [syStr, smStr] = payload.startMonth.split('-');
+      const [eyStr, emStr] = payload.endMonth.split('-');
+      const sy = parseInt(syStr, 10);
+      const sm = parseInt(smStr, 10);
+      const ey = parseInt(eyStr, 10);
+      const em = parseInt(emStr, 10);
+      if (!isNaN(sy) && !isNaN(sm) && !isNaN(ey) && !isNaN(em)) {
+        wibStartIso = new Date(Date.UTC(sy, sm - 1, 1, -7, 0, 0)).toISOString();
+        wibEndIso = new Date(Date.UTC(em === 12 ? ey + 1 : ey, em === 12 ? 0 : em, 1, -7, 0, 0)).toISOString();
       }
-
-      if (reachedEnd) break;
     }
 
-    const rows = allData.map((row: any) => {
-      const cleanWsid = (row.wsid || '').trim().toUpperCase();
-      const meta = machinesMap.get(cleanWsid) || getMachineMetadata(row.wsid);
+    // Keyset pagination memakai cursor (start_time desc, id desc)
+    let cursorStartTime: string | null = null;
+    let cursorId: number | null = null;
+
+    while (true) {
+      let query = client
+        .from('incident_logs')
+        .select(selectCols)
+        .order('start_time', { ascending: false })
+        .order('id', { ascending: false })
+        .limit(chunkSize);
+
+      if (wibStartIso && wibEndIso) {
+        query = query.gte('start_time', wibStartIso).lt('start_time', wibEndIso);
+      } else if (payload?.monthStr && payload.monthStr !== 'ALL') {
+        query = query.eq('periode_bulan', payload.monthStr);
+      }
+
+      if (cursorStartTime && cursorId !== null) {
+        query = query.or(`start_time.lt.${cursorStartTime},and(start_time.eq.${cursorStartTime},id.lt.${cursorId})`);
+      }
+
+      const { data, error } = await query;
+      if (error) {
+        console.error('fetchDailyIncidentsFromDbSupabase error:', error);
+        throw error;
+      }
+
+      if (!data || data.length === 0) {
+        break;
+      }
+
+      allData.push(...data);
+
+      if (data.length < chunkSize) {
+        break;
+      }
+
+      if (userLimit && allData.length >= userLimit) {
+        break;
+      }
+
+      const lastRow = data[data.length - 1];
+      cursorStartTime = lastRow.start_time;
+      cursorId = lastRow.id;
+    }
+
+    const finalRows = userLimit ? allData.slice(0, userLimit) : allData;
+
+    const rows = finalRows.map((row: any) => {
+      const cleanWsidStr = (row.wsid || '').trim().toUpperCase();
+      const meta = machinesMap.get(cleanWsidStr) || getMachineMetadata(row.wsid);
       return mapRowToDailyIncidentRow(row, meta);
     });
 
@@ -2290,12 +2302,19 @@ export async function fetchDistinctIncidentMonthsSupabase(): Promise<string[]> {
   if (!client) return [];
 
   try {
+    // 1. Coba via RPC get_distinct_incident_months (instan & lengkap)
+    const { data: rpcData, error: rpcErr } = await client.rpc('get_distinct_incident_months');
+    if (!rpcErr && Array.isArray(rpcData) && rpcData.length > 0) {
+      return rpcData;
+    }
+
+    // 2. Fallback via select query jika RPC belum dibuat
     const { data, error } = await client
       .from('incident_logs')
       .select('periode_bulan')
       .not('periode_bulan', 'is', null)
       .order('periode_bulan', { ascending: false })
-      .limit(1000);
+      .limit(10000);
 
     if (!error && Array.isArray(data)) {
       const set = new Set<string>();
@@ -2311,6 +2330,195 @@ export async function fetchDistinctIncidentMonthsSupabase(): Promise<string[]> {
   }
   return [];
 }
+
+/**
+ * Mengambil matriks agregasi frekuensi problem bulanan via RPC get_frequency_matrix (Server-side)
+ * Format respon RPC: [wsid, problem, 'YYYY-MM-DD', freq, dur]
+ */
+export async function fetchFrequencyMatrixSupabase(month: string): Promise<{
+  success: boolean;
+  items: WsidProblemDateAggregation[];
+  allDates: string[];
+  totalIncidents?: number;
+  message?: string;
+}> {
+  const client = getSupabase();
+  if (!client) {
+    return { success: false, items: [], allDates: [], message: 'Supabase belum dikonfigurasi.' };
+  }
+
+  try {
+    const targetMonth = month && month !== 'ALL' ? month : toWibDateOnly(new Date()).slice(0, 7).replace('/', '-');
+    const { data, error } = await client.rpc('get_frequency_matrix', { p_month: targetMonth });
+
+    if (error) {
+      console.error('[fetchFrequencyMatrixSupabase] RPC error:', error);
+      throw error;
+    }
+
+    const rawList: any[] = Array.isArray(data) ? data : [];
+    const map: Record<string, WsidProblemDateAggregation> = {};
+    const datesSet = new Set<string>();
+    const machinesMap = getMachinesMap();
+    let totalIncidents = 0;
+
+    for (const row of rawList) {
+      if (!Array.isArray(row) || row.length < 5) continue;
+      const [rawWsid, problem, tglIso, freq, dur] = row;
+      const cleanW = cleanWsid(rawWsid);
+      if (!cleanW) continue;
+
+      // Ubah YYYY-MM-DD ke DD/MM/YYYY
+      let dFormatted = tglIso;
+      if (tglIso && tglIso.includes('-')) {
+        const parts = tglIso.split('-');
+        if (parts.length === 3) {
+          dFormatted = `${parts[2].padStart(2, '0')}/${parts[1].padStart(2, '0')}/${parts[0]}`;
+        }
+      }
+
+      if (dFormatted && dFormatted !== '-') {
+        datesSet.add(dFormatted);
+      }
+
+      const key = `${cleanW}__${problem || '-'}`;
+      if (!map[key]) {
+        const meta = machinesMap.get(cleanW) || getMachineMetadata(cleanW) || {};
+        const sp = resolveServicePoint(meta);
+        const rawSek = meta.sektor_bca || meta.sektor || '-';
+        const cleanSek = cleanSektorName(rawSek);
+        const sek = cleanSek !== '-' ? cleanSek : (rawSek !== '-' ? rawSek : '-');
+        const servicePointSektor = (sp && sek && sp !== '-' && sek !== '-')
+          ? (sek.includes('-') ? sek : `${sp} - ${sek}`)
+          : (sek !== '-' ? sek : sp);
+
+        map[key] = {
+          wsid: cleanW,
+          lokasi: meta.lokasi || '-',
+          servicePointSektor,
+          typeMesin: meta.tipe_mesin || meta.tipeMesin || 'ATM',
+          vendorMesin: meta.vendor || meta.vendorMesin || '-',
+          eventCodeDesc: String(problem || '-'),
+          dateCounts: {},
+          dateDurations: {},
+          totalFrekuensi: 0,
+          totalDurasi: 0
+        };
+      }
+
+      const item = map[key];
+      const count = Number(freq) || 0;
+      const duration = Number(dur) || 0;
+
+      if (dFormatted && dFormatted !== '-') {
+        item.dateCounts[dFormatted] = (item.dateCounts[dFormatted] || 0) + count;
+        if (!item.dateDurations) item.dateDurations = {};
+        item.dateDurations[dFormatted] = (item.dateDurations[dFormatted] || 0) + duration;
+      }
+      item.totalFrekuensi += count;
+      item.totalDurasi += duration;
+      totalIncidents += count;
+    }
+
+    // Sort dates chronologically
+    const allDates = Array.from(datesSet).sort((a, b) => {
+      const da = a.split('/').reverse().join('-');
+      const db = b.split('/').reverse().join('-');
+      return da.localeCompare(db);
+    });
+
+    const items = Object.values(map).sort((a, b) => b.totalFrekuensi - a.totalFrekuensi);
+
+    return {
+      success: true,
+      items,
+      allDates,
+      totalIncidents
+    };
+  } catch (err: any) {
+    console.error('fetchFrequencyMatrixSupabase error:', err);
+    return {
+      success: false,
+      items: [],
+      allDates: [],
+      message: err.message || 'Gagal memuat matriks frekuensi dari Supabase.'
+    };
+  }
+}
+
+/**
+ * Mengambil detail baris insiden harian untuk satu WSID + problem + bulan (untuk Modal Detail Penanganan)
+ */
+export async function fetchFrequencyDetailSupabase(payload: {
+  wsid: string;
+  problem: string;
+  month?: string;
+}): Promise<{
+  success: boolean;
+  rows: DailyIncidentRow[];
+  message?: string;
+}> {
+  const client = getSupabase();
+  if (!client) {
+    return { success: false, rows: [], message: 'Supabase belum dikonfigurasi.' };
+  }
+
+  try {
+    const cleanW = cleanWsid(payload.wsid);
+    const machinesMap = getMachinesMap();
+    const meta = machinesMap.get(cleanW) || getMachineMetadata(payload.wsid);
+
+    let query = client
+      .from('incident_logs')
+      .select('*')
+      .eq('wsid', cleanW)
+      .eq('problem', payload.problem)
+      .not('start_time', 'is', null)
+      .order('start_time', { ascending: false })
+      .order('id', { ascending: false })
+      .limit(500);
+
+    if (payload.month && payload.month !== 'ALL') {
+      const [yStr, mStr] = payload.month.split('-');
+      const y = parseInt(yStr, 10);
+      const m = parseInt(mStr, 10);
+      if (!isNaN(y) && !isNaN(m)) {
+        // Rentang bulan WIB (UTC+7)
+        const startIso = new Date(Date.UTC(y, m - 1, 1, -7, 0, 0)).toISOString();
+        const endIso = new Date(Date.UTC(m === 12 ? y + 1 : y, m === 12 ? 0 : m, 1, -7, 0, 0)).toISOString();
+        query = query.gte('start_time', startIso).lt('start_time', endIso);
+      }
+    }
+
+    const { data, error } = await query;
+    if (error) throw error;
+
+    // Deduplikasi per incident_key (ambil versi terbaru per insiden)
+    const seen = new Set<string>();
+    const deduplicated: any[] = [];
+    for (const r of data || []) {
+      const k = r.incident_key || `${r.wsid}|${r.problem}|${r.start_time}`;
+      if (seen.has(k)) continue;
+      seen.add(k);
+      deduplicated.push(r);
+    }
+
+    const rows = deduplicated.map((r) => mapRowToDailyIncidentRow(r, meta));
+
+    return {
+      success: true,
+      rows
+    };
+  } catch (err: any) {
+    console.error('fetchFrequencyDetailSupabase error:', err);
+    return {
+      success: false,
+      rows: [],
+      message: err.message || 'Gagal memuat detail insiden frekuensi.'
+    };
+  }
+}
+
 
 /**
  * Menghapus data problem (incident_logs & opsional active_incidents) per periode tertentu

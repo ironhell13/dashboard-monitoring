@@ -10,6 +10,8 @@ import {
   fetchWsidPenangananHistorySupabase,
   searchIncidentsSupabase,
   fetchDailyIncidentsFromDbSupabase,
+  fetchFrequencyMatrixSupabase,
+  fetchFrequencyDetailSupabase,
   fetchUploadLogsSupabase,
   subscribeActiveIncidentsSupabase,
   mapRowToOpenIncident,
@@ -478,3 +480,70 @@ export const getDailyIncidentsFromDbApi = async (payload?: {
     };
   }
 };
+
+/**
+ * 9. Mengambil matriks frekuensi bulanan via RPC Database Supabase (Server-side)
+ */
+export const getFrequencyMatrixApi = async (month: string): Promise<{
+  success: boolean;
+  items: any[];
+  allDates: string[];
+  totalIncidents?: number;
+  message?: string;
+}> => {
+  if (!isSupabaseConfigured()) {
+    return {
+      success: false,
+      items: [],
+      allDates: [],
+      message: 'Supabase belum dikonfigurasi.'
+    };
+  }
+
+  try {
+    const res = await fetchFrequencyMatrixSupabase(month);
+    return res;
+  } catch (err: any) {
+    console.error('getFrequencyMatrixApi error:', err);
+    return {
+      success: false,
+      items: [],
+      allDates: [],
+      message: err.message || 'Gagal memuat matriks frekuensi.'
+    };
+  }
+};
+
+/**
+ * 10. Mengambil detail raw insiden harian untuk satu WSID & Problem tertentu
+ */
+export const getFrequencyDetailApi = async (payload: {
+  wsid: string;
+  problem: string;
+  month?: string;
+}): Promise<{
+  success: boolean;
+  rows: any[];
+  message?: string;
+}> => {
+  if (!isSupabaseConfigured()) {
+    return {
+      success: false,
+      rows: [],
+      message: 'Supabase belum dikonfigurasi.'
+    };
+  }
+
+  try {
+    const res = await fetchFrequencyDetailSupabase(payload);
+    return res;
+  } catch (err: any) {
+    console.error('getFrequencyDetailApi error:', err);
+    return {
+      success: false,
+      rows: [],
+      message: err.message || 'Gagal memuat detail insiden frekuensi.'
+    };
+  }
+};
+
