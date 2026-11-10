@@ -1,4 +1,5 @@
 import React, { useMemo, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useDataStore } from '../store/useDataStore';
 import StickyTableWrapper from '../components/StickyTableWrapper';
 import { 
@@ -9,7 +10,8 @@ import {
   AlertTriangle, 
   Layers,
   ArrowUpRight,
-  ArrowDownRight
+  ArrowDownRight,
+  Flame
 } from 'lucide-react';
 import { 
   ResponsiveContainer, 
@@ -27,11 +29,13 @@ import {
 import { exportComprehensiveExcel, formatBulanTahun } from '../utils/comprehensiveExporter';
 import { fetchDashboardData } from '../utils/spreadsheetService';
 import { matchData } from '../utils/dataMatcher';
+import { evaluateMachineHealth, isBcaMachine, isActiveMachine } from '../utils/slaHelper';
 
 const SLA_ATM = 99.00;
 const SLA_CRM = 98.50;
 
 export default function TotalUptimeBulanPage() {
+  const navigate = useNavigate();
   const [tableViewMode, setTableViewMode] = useState<'SPLIT' | 'ATM' | 'CRM'>('SPLIT');
   const [isExporting, setIsExporting] = useState(false);
   const { 
@@ -41,6 +45,36 @@ export default function TotalUptimeBulanPage() {
     machines, 
     selectedPeriode 
   } = useDataStore();
+
+  const chronicStats = useMemo(() => {
+    let chronicWarningCount = 0;
+    let chronicCriticalCount = 0;
+    const chronicCriticalWsids: string[] = [];
+    const chronicWarningWsids: string[] = [];
+
+    const bcaActiveMachines = (machines || []).filter(m => isBcaMachine(m) && isActiveMachine(m));
+    bcaActiveMachines.forEach(m => {
+      const evalRes = evaluateMachineHealth(m, selectedPeriode || 'ALL');
+      if (evalRes.isChronicCritical) {
+        chronicCriticalCount++;
+        chronicCriticalWsids.push(m.wsid);
+      } else if (evalRes.isChronicWarning) {
+        chronicWarningCount++;
+        chronicWarningWsids.push(m.wsid);
+      }
+    });
+
+    const total = bcaActiveMachines.length;
+    return {
+      total,
+      chronicWarningCount,
+      chronicCriticalCount,
+      chronicCriticalWsids,
+      chronicWarningWsids,
+      chronicCriticalPct: total > 0 ? ((chronicCriticalCount / total) * 100).toFixed(1) : '0',
+      chronicWarningPct: total > 0 ? ((chronicWarningCount / total) * 100).toFixed(1) : '0'
+    };
+  }, [machines, selectedPeriode]);
 
   const handleExportAll = async () => {
     if (machines.length === 0) {
@@ -232,6 +266,95 @@ export default function TotalUptimeBulanPage() {
             <span>ATM: <strong className="text-blue-600 font-semibold">{latestMonth?.mesinATM || 0}</strong></span>
             <span>CRM: <strong className="text-slate-700 font-semibold">{latestMonth?.mesinCRM || 0}</strong></span>
             <span>Periode: <strong className="text-slate-700 font-semibold">{chartData.length} Bulan</strong></span>
+          </div>
+        </div>
+      </div>
+
+      {/* Dua Kartu Metrik Chronic SLA Bulanan: Kritis (> 2 Bulan) & Waspada (2 Bulan) */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+        {/* Card 1: Chronic Kritis (> 2 Bulan) */}
+        <div
+          onClick={() => {
+            navigate('/follow-up', {
+              state: {
+                categoryFilter: 'CHRONIC_CRITICAL',
+                categoryLabel: 'Mesin Kronis Kritis (> 2 Bulan)',
+                priorityFilter: 'CRITICAL',
+                categoryWsids: chronicStats.chronicCriticalWsids
+              }
+            });
+          }}
+          className="flex items-center justify-between p-3 rounded-lg bg-rose-50/70 hover:bg-rose-100/70 border border-rose-200 cursor-pointer transition-all hover:shadow-2xs group select-none min-h-[82px]"
+          title="Klik untuk lihat daftar rekomendasi mesin Chronic Kritis di Follow-Up"
+        >
+          <div className="flex items-center gap-2.5">
+            <div className="w-9 h-9 rounded-lg bg-rose-100 text-rose-700 flex items-center justify-center shrink-0 border border-rose-200">
+              <Flame size={18} />
+            </div>
+            <div>
+              <div className="flex items-center gap-1.5">
+                <span className="text-xs font-bold text-rose-900 group-hover:text-rose-700 transition-colors">
+                  Chronic Kritis (&gt; 2 Bulan)
+                </span>
+                <span className="text-[9px] px-1 py-0.2 rounded bg-rose-200/60 text-rose-800 font-semibold uppercase">
+                  Kritis
+                </span>
+              </div>
+              <p className="text-[10px] text-rose-700/80 mt-0.5">
+                Uptime di bawah target SLA &gt; 2 bulan berturut-turut (BCA Aktif)
+              </p>
+            </div>
+          </div>
+          <div className="text-right shrink-0">
+            <span className="text-xl font-bold text-rose-700 block leading-tight">
+              {chronicStats.chronicCriticalCount} <span className="text-[10px] font-normal text-rose-600">unit</span>
+            </span>
+            <span className="text-[10px] text-rose-600">
+              ({chronicStats.chronicCriticalPct}%)
+            </span>
+          </div>
+        </div>
+
+        {/* Card 2: Chronic Waspada (2 Bulan) */}
+        <div
+          onClick={() => {
+            navigate('/follow-up', {
+              state: {
+                categoryFilter: 'CHRONIC_WARNING',
+                categoryLabel: 'Mesin Kronis Waspada (2 Bulan)',
+                priorityFilter: 'WARNING',
+                categoryWsids: chronicStats.chronicWarningWsids
+              }
+            });
+          }}
+          className="flex items-center justify-between p-3 rounded-lg bg-amber-50/70 hover:bg-amber-100/70 border border-amber-200 cursor-pointer transition-all hover:shadow-2xs group select-none min-h-[82px]"
+          title="Klik untuk lihat daftar rekomendasi mesin Chronic Waspada di Follow-Up"
+        >
+          <div className="flex items-center gap-2.5">
+            <div className="w-9 h-9 rounded-lg bg-amber-100 text-amber-700 flex items-center justify-center shrink-0 border border-amber-200">
+              <AlertTriangle size={18} />
+            </div>
+            <div>
+              <div className="flex items-center gap-1.5">
+                <span className="text-xs font-bold text-amber-900 group-hover:text-amber-700 transition-colors">
+                  Chronic Waspada (2 Bulan)
+                </span>
+                <span className="text-[9px] px-1 py-0.2 rounded bg-amber-200/60 text-amber-800 font-semibold uppercase">
+                  Warning
+                </span>
+              </div>
+              <p className="text-[10px] text-amber-700/80 mt-0.5">
+                Uptime di bawah target SLA tepat 2 bulan berturut-turut (BCA Aktif)
+              </p>
+            </div>
+          </div>
+          <div className="text-right shrink-0">
+            <span className="text-xl font-bold text-amber-700 block leading-tight">
+              {chronicStats.chronicWarningCount} <span className="text-[10px] font-normal text-amber-600">unit</span>
+            </span>
+            <span className="text-[10px] text-amber-600">
+              ({chronicStats.chronicWarningPct}%)
+            </span>
           </div>
         </div>
       </div>
