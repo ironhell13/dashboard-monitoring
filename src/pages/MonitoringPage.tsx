@@ -762,31 +762,50 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
     refetch: fetchOpenIncidents
   } = useOpenIncidents();
 
+  const isFetchingChronicRef = useRef(false);
   // Penarik dataset insiden beberapa hari terakhir secara kilat (<500ms) untuk kalkulasi Chronic instan
   const fetchChronicDataset = useCallback(async () => {
+    if (isFetchingChronicRef.current) return;
+    isFetchingChronicRef.current = true;
     setIsLoadingChronic(true);
     try {
-      let res = await fetchRecentIncidentsForChronicSupabase(14);
-      // Fallback ganda: jika res.rows masih kosong, gunakan API getDailyIncidentsFromDbApi (limit 3000)
-      if (!res.success || !res.rows || res.rows.length === 0) {
-        const dbRes = await getDailyIncidentsFromDbApi({ limit: 3000 });
-        if (dbRes && dbRes.success && dbRes.rows && dbRes.rows.length > 0) {
-          res = { success: true, rows: dbRes.rows };
-        }
-      }
+      let attempts = 0;
+      let success = false;
+      while (attempts < 3 && !success) {
+        attempts++;
+        try {
+          let res = await fetchRecentIncidentsForChronicSupabase(14);
+          // Fallback ganda: jika res.rows masih kosong, gunakan API getDailyIncidentsFromDbApi (limit 3000)
+          if (!res.success || !res.rows || res.rows.length === 0) {
+            const dbRes = await getDailyIncidentsFromDbApi({ limit: 3000 });
+            if (dbRes && dbRes.success && dbRes.rows && dbRes.rows.length > 0) {
+              res = { success: true, rows: dbRes.rows };
+            }
+          }
 
-      if (res.success && res.rows && res.rows.length > 0) {
-        setChronicDataset(res.rows);
-        setAllDailyIncidents((prev) => (prev.length === 0 ? res.rows : prev));
-        setOpenIncidents((prev) => {
-          if (!prev || prev.length === 0) return prev;
-          return enrichOpenWithDailyData(prev, res.rows);
-        });
+          if (res.success && res.rows && res.rows.length > 0) {
+            setChronicDataset(res.rows);
+            setAllDailyIncidents((prev) => (prev.length === 0 ? res.rows : prev));
+            setOpenIncidents((prev) => {
+              if (!prev || prev.length === 0) return prev;
+              return enrichOpenWithDailyData(prev, res.rows);
+            });
+            success = true;
+            break;
+          }
+        } catch (attemptErr) {
+          console.warn(`[CHRONIC-DEBUG] fetchChronicDataset percobaan ${attempts} gagal:`, attemptErr);
+        }
+
+        if (!success && attempts < 3) {
+          await new Promise((resolve) => setTimeout(resolve, 1500));
+        }
       }
     } catch (err) {
       console.warn('Gagal memuat dataset chronic cepat:', err);
     } finally {
       setIsLoadingChronic(false);
+      isFetchingChronicRef.current = false;
     }
   }, [setOpenIncidents]);
   const [openCardFilter, setOpenCardFilter] = useState<
@@ -1223,10 +1242,27 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
     return () => { mounted = false; };
   }, []);
 
-  // Muat dataset chronic cepat secara instan (<300ms) saat mount
+  // Muat dataset chronic cepat secara instan saat mount, saat tersambung, dan saat openIncidents pertama kali terisi
+  const hasTriggeredChronicOnOpenRef = useRef(false);
+  const prevConnectionStatusRef = useRef(connectionStatus);
+
   useEffect(() => {
     fetchChronicDataset();
   }, [fetchChronicDataset]);
+
+  useEffect(() => {
+    if (connectionStatus === 'SUBSCRIBED' && prevConnectionStatusRef.current !== 'SUBSCRIBED') {
+      fetchChronicDataset();
+    }
+    prevConnectionStatusRef.current = connectionStatus;
+  }, [connectionStatus, fetchChronicDataset]);
+
+  useEffect(() => {
+    if (openIncidents && openIncidents.length > 0 && !hasTriggeredChronicOnOpenRef.current) {
+      hasTriggeredChronicOnOpenRef.current = true;
+      fetchChronicDataset();
+    }
+  }, [openIncidents, fetchChronicDataset]);
 
   // Fungsi loader data matriks Frekuensi (RPC Database Server-side + Cache Stale-while-revalidate)
   const loadFrequencyData = useCallback(async (targetMonth: string, forceRefresh = false) => {
@@ -4047,7 +4083,7 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
     const fileName = `Problem_Open_${dateStamp}.xlsx`;
     exportDailyIncidentsToExcel(
       filteredOpenIncidents.map((r: any) => {
-        const cInfo = chronicInfoMap.get(r.wsid.trim().toUpperCase());
+        const cInfo = r.incidentKey ? chronicInfoMap.get(r.incidentKey) : undefined;
         return {
           wsid: r.wsid,
           lokasi: r.lokasi || '-',
@@ -4067,7 +4103,9 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
           actionTerakhirOleh: r.actionTerakhirOleh || '-',
           actionTerakhirWaktu: r.actionTerakhirWaktu || '-',
           status: 'OPEN',
-          chronic: cInfo ? `CHRONIC (${cInfo.count}x)` : 'NORMAL'
+          chronic: cInfo?.isChronic
+            ? (cInfo.is3xSehari ? `CHRONIC (${cInfo.sameDayCount}x Sehari)` : `CHRONIC (${cInfo.fiveDayCount}x/5 Hari)`)
+            : 'NORMAL'
         };
       }) as any,
       fileName
@@ -5459,6 +5497,10 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
                     ]);
                   }}
                 />
+                <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-slate-50 text-slate-700 text-xs font-medium border border-[#E5EAF2]">
+                  <span className={`w-2 h-2 rounded-full ${isLoadingChronic ? 'bg-amber-500 animate-pulse' : chronicDataset.length > 0 ? 'bg-emerald-500' : 'bg-rose-500'}`} />
+                  Data chronic: <strong className="text-[#0D1C2E]">{chronicDataset.length.toLocaleString('id-ID')}</strong> insiden / 14 hari
+                </span>
               </div>
 
               {/* Right Utility Buttons */}

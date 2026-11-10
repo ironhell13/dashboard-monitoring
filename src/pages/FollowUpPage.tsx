@@ -1,4 +1,5 @@
 import React, { useState, useMemo, useEffect, useRef } from 'react';
+import { useLocation } from 'react-router-dom';
 import {
   Ticket,
   Clock,
@@ -40,6 +41,7 @@ import {
 import { cleanSektorName, getServicePointForSektor, TARGET_EVENT_CODES } from '../utils/dailyIncidentParser';
 import { useQuickChips } from '../utils/quickChipsService';
 import { subscribeFollowUpTicketsSupabase, getMachinesMap, getMachineMetadata } from '../utils/supabaseService';
+import { getFollowUpRecommendations, type FollowUpRecommendation } from '../utils/followUpEngine';
 
 interface FollowUpPageProps {
   userRole?: 'KAWIL' | 'KAOPS' | 'MONITORING';
@@ -49,7 +51,96 @@ interface FollowUpPageProps {
 const DEFAULT_SERVICE_POINTS = ['ACJK', 'ACBT', 'ACCK', 'ACSR', 'ACBS', 'ACRW', 'TAG'];
 
 export default function FollowUpPage({ userRole, isEmbedded = false }: FollowUpPageProps) {
-  const { modernTickets, setModernTickets, addOrUpdateModernTicket, removeModernTicket, rawMasterData } = useDataStore();
+  const location = useLocation();
+  const navState = (location.state || {}) as {
+    categoryFilter?: string;
+    categoryLabel?: string;
+    priorityFilter?: string;
+    categoryWsids?: string[];
+  };
+
+  const {
+    modernTickets,
+    setModernTickets,
+    addOrUpdateModernTicket,
+    removeModernTicket,
+    rawMasterData,
+    machines,
+    selectedPeriode
+  } = useDataStore();
+
+  const [activeCategoryFilter, setActiveCategoryFilter] = useState<string | null>(navState.categoryFilter || null);
+  const [activeCategoryLabel, setActiveCategoryLabel] = useState<string | null>(navState.categoryLabel || null);
+  const [activeCategoryWsids, setActiveCategoryWsids] = useState<string[] | null>(navState.categoryWsids || null);
+
+  const [mainSectionTab, setMainSectionTab] = useState<'RECOMMENDATIONS' | 'TICKETS'>(() => {
+    return navState.categoryFilter || navState.categoryWsids ? 'RECOMMENDATIONS' : 'TICKETS';
+  });
+
+  useEffect(() => {
+    if (navState.categoryFilter || navState.categoryWsids) {
+      setActiveCategoryFilter(navState.categoryFilter || null);
+      setActiveCategoryLabel(navState.categoryLabel || null);
+      setActiveCategoryWsids(navState.categoryWsids || null);
+      setMainSectionTab('RECOMMENDATIONS');
+    }
+  }, [location.state]);
+
+  const [createPeriodeProblem, setCreatePeriodeProblem] = useState<string>('');
+  const [createUptimeBaseline, setCreateUptimeBaseline] = useState<number | undefined>(undefined);
+  const [createSumberProblem, setCreateSumberProblem] = useState<'OPEN_INCIDENT' | 'FREKUENSI' | 'ANALISIS' | 'CHRONIC_SLA'>('ANALISIS');
+
+  // Rekomendasi SLA BCA & Chronic dari followUpEngine
+  const allRecommendations = useMemo(() => {
+    return getFollowUpRecommendations(machines || [], selectedPeriode || 'ALL');
+  }, [machines, selectedPeriode]);
+
+  const [onlyChronicFilter, setOnlyChronicFilter] = useState(false);
+  const [recSearch, setRecSearch] = useState('');
+  const [recPriorityFilter, setRecPriorityFilter] = useState<'ALL' | 'CRITICAL' | 'WARNING'>('ALL');
+
+  const filteredRecommendations = useMemo(() => {
+    let list = allRecommendations;
+
+    if (activeCategoryWsids && activeCategoryWsids.length > 0) {
+      const wsidSet = new Set(activeCategoryWsids.map((w) => w.trim().toUpperCase()));
+      list = list.filter((r) => wsidSet.has(r.wsid.trim().toUpperCase()));
+    }
+
+    if (onlyChronicFilter) {
+      list = list.filter((r) => r.isChronic);
+    }
+
+    if (recPriorityFilter !== 'ALL') {
+      list = list.filter((r) => r.priority === recPriorityFilter);
+    }
+
+    if (recSearch.trim()) {
+      const q = recSearch.trim().toLowerCase();
+      list = list.filter(
+        (r) =>
+          r.wsid.toLowerCase().includes(q) ||
+          r.lokasi.toLowerCase().includes(q) ||
+          r.sektor.toLowerCase().includes(q) ||
+          r.vendor.toLowerCase().includes(q) ||
+          r.dominantProblem.toLowerCase().includes(q) ||
+          (r.priorityReason && r.priorityReason.toLowerCase().includes(q))
+      );
+    }
+
+    return list;
+  }, [allRecommendations, activeCategoryWsids, onlyChronicFilter, recPriorityFilter, recSearch]);
+
+  const activeTicketMap = useMemo(() => {
+    const map = new Map<string, FollowUpTicketItem>();
+    for (const t of modernTickets || []) {
+      if (t.status !== 'CLOSED') {
+        map.set(t.wsid.trim().toUpperCase(), t);
+      }
+    }
+    return map;
+  }, [modernTickets]);
+
   const { chipTexts: progressChips } = useQuickChips('PROGRESS_TIKET');
   const { chipTexts: instruksiChips } = useQuickChips('INSTRUKSI_REQUEST');
 
@@ -397,6 +488,31 @@ export default function FollowUpPage({ userRole, isEmbedded = false }: FollowUpP
     setCreatePriority('NORMAL');
     setCreateCategory('VENDOR');
     setCreateNote('');
+    setCreatePeriodeProblem('');
+    setCreateUptimeBaseline(undefined);
+    setCreateSumberProblem('ANALISIS');
+    setShowWsidSuggestions(false);
+    setShowProblemSuggestions(false);
+    setShowCreateModal(true);
+  };
+
+  const handleCreateTicketFromRecommendation = (rec: FollowUpRecommendation) => {
+    if (!ensurePetugas()) return;
+    setCreateWsid(rec.wsid);
+    setCreateLokasi(rec.lokasi);
+    setCreateSektor(rec.sektor);
+    setCreateVendor(rec.vendor);
+    const sp = getServicePointForSektor(rec.sektor) || 'ACJK';
+    setCreateSp(sp);
+    setCreateProblem(rec.dominantProblem || 'Chronic SLA Uptime Rendah');
+    setCreatePriority(rec.priority === 'CRITICAL' ? 'URGENT' : 'HIGH');
+    setCreateCategory('VENDOR');
+    setCreatePeriodeProblem(rec.latestPeriode);
+    setCreateUptimeBaseline(rec.latestUptime);
+    setCreateSumberProblem('CHRONIC_SLA');
+    setCreateNote(
+      `Eskalasi Rekomendasi SLA BCA: Uptime ${rec.latestUptime}% (${rec.consecutiveLowMonths} bulan berturut-turut di bawah target). ${rec.priorityReason}`
+    );
     setShowWsidSuggestions(false);
     setShowProblemSuggestions(false);
     setShowCreateModal(true);
@@ -455,13 +571,15 @@ export default function FollowUpPage({ userRole, isEmbedded = false }: FollowUpP
       servicePoint: createSp.trim().toUpperCase(),
       vendor: createVendor.trim() || 'ATM/CRM',
       problem: createProblem.trim(),
-      sumberProblem: 'ANALISIS',
+      sumberProblem: createSumberProblem,
       prioritas: createPriority,
       kategori: createCategory,
       catatanRequest: createNote.trim(),
       createdBy: createdByStr,
       createdAt: nowIso,
       status: 'OPEN',
+      periodeProblem: createPeriodeProblem || undefined,
+      uptimeBaseline: createUptimeBaseline,
       progresList: []
     };
 
@@ -847,7 +965,303 @@ ${ticket.reqCloseInfo ? `*Catatan Penyelesaian:* ${ticket.reqCloseInfo.catatanPe
         </div>
       </div>
 
-      {/* Metric Cards (Compact Enterprise Grid) */}
+      {/* Tab Navigasi Utama: Rekomendasi SLA/Chronic vs Daftar Tiket */}
+      <div className="flex items-center gap-2 border-b border-[#E5EAF2] pb-1">
+        <button
+          type="button"
+          onClick={() => setMainSectionTab('RECOMMENDATIONS')}
+          className={`flex items-center gap-2 px-4 py-2 rounded-t-lg text-xs font-bold transition-all border-b-2 cursor-pointer ${
+            mainSectionTab === 'RECOMMENDATIONS'
+              ? 'border-blue-600 text-blue-600 bg-white shadow-2xs'
+              : 'border-transparent text-slate-500 hover:text-slate-800 hover:bg-slate-50'
+          }`}
+        >
+          <Flame size={15} className={mainSectionTab === 'RECOMMENDATIONS' ? 'text-amber-500' : 'text-slate-400'} />
+          <span>Rekomendasi Tindak Lanjut (Chronic & SLA)</span>
+          <span className="px-1.5 py-0.2 rounded-full text-[10px] bg-amber-100 text-amber-800 font-bold">
+            {allRecommendations.length}
+          </span>
+        </button>
+
+        <button
+          type="button"
+          onClick={() => setMainSectionTab('TICKETS')}
+          className={`flex items-center gap-2 px-4 py-2 rounded-t-lg text-xs font-bold transition-all border-b-2 cursor-pointer ${
+            mainSectionTab === 'TICKETS'
+              ? 'border-blue-600 text-blue-600 bg-white shadow-2xs'
+              : 'border-transparent text-slate-500 hover:text-slate-800 hover:bg-slate-50'
+          }`}
+        >
+          <Ticket size={15} className={mainSectionTab === 'TICKETS' ? 'text-blue-600' : 'text-slate-400'} />
+          <span>Daftar Tiket Tindak Lanjut</span>
+          <span className="px-1.5 py-0.2 rounded-full text-[10px] bg-blue-100 text-blue-800 font-bold">
+            {(modernTickets || []).length}
+          </span>
+        </button>
+      </div>
+
+      {/* SECTION 1: REKOMENDASI TINDAK LANJUT (CHRONIC & SLA) */}
+      {mainSectionTab === 'RECOMMENDATIONS' && (
+        <div className="space-y-3">
+          {/* Dashboard Active Filter Chip */}
+          {activeCategoryLabel && (
+            <div className="flex items-center justify-between gap-2 bg-blue-50 border border-blue-200 text-blue-900 px-3.5 py-2 rounded-xl text-xs">
+              <div className="flex items-center gap-2 flex-wrap">
+                <span className="font-medium text-slate-600">Filter Kategori Dashboard:</span>
+                <span className="font-bold px-2 py-0.5 rounded bg-blue-100 text-blue-800 border border-blue-300/60">
+                  {activeCategoryLabel}
+                </span>
+                {activeCategoryWsids && (
+                  <span className="text-[10px] font-mono px-1.5 py-0.2 rounded bg-white text-blue-700 border border-blue-200">
+                    {activeCategoryWsids.length} Unit WSID
+                  </span>
+                )}
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  setActiveCategoryFilter(null);
+                  setActiveCategoryLabel(null);
+                  setActiveCategoryWsids(null);
+                }}
+                className="flex items-center gap-1 px-2 py-1 rounded bg-white hover:bg-blue-100 text-blue-700 text-[11px] font-semibold border border-blue-200 transition-colors cursor-pointer"
+              >
+                <X size={12} />
+                <span>Hapus Filter</span>
+              </button>
+            </div>
+          )}
+
+          {/* Recommendations Filter Toolbar */}
+          <div className="bg-white p-3.5 rounded-xl border border-[#E5EAF2] shadow-2xs flex flex-wrap items-center justify-between gap-3">
+            <div className="flex flex-wrap items-center gap-2 flex-1 min-w-[280px]">
+              <div className="relative flex-1 min-w-[200px] max-w-md">
+                <Search size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400" />
+                <input
+                  type="text"
+                  value={recSearch}
+                  onChange={(e) => setRecSearch(e.target.value)}
+                  placeholder="Cari WSID, lokasi, sektor, vendor, problem..."
+                  className="w-full h-8 pl-8 pr-7 rounded-lg bg-slate-50 text-xs text-slate-800 placeholder:text-slate-400 border border-[#E5EAF2] focus:outline-none focus:ring-1 focus:ring-blue-500 focus:bg-white"
+                />
+                {recSearch && (
+                  <button
+                    type="button"
+                    onClick={() => setRecSearch('')}
+                    className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 cursor-pointer"
+                  >
+                    <X size={12} />
+                  </button>
+                )}
+              </div>
+
+              {/* Toggle Hanya Chronic */}
+              <label className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-[#E5EAF2] bg-slate-50 text-xs font-semibold text-slate-700 cursor-pointer hover:bg-slate-100 transition-colors select-none">
+                <input
+                  type="checkbox"
+                  checked={onlyChronicFilter}
+                  onChange={(e) => setOnlyChronicFilter(e.target.checked)}
+                  className="rounded text-blue-600 focus:ring-0 cursor-pointer"
+                />
+                <Flame size={13} className={onlyChronicFilter ? 'text-amber-500' : 'text-slate-400'} />
+                <span>Hanya Chronic</span>
+              </label>
+
+              {/* Priority Filter */}
+              <div className="flex items-center gap-1 bg-slate-100 p-0.5 rounded-lg border border-slate-200">
+                <button
+                  type="button"
+                  onClick={() => setRecPriorityFilter('ALL')}
+                  className={`px-2.5 py-1 rounded text-[11px] font-semibold transition-colors cursor-pointer ${
+                    recPriorityFilter === 'ALL' ? 'bg-white text-blue-600 shadow-2xs' : 'text-slate-600 hover:text-slate-900'
+                  }`}
+                >
+                  Semua
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setRecPriorityFilter('CRITICAL')}
+                  className={`px-2.5 py-1 rounded text-[11px] font-semibold transition-colors cursor-pointer ${
+                    recPriorityFilter === 'CRITICAL' ? 'bg-white text-rose-700 shadow-2xs' : 'text-slate-600 hover:text-slate-900'
+                  }`}
+                >
+                  Kritis
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setRecPriorityFilter('WARNING')}
+                  className={`px-2.5 py-1 rounded text-[11px] font-semibold transition-colors cursor-pointer ${
+                    recPriorityFilter === 'WARNING' ? 'bg-white text-amber-700 shadow-2xs' : 'text-slate-600 hover:text-slate-900'
+                  }`}
+                >
+                  Warning
+                </button>
+              </div>
+            </div>
+
+            <div className="text-xs text-slate-500 font-medium">
+              Menampilkan <strong>{filteredRecommendations.length}</strong> rekomendasi
+            </div>
+          </div>
+
+          {/* Recommendations Table */}
+          {filteredRecommendations.length === 0 ? (
+            <div className="p-8 bg-white border border-[#E5EAF2] rounded-xl text-center shadow-2xs">
+              <CheckCircle2 size={32} className="text-emerald-500 mx-auto mb-2" />
+              <h3 className="text-sm font-bold text-slate-800">Tidak ada mesin dalam kriteria ini</h3>
+              <p className="text-xs text-slate-500 mt-1">
+                Semua mesin dalam filter berada dalam kondisi aman atau filter pencarian tidak menemukan hasil.
+              </p>
+            </div>
+          ) : (
+            <div className="bg-white rounded-xl border border-[#E5EAF2] shadow-2xs overflow-hidden">
+              <div className="overflow-x-auto">
+                <table className="w-full text-left text-xs text-slate-700">
+                  <thead className="bg-slate-50 text-[11px] font-semibold text-slate-500 border-b border-[#E5EAF2] uppercase tracking-wider">
+                    <tr>
+                      <th className="px-3.5 py-2.5">WSID & Mesin</th>
+                      <th className="px-3.5 py-2.5">Lokasi / Sektor / Vendor</th>
+                      <th className="px-3.5 py-2.5">Uptime & Tren</th>
+                      <th className="px-3.5 py-2.5">Prioritas & Status Kronis</th>
+                      <th className="px-3.5 py-2.5">Masalah Dominan & Alasan</th>
+                      <th className="px-3.5 py-2.5 text-right">Aksi Tindak Lanjut</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-[#E5EAF2]">
+                    {filteredRecommendations.map((rec) => {
+                      const activeTicket = activeTicketMap.get(rec.wsid.trim().toUpperCase());
+                      return (
+                        <tr key={rec.wsid} className="hover:bg-slate-50/70 transition-colors">
+                          <td className="px-3.5 py-3 align-top">
+                            <div className="font-mono font-bold text-slate-900 text-sm">
+                              {rec.wsid}
+                            </div>
+                            <span className="inline-block px-1.5 py-0.2 rounded text-[10px] font-semibold bg-slate-100 text-slate-600 border border-slate-200 mt-0.5">
+                              {rec.jenisMesin}
+                            </span>
+                          </td>
+
+                          <td className="px-3.5 py-3 align-top max-w-[240px]">
+                            <div className="font-medium text-slate-800 line-clamp-1" title={rec.lokasi}>
+                              {rec.lokasi}
+                            </div>
+                            <div className="text-[11px] text-slate-500 flex items-center gap-1.5 mt-0.5">
+                              <span>Sektor: {rec.sektor}</span>
+                              <span>&bull;</span>
+                              <span>{rec.vendor}</span>
+                            </div>
+                          </td>
+
+                          <td className="px-3.5 py-3 align-top">
+                            <div className="flex items-baseline gap-1.5">
+                              <span className={`text-sm font-bold ${
+                                rec.latestUptime < (rec.jenisMesin === 'CRM' ? 98.0 : 98.5)
+                                  ? 'text-rose-600'
+                                  : 'text-amber-600'
+                              }`}>
+                                {rec.latestUptime}%
+                              </span>
+                              <span className="text-[10px] text-slate-400">
+                                Target {rec.jenisMesin === 'CRM' ? '98.5%' : '99.0%'}
+                              </span>
+                            </div>
+                            {/* Mini trend */}
+                            {rec.trend && rec.trend.length > 0 && (
+                              <div className="flex items-end gap-1 mt-1.5 h-6">
+                                {rec.trend.map((t, tIdx) => {
+                                  const isLow = t.uptime < (rec.jenisMesin === 'CRM' ? 98.5 : 99.0);
+                                  const heightPct = Math.max(20, Math.min(100, (t.uptime - 80) * 5));
+                                  return (
+                                    <div
+                                      key={tIdx}
+                                      className="flex flex-col items-center group relative cursor-pointer"
+                                      title={`${t.periode}: ${t.uptime}%`}
+                                    >
+                                      <div
+                                        style={{ height: `${heightPct}%` }}
+                                        className={`w-1.5 rounded-t-xs transition-all ${
+                                          isLow ? 'bg-rose-500' : 'bg-emerald-500'
+                                        }`}
+                                      />
+                                      <span className="text-[7px] text-slate-400 mt-0.5">
+                                        {t.periode.slice(-2)}
+                                      </span>
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                            )}
+                          </td>
+
+                          <td className="px-3.5 py-3 align-top">
+                            <div className="flex flex-col gap-1 items-start">
+                              <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${
+                                rec.priority === 'CRITICAL'
+                                  ? 'bg-rose-50 text-rose-700 border border-rose-200'
+                                  : 'bg-amber-50 text-amber-700 border border-amber-200'
+                              }`}>
+                                {rec.priority === 'CRITICAL' ? 'Prioritas Kritis' : 'Prioritas Warning'}
+                              </span>
+
+                              {rec.isChronic && (
+                                <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-bold border ${
+                                  rec.consecutiveLowMonths > 2
+                                    ? 'bg-rose-100 text-rose-900 border-rose-300'
+                                    : 'bg-amber-100 text-amber-900 border-amber-300'
+                                }`}>
+                                  <Flame size={11} className={rec.consecutiveLowMonths > 2 ? 'text-rose-700' : 'text-amber-700'} />
+                                  <span>Kronis: {rec.consecutiveLowMonths} Bln Rendah</span>
+                                </span>
+                              )}
+                            </div>
+                          </td>
+
+                          <td className="px-3.5 py-3 align-top max-w-[280px]">
+                            <div className="font-semibold text-slate-800 line-clamp-1">
+                              {rec.dominantProblem}
+                            </div>
+                            <div className="text-[11px] text-slate-500 mt-0.5 line-clamp-2" title={rec.priorityReason}>
+                              {rec.priorityReason}
+                            </div>
+                          </td>
+
+                          <td className="px-3.5 py-3 align-top text-right">
+                            {activeTicket ? (
+                              <div className="inline-flex flex-col items-end">
+                                <span className="inline-flex items-center gap-1 px-2 py-1 rounded bg-amber-50 text-amber-800 text-[10px] font-bold border border-amber-200">
+                                  <Clock size={11} />
+                                  <span>Tiket #{activeTicket.ticketId}</span>
+                                </span>
+                                <span className="text-[9px] text-slate-400 mt-0.5">
+                                  Status: {activeTicket.status}
+                                </span>
+                              </div>
+                            ) : (
+                              <button
+                                type="button"
+                                onClick={() => handleCreateTicketFromRecommendation(rec)}
+                                className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-xs font-bold shadow-2xs transition-colors cursor-pointer"
+                              >
+                                <Plus size={13} />
+                                <span>Buat Tiket</span>
+                              </button>
+                            )}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* SECTION 2: DAFTAR TIKET TINDAK LANJUT */}
+      {mainSectionTab === 'TICKETS' && (
+        <>
+          {/* Metric Cards (Compact Enterprise Grid) */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
         {/* Card 1: Semua Tiket Aktif */}
         <div
@@ -1306,6 +1720,8 @@ ${ticket.reqCloseInfo ? `*Catatan Penyelesaian:* ${ticket.reqCloseInfo.catatanPe
           </span>
         </div>
       </div>
+      </>
+      )}
 
       {/* ========================================================= */}
       {/* MODAL 1: FORM BUAT TIKET BARU (KA WIL / KA OPS)           */}
@@ -1328,6 +1744,25 @@ ${ticket.reqCloseInfo ? `*Catatan Penyelesaian:* ${ticket.reqCloseInfo.catatanPe
             </div>
 
             <div className="p-4 space-y-3 text-xs overflow-y-auto max-h-[75vh]">
+              {createPeriodeProblem && (
+                <div className="p-2.5 rounded-lg bg-blue-50 border border-blue-200 flex items-center justify-between text-xs text-blue-900">
+                  <div>
+                    <span className="font-semibold flex items-center gap-1 text-blue-800">
+                      <Flame size={12} className="text-amber-500" />
+                      Sumber Rekomendasi SLA BCA
+                    </span>
+                    <span className="block text-[11px] text-blue-700 mt-0.5">
+                      Periode Evaluasi: {createPeriodeProblem}
+                    </span>
+                  </div>
+                  {typeof createUptimeBaseline === 'number' && (
+                    <div className="text-right">
+                      <span className="text-[10px] text-blue-600 block">Baseline Uptime</span>
+                      <span className="font-bold text-sm text-blue-800">{createUptimeBaseline}%</span>
+                    </div>
+                  )}
+                </div>
+              )}
               <div className="grid grid-cols-2 gap-2.5">
                 <div className="relative" ref={wsidBoxRef}>
                   <label className="block text-[11px] font-semibold text-slate-700 mb-1">

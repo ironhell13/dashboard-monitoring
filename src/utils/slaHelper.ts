@@ -18,6 +18,124 @@ export const SPIKE_THRESHOLDS = {
   HW: 1.00
 } as const;
 
+const MONTH_NAME_MAP: Record<string, number> = {
+  jan: 1, januari: 1, january: 1,
+  feb: 2, februari: 2, february: 2,
+  mar: 3, maret: 3, march: 3,
+  apr: 4, april: 4,
+  mei: 5, may: 5,
+  jun: 6, juni: 6, june: 6,
+  jul: 7, juli: 7, july: 7,
+  agu: 8, agt: 8, agustus: 8, aug: 8, august: 8,
+  sep: 9, september: 9,
+  okt: 10, oktober: 10, oct: 10, october: 10,
+  nov: 11, november: 11,
+  des: 12, desember: 12, dec: 12, december: 12
+};
+
+/**
+ * Parsing periode string ke objek tahun & bulan numerik { year, month, ym: year*100+month }.
+ * Mendukung format: 'YYYY-MM', 'YYYY/MM', 'MM/YYYY', 'MM-YYYY', 'Sep 2026', 'September 2026', Date object.
+ */
+export function parsePeriodeToYearMonth(val: any): { year: number; month: number; ym: number } | null {
+  if (!val) return null;
+  if (val instanceof Date) {
+    const y = val.getFullYear();
+    const m = val.getMonth() + 1;
+    return { year: y, month: m, ym: y * 100 + m };
+  }
+  const str = String(val).trim();
+  if (!str || str === 'ALL') return null;
+
+  // 1. Format YYYY-MM / YYYY/MM (e.g. 2026-08)
+  const yyyyMm = str.match(/^(\d{4})[-/](\d{1,2})$/);
+  if (yyyyMm) {
+    const year = parseInt(yyyyMm[1], 10);
+    const month = parseInt(yyyyMm[2], 10);
+    if (month >= 1 && month <= 12) {
+      return { year, month, ym: year * 100 + month };
+    }
+  }
+
+  // 2. Format MM-YYYY / MM/YYYY (e.g. 08/2026)
+  const mmYyyy = str.match(/^(\d{1,2})[-/](\d{4})$/);
+  if (mmYyyy) {
+    const year = parseInt(mmYyyy[2], 10);
+    const month = parseInt(mmYyyy[1], 10);
+    if (month >= 1 && month <= 12) {
+      return { year, month, ym: year * 100 + month };
+    }
+  }
+
+  // 3. Nama bulan + tahun: e.g. "Sep 2026", "September 2026", "2026 Sep"
+  const wordMatch = str.match(/([a-zA-Z]+)[^0-9]+(\d{4})/) || str.match(/(\d{4})[^0-9]+([a-zA-Z]+)/);
+  if (wordMatch) {
+    const isYearFirst = /^\d{4}$/.test(wordMatch[1]);
+    const monthWord = (isYearFirst ? wordMatch[2] : wordMatch[1]).toLowerCase();
+    const year = parseInt(isYearFirst ? wordMatch[1] : wordMatch[2], 10);
+    const month = MONTH_NAME_MAP[monthWord] || MONTH_NAME_MAP[monthWord.slice(0, 3)];
+    if (month) {
+      return { year, month, ym: year * 100 + month };
+    }
+  }
+
+  // 4. Fallback ke normalizePeriode
+  const norm = normalizePeriode(str);
+  const m = norm.match(/^(\d{4})-(\d{2})$/);
+  if (m) {
+    const year = parseInt(m[1], 10);
+    const month = parseInt(m[2], 10);
+    return { year, month, ym: year * 100 + month };
+  }
+
+  return null;
+}
+
+/**
+ * Mengurutkan periode secara kronologis numerik (tahun * 100 + bulan).
+ */
+export function sortPeriode(a: string | { periode: string }, b: string | { periode: string }): number {
+  const pA = typeof a === 'string' ? a : a?.periode;
+  const pB = typeof b === 'string' ? b : b?.periode;
+  const ymA = parsePeriodeToYearMonth(pA)?.ym ?? 0;
+  const ymB = parsePeriodeToYearMonth(pB)?.ym ?? 0;
+  if (ymA !== ymB) return ymA - ymB;
+  return String(pA || '').localeCompare(String(pB || ''));
+}
+
+/**
+ * Cek apakah dua periode merupakan bulan berturut-turut (selisih tepat 1 bulan).
+ */
+export function isConsecutiveMonth(
+  prev: string | { periode: string },
+  curr: string | { periode: string }
+): boolean {
+  const pA = typeof prev === 'string' ? prev : prev?.periode;
+  const pB = typeof curr === 'string' ? curr : curr?.periode;
+  const ymPrev = parsePeriodeToYearMonth(pA);
+  const ymCurr = parsePeriodeToYearMonth(pB);
+  if (!ymPrev || !ymCurr) return false;
+  return (ymCurr.year * 12 + ymCurr.month) - (ymPrev.year * 12 + ymPrev.month) === 1;
+}
+
+/**
+ * Pengecekan mesin BCA yang tangguh dan case-insensitive.
+ */
+export function isBcaMachine(m: any): boolean {
+  if (!m) return false;
+  const val = (m.klienStatus ?? m.klien_status ?? m.klien ?? 'BCA').toString().trim().toUpperCase();
+  return val === 'BCA' || val === '';
+}
+
+/**
+ * Pengecekan status mesin aktif yang tangguh dan case-insensitive.
+ */
+export function isActiveMachine(m: any): boolean {
+  if (!m) return false;
+  const val = (m.statusAktif ?? m.status_aktif ?? m.status ?? 'AKTIF').toString().trim().toUpperCase();
+  return val === 'AKTIF' || val === 'ACTIVE' || val === 'A' || val === 'OPERATIONAL' || val === '';
+}
+
 export type MachineHealthStatus = 'SAFE' | 'WARNING' | 'CRITICAL';
 
 export interface MachineHealthEvaluation {
@@ -74,7 +192,7 @@ export function evaluateMachineHealth(
   const warningThreshold = isCrm ? WARNING_THRESHOLDS.CRM : WARNING_THRESHOLDS.ATM;
 
   const history = [...(machine.monthlyData || [])].sort((a, b) => 
-    normalizePeriode(a.periode).localeCompare(normalizePeriode(b.periode))
+    sortPeriode(a, b)
   );
 
   const isAll = !selectedPeriode || selectedPeriode === 'ALL';
@@ -118,7 +236,8 @@ export function evaluateMachineHealth(
     let currentConsecutiveLow = 0;
     const spikeDetails: string[] = [];
 
-    history.forEach(h => {
+    for (let i = 0; i < history.length; i++) {
+      const h = history[i];
       const dt = Number(h.total) || 0;
       const up = 100 - dt;
       sumDt += dt;
@@ -128,8 +247,14 @@ export function evaluateMachineHealth(
       sumUp += Number(h.up) || 0;
       sumLl += Number(h.ll) || 0;
 
+      const isAdjacent = i === 0 || isConsecutiveMonth(history[i - 1], h);
+
       if (up < targetSla) {
-        currentConsecutiveLow++;
+        if (isAdjacent) {
+          currentConsecutiveLow++;
+        } else {
+          currentConsecutiveLow = 1;
+        }
         if (currentConsecutiveLow > maxConsecutiveLow) {
           maxConsecutiveLow = currentConsecutiveLow;
         }
@@ -156,7 +281,7 @@ export function evaluateMachineHealth(
       if (hw > SPIKE_THRESHOLDS.HW) {
         spikeDetails.push(`Lonjakan Hardware (${pLabel}): ${hw.toFixed(2)}% (> ${SPIKE_THRESHOLDS.HW}%)`);
       }
-    });
+    }
 
     const monthCount = history.length;
     const avgDtTotal = Number((sumDt / monthCount).toFixed(2));
@@ -210,6 +335,9 @@ export function evaluateMachineHealth(
     } else {
       if (isChronicCritical && !reasons.some(r => r.includes('Mesin Kronis'))) {
         reasons.push(`Mesin Kronis (> 2 Bulan): ${maxConsecutiveLow} Bulan berturut-turut di bawah SLA`);
+      }
+      if (isChronicWarning && !reasons.some(r => r.includes('Mesin Kronis'))) {
+        reasons.push(`Mesin Kronis (Waspada 2 Bulan): 2 Bulan berturut-turut di bawah SLA (${targetSla}%)`);
       }
       if (hasSpike) {
         spikeDetails.slice(0, 2).forEach(s => reasons.push(s));
@@ -298,9 +426,12 @@ export function evaluateMachineHealth(
   const dtTotal = Number(current.total) || 0;
   const currentUptime = Number(Math.max(0, 100 - dtTotal).toFixed(2));
 
-  // Hitung bulan berturut-turut di bawah target SLA hingga bulan terpilih
+  // Hitung bulan berturut-turut di bawah target SLA hingga bulan terpilih (mundur dari targetIdx)
   let consecutiveLow = 0;
   for (let i = targetIdx; i >= 0; i--) {
+    if (i < targetIdx && !isConsecutiveMonth(history[i], history[i + 1])) {
+      break;
+    }
     const mDt = Number(history[i].total) || 0;
     const mUp = 100 - mDt;
     if (mUp < targetSla) {
@@ -373,6 +504,9 @@ export function evaluateMachineHealth(
   } else {
     if (isChronicCritical && !reasons.some(r => r.includes('Mesin Kronis'))) {
       reasons.push(`Mesin Kronis (> 2 Bulan): ${consecutiveLow} Bulan berturut-turut di bawah SLA`);
+    }
+    if (isChronicWarning && !reasons.some(r => r.includes('Mesin Kronis'))) {
+      reasons.push(`Mesin Kronis (Waspada 2 Bulan): 2 Bulan berturut-turut di bawah SLA (${targetSla}%)`);
     }
     if (hasSpike) {
       spikeDetails.forEach(s => reasons.push(s));

@@ -8,14 +8,16 @@ import {
 import { 
   BarChart3, TrendingUp, PieChart as PieIcon,
   Layers, MapPin, Server, Download, Info, CheckCircle2, AlertTriangle, Cpu,
-  ShieldAlert, ArrowRight, Activity, ChevronDown, ChevronUp
+  ShieldAlert, ArrowRight, Activity, ChevronDown, ChevronUp, Flame
 } from 'lucide-react';
 import { exportDashboardExcel, SERVICE_POINT_MAP, getServicePointName, formatBulanTahun } from '../utils/comprehensiveExporter';
 import { cleanSektorName, normalizeServicePoint } from '../utils/dailyIncidentParser';
 import StickyTableWrapper from '../components/StickyTableWrapper';
 import { 
   evaluateMachineHealth, 
-  SPIKE_THRESHOLDS 
+  SPIKE_THRESHOLDS,
+  isBcaMachine,
+  isActiveMachine
 } from '../utils/slaHelper';
 
 function formatPeriodLabel(periode: string) {
@@ -408,7 +410,10 @@ export default function DashboardPage() {
     }> = {};
 
     // HANYA mengevaluasi mesin BCA Aktif untuk Status Kesehatan Mesin & Kepatuhan SLA
-    const bcaActiveMachines = filteredMachines.filter(m => m.klienStatus === 'BCA');
+    const bcaActiveMachines = filteredMachines.filter(m => isBcaMachine(m) && isActiveMachine(m));
+
+    const chronicCriticalWsids: string[] = [];
+    const chronicWarningWsids: string[] = [];
 
     bcaActiveMachines.forEach(m => {
       const evalRes = evaluateMachineHealth(m, activeHealthPeriod);
@@ -420,18 +425,26 @@ export default function DashboardPage() {
         criticalCount++;
       }
 
-      if (evalRes.isChronicWarning) chronicWarningCount++;
-      if (evalRes.isChronicCritical) chronicCriticalCount++;
+      if (evalRes.isChronicCritical) {
+        chronicCriticalCount++;
+        chronicCriticalWsids.push(m.wsid);
+      } else if (evalRes.isChronicWarning) {
+        chronicWarningCount++;
+        chronicWarningWsids.push(m.wsid);
+      }
 
       if (evalRes.status !== 'SAFE') {
         const matchedKeys = new Set<string>();
 
+        // Kumpulkan wsid chronic langsung dari evalRes.isChronicCritical / isChronicWarning
+        if (evalRes.isChronicCritical) {
+          matchedKeys.add('CHRONIC_CRITICAL');
+        } else if (evalRes.isChronicWarning) {
+          matchedKeys.add('CHRONIC_WARNING');
+        }
+
         evalRes.reasons.forEach(r => {
-          if (r.includes('Mesin Kronis (> 2 Bulan)')) {
-            matchedKeys.add('CHRONIC_CRITICAL');
-          } else if (r.includes('Mesin Kronis (Waspada 2 Bulan)')) {
-            matchedKeys.add('CHRONIC_WARNING');
-          } else if (r.includes('Hardware')) {
+          if (r.includes('Hardware')) {
             matchedKeys.add('SPIKE_HW');
           } else if (r.includes('Komunikasi') || r.includes('Jaringan')) {
             matchedKeys.add('SPIKE_KOM');
@@ -490,9 +503,13 @@ export default function DashboardPage() {
       criticalCount,
       chronicWarningCount,
       chronicCriticalCount,
+      chronicCriticalWsids,
+      chronicWarningWsids,
       safePct: total > 0 ? ((safeCount / total) * 100).toFixed(1) : '0',
       warningPct: total > 0 ? ((warningCount / total) * 100).toFixed(1) : '0',
       criticalPct: total > 0 ? ((criticalCount / total) * 100).toFixed(1) : '0',
+      chronicCriticalPct: total > 0 ? ((chronicCriticalCount / total) * 100).toFixed(1) : '0',
+      chronicWarningPct: total > 0 ? ((chronicWarningCount / total) * 100).toFixed(1) : '0',
       reasons: sortedReasons
     };
   }, [filteredMachines, activeHealthPeriod]);
@@ -693,6 +710,97 @@ export default function DashboardPage() {
               <span>Follow-Up</span>
               <ArrowRight size={12} />
             </button>
+          </div>
+        </div>
+
+        {/* Dua Kartu Metrik Chronic: Kritis (> 2 Bulan) & Waspada (2 Bulan) (Selalu tampil walau 0) */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 mt-2.5 pt-2.5 border-t border-[#E5EAF2]">
+          {/* Card 1: Chronic Kritis (> 2 Bulan) */}
+          <div
+            onClick={() => {
+              setSelectedPeriode(activeHealthPeriod);
+              navigate('/follow-up', {
+                state: {
+                  categoryFilter: 'CHRONIC_CRITICAL',
+                  categoryLabel: 'Mesin Kronis Kritis (> 2 Bulan)',
+                  priorityFilter: 'CRITICAL',
+                  categoryWsids: healthAnalysis.chronicCriticalWsids
+                }
+              });
+            }}
+            className="flex items-center justify-between p-2.5 rounded-lg bg-rose-50/70 hover:bg-rose-100/70 border border-rose-200 cursor-pointer transition-all hover:shadow-2xs group select-none"
+            title="Klik untuk lihat daftar rekomendasi mesin Chronic Kritis di Follow-Up"
+          >
+            <div className="flex items-center gap-2.5">
+              <div className="w-8 h-8 rounded-lg bg-rose-100 text-rose-700 flex items-center justify-center shrink-0 border border-rose-200">
+                <Flame size={16} />
+              </div>
+              <div>
+                <div className="flex items-center gap-1.5">
+                  <span className="text-xs font-bold text-rose-900 group-hover:text-rose-700 transition-colors">
+                    Chronic Kritis (&gt; 2 Bulan)
+                  </span>
+                  <span className="text-[9px] px-1 py-0.2 rounded bg-rose-200/60 text-rose-800 font-semibold uppercase">
+                    Kritis
+                  </span>
+                </div>
+                <p className="text-[10px] text-rose-700/80">
+                  Uptime di bawah target SLA &gt; 2 bulan berturut-turut
+                </p>
+              </div>
+            </div>
+            <div className="text-right shrink-0">
+              <span className="text-base font-bold text-rose-700 block leading-tight">
+                {healthAnalysis.chronicCriticalCount} <span className="text-[10px] font-normal text-rose-600">unit</span>
+              </span>
+              <span className="text-[10px] text-rose-600">
+                ({healthAnalysis.chronicCriticalPct}%)
+              </span>
+            </div>
+          </div>
+
+          {/* Card 2: Chronic Waspada (2 Bulan) */}
+          <div
+            onClick={() => {
+              setSelectedPeriode(activeHealthPeriod);
+              navigate('/follow-up', {
+                state: {
+                  categoryFilter: 'CHRONIC_WARNING',
+                  categoryLabel: 'Mesin Kronis Waspada (2 Bulan)',
+                  priorityFilter: 'WARNING',
+                  categoryWsids: healthAnalysis.chronicWarningWsids
+                }
+              });
+            }}
+            className="flex items-center justify-between p-2.5 rounded-lg bg-amber-50/70 hover:bg-amber-100/70 border border-amber-200 cursor-pointer transition-all hover:shadow-2xs group select-none"
+            title="Klik untuk lihat daftar rekomendasi mesin Chronic Waspada di Follow-Up"
+          >
+            <div className="flex items-center gap-2.5">
+              <div className="w-8 h-8 rounded-lg bg-amber-100 text-amber-700 flex items-center justify-center shrink-0 border border-amber-200">
+                <AlertTriangle size={16} />
+              </div>
+              <div>
+                <div className="flex items-center gap-1.5">
+                  <span className="text-xs font-bold text-amber-900 group-hover:text-amber-700 transition-colors">
+                    Chronic Waspada (2 Bulan)
+                  </span>
+                  <span className="text-[9px] px-1 py-0.2 rounded bg-amber-200/60 text-amber-800 font-semibold uppercase">
+                    Warning
+                  </span>
+                </div>
+                <p className="text-[10px] text-amber-700/80">
+                  Uptime di bawah target SLA tepat 2 bulan berturut-turut
+                </p>
+              </div>
+            </div>
+            <div className="text-right shrink-0">
+              <span className="text-base font-bold text-amber-700 block leading-tight">
+                {healthAnalysis.chronicWarningCount} <span className="text-[10px] font-normal text-amber-600">unit</span>
+              </span>
+              <span className="text-[10px] text-amber-600">
+                ({healthAnalysis.chronicWarningPct}%)
+              </span>
+            </div>
           </div>
         </div>
 

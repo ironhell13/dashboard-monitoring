@@ -2023,6 +2023,7 @@ export async function searchIncidentsSupabase(filters: {
 /**
  * Ambil riwayat insiden beberapa hari terakhir khusus untuk evaluasi kalkulasi Chronic instan (<500ms).
  * Membaca incident_logs menggunakan index start_time (default 14 hari) untuk mencakup rolling 5 hari & problem open.
+ * Menggunakan paginasi per 1000 baris dengan batas aman total 30.000 baris.
  */
 export async function fetchRecentIncidentsForChronicSupabase(days: number = 14): Promise<{
   success: boolean;
@@ -2032,44 +2033,70 @@ export async function fetchRecentIncidentsForChronicSupabase(days: number = 14):
   if (!client) return { success: false, rows: [] };
 
   try {
-    const selectCols = 'id, incident_key, wsid, problem, status, start_time, end_time, duration_minutes, action_taken, action_by, action_at, periode_bulan';
+    const selectCols = 'id, incident_key, wsid, ticket_no, problem, status, start_time, end_time, duration_minutes, action_taken, action_by, action_at, periode_bulan';
     const machinesMap = getMachinesMap();
     let rawData: any[] = [];
+    const chunkSize = 1000;
+    const maxSafe = 30000;
 
-    // 1. Coba ambil berdasarkan cutoff start_time
+    // Filter cutoff WIB: hari ini 00:00 WIB dikurangi `days` hari, konversi ke ISO UTC (WIB = UTC+7)
+    const now = new Date();
+    const nowWibMs = now.getTime() + 7 * 3600 * 1000;
+    const wibDate = new Date(nowWibMs);
+    const y = wibDate.getUTCFullYear();
+    const m = wibDate.getUTCMonth();
+    const d = wibDate.getUTCDate();
+    const cutoffDateUtc = new Date(Date.UTC(y, m, d - days, -7, 0, 0, 0));
+    const cutoffIso = cutoffDateUtc.toISOString();
+
+    // 1. Ambil data dengan filter cutoff start_time menggunakan paginasi range
     try {
-      const cutoff = new Date();
-      cutoff.setDate(cutoff.getDate() - days);
-      cutoff.setHours(0, 0, 0, 0);
-      const cutoffIso = cutoff.toISOString();
-
-      const { data, error } = await client
-        .from('incident_logs')
-        .select(selectCols)
-        .gte('start_time', cutoffIso)
-        .order('start_time', { ascending: false })
-        .limit(5000);
-
-      if (!error && data && data.length > 0) {
-        rawData = data;
-      }
-    } catch (_) {}
-
-    // 2. Fallback tangguh: Jika query dengan filter tanggal tidak menemukan data
-    // (misalnya format tanggal custom, timezone WIB vs UTC, atau start_time null),
-    // langsung tarik 3000 data insiden paling akhir berdasarkan ID descending (<100ms)
-    if (rawData.length === 0) {
-      try {
+      for (let from = 0; from < maxSafe; from += chunkSize) {
+        const to = from + chunkSize - 1;
         const { data, error } = await client
           .from('incident_logs')
           .select(selectCols)
+          .gte('start_time', cutoffIso)
+          .order('start_time', { ascending: false })
           .order('id', { ascending: false })
-          .limit(3000);
+          .range(from, to);
 
-        if (!error && data && data.length > 0) {
-          rawData = data;
+        if (error) {
+          console.warn('[CHRONIC-DEBUG] fetchRecentIncidentsForChronicSupabase query error:', error);
+          break;
         }
-      } catch (_) {}
+
+        if (!data || data.length === 0) break;
+        rawData.push(...data);
+        if (data.length < chunkSize) break;
+      }
+    } catch (err: any) {
+      console.warn('[CHRONIC-DEBUG] fetchRecentIncidentsForChronicSupabase exception:', err);
+    }
+
+    // 2. Fallback tangguh jika cutoff start_time kosong (juga dipaginasi hingga 3000 data)
+    if (rawData.length === 0) {
+      try {
+        for (let from = 0; from < 3000; from += chunkSize) {
+          const to = from + chunkSize - 1;
+          const { data, error } = await client
+            .from('incident_logs')
+            .select(selectCols)
+            .order('id', { ascending: false })
+            .range(from, to);
+
+          if (error) {
+            console.warn('[CHRONIC-DEBUG] fetchRecentIncidentsForChronicSupabase fallback query error:', error);
+            break;
+          }
+
+          if (!data || data.length === 0) break;
+          rawData.push(...data);
+          if (data.length < chunkSize) break;
+        }
+      } catch (fbErr: any) {
+        console.warn('[CHRONIC-DEBUG] fetchRecentIncidentsForChronicSupabase fallback exception:', fbErr);
+      }
     }
 
     if (rawData.length === 0) {
@@ -2083,8 +2110,8 @@ export async function fetchRecentIncidentsForChronicSupabase(days: number = 14):
     });
 
     return { success: true, rows };
-  } catch (err) {
-    console.warn('fetchRecentIncidentsForChronicSupabase warning:', err);
+  } catch (err: any) {
+    console.warn('[CHRONIC-DEBUG] fetchRecentIncidentsForChronicSupabase warning:', err);
     return { success: false, rows: [] };
   }
 }

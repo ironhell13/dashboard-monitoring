@@ -24,7 +24,7 @@ import {
 } from 'lucide-react';
 import { hwDetailMap } from '../utils/problemCalculator';
 import { exportWsidDetailExcel, formatBulanTahun, normalizePeriode } from '../utils/comprehensiveExporter';
-import { evaluateMachineHealth } from '../utils/slaHelper';
+import { evaluateMachineHealth, sortPeriode } from '../utils/slaHelper';
 import {
   type FollowUpTicketItem,
   fetchFollowUpTicketsModern,
@@ -220,10 +220,10 @@ export default function WsidDetailPage() {
 
   // Sort monthlyData by periode (Bulan) chronologically ascending
   const sortedMonthlyData = [...(machine.monthlyData || [])].sort((a, b) =>
-    normalizePeriode(a.periode).localeCompare(normalizePeriode(b.periode))
+    sortPeriode(a, b)
   );
 
-  const latestHealth = machine ? evaluateMachineHealth(machine) : null;
+  const latestHealth = machine ? evaluateMachineHealth(machine, 'ALL') : null;
 
   const formatNum = (val: number | undefined) => {
     if (val === undefined) return 0;
@@ -321,10 +321,20 @@ export default function WsidDetailPage() {
               >
                 Uptime Terkini: {latestHealth.currentUptime}%
               </span>
-              {latestHealth.consecutiveLowMonths > 0 && (
-                <span className="text-[10px] font-medium px-2 py-0.5 rounded bg-purple-50 border border-purple-200 text-purple-700">
+              {latestHealth.consecutiveLowMonths >= 2 ? (
+                <span
+                  className={`text-[10px] font-semibold px-2 py-0.5 rounded border ${
+                    latestHealth.isChronicCritical
+                      ? 'bg-rose-50 text-rose-800 border-rose-200'
+                      : 'bg-amber-50 text-amber-800 border-amber-200'
+                  }`}
+                >
                   {latestHealth.consecutiveLowMonths} Bulan Berturut di bawah SLA{' '}
                   {latestHealth.isChronicCritical ? '(Kronis Kritis)' : '(Waspada)'}
+                </span>
+              ) : (
+                <span className="text-[10px] font-medium px-2 py-0.5 rounded bg-slate-50 border border-slate-200 text-slate-600">
+                  Belum kronis ({latestHealth.consecutiveLowMonths} bulan di bawah SLA)
                 </span>
               )}
             </div>

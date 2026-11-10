@@ -1,7 +1,7 @@
 import type { MachineData } from '../store/useDataStore';
 import type { FollowUpTicket } from './spreadsheetService';
 import { normalizePeriode } from './comprehensiveExporter';
-import { evaluateMachineHealth, getTargetSla } from './slaHelper';
+import { evaluateMachineHealth, getTargetSla, isBcaMachine, isActiveMachine, sortPeriode } from './slaHelper';
 
 export interface FollowUpRecommendation {
   wsid: string;
@@ -85,10 +85,10 @@ export const getFollowUpRecommendations = (
 
   machines.forEach(machine => {
     // 1. Hanya evaluasi mesin yang aktif
-    if (machine.statusAktif?.trim().toUpperCase() !== 'AKTIF') return;
+    if (!isActiveMachine(machine)) return;
 
     // 2. HANYA FOKUS KE MESIN BCA AKTIF (Non BCA tidak dievaluasi untuk SLA & Follow Up BCA)
-    if (machine.klienStatus !== 'BCA') return;
+    if (!isBcaMachine(machine)) return;
 
     // 3. Filter Jenis Mesin jika dispesifikasikan
     if (filterOptions?.jenisMesin && filterOptions.jenisMesin !== 'ALL' && machine.jenisMesin !== filterOptions.jenisMesin) {
@@ -101,7 +101,7 @@ export const getFollowUpRecommendations = (
     }
 
     const history = [...(machine.monthlyData || [])].sort((a, b) => 
-      normalizePeriode(a.periode).localeCompare(normalizePeriode(b.periode))
+      sortPeriode(a, b)
     );
 
     // Evaluasi performa kesehatan mesin sesuai periode filter

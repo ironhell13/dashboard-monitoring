@@ -641,13 +641,15 @@ export interface FollowUpTicketItem {
   servicePoint: string;
   vendor: string;
   problem: string;
-  sumberProblem: 'OPEN_INCIDENT' | 'FREKUENSI';
+  sumberProblem?: 'OPEN_INCIDENT' | 'FREKUENSI' | 'ANALISIS' | 'CHRONIC_SLA';
   prioritas: 'NORMAL' | 'HIGH' | 'URGENT';
   kategori: 'VENDOR' | 'FLM' | 'SLM' | 'CABANG' | 'JALUR' | 'LAINNYA';
   catatanRequest: string;
   createdBy: string;
   createdAt: string;
   status: 'OPEN' | 'IN_PROGRESS' | 'REQ_CLOSE' | 'RE_OPEN' | 'CLOSED';
+  periodeProblem?: string;
+  uptimeBaseline?: number;
   durasiMenitFinal?: number;
   progresList: {
     id?: string;
