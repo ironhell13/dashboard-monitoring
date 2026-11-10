@@ -293,7 +293,9 @@ function App() {
   if (appMode === 'MONITORING') {
     return (
       <ErrorBoundary>
-        <MonitoringPage onLogout={handleLogoutMonitoring} userRole="MONITORING" isKaOps={false} />
+        <HashRouter>
+          <MonitoringPage onLogout={handleLogoutMonitoring} userRole="MONITORING" isKaOps={false} />
+        </HashRouter>
       </ErrorBoundary>
     );
   }

@@ -1162,24 +1162,31 @@ export function getMachineMetadata(wsid?: string): any {
   return null;
 }
 
-export function getMachinesMap(): Map<string, any> {
-  const map = new Map<string, any>();
-  // 1. Masukkan seluruh data static catalog sebagai baseline 2.043 mesin
-  for (const k in staticCatalog) {
-    const c = staticCatalog[k];
-    const sp = getServicePointForSektor(c.sektorBCA) || 'ACJK';
-    map.set(k, {
-      wsid: c.wsid,
-      lokasi: c.lokasi,
-      service_point: sp,
-      sektor_bca: c.sektorBCA,
-      tipe_mesin: c.tipeMesin,
-      vendor: c.vendor,
-      jenis_mesin: c.jenisMesin,
-      hari: c.hari,
-      jam: c.jam
-    });
+let _baseStaticMachinesMap: Map<string, any> | null = null;
+function getBaseStaticMachinesMap(): Map<string, any> {
+  if (!_baseStaticMachinesMap) {
+    _baseStaticMachinesMap = new Map<string, any>();
+    for (const k in staticCatalog) {
+      const c = staticCatalog[k];
+      const sp = getServicePointForSektor(c.sektorBCA) || 'ACJK';
+      _baseStaticMachinesMap.set(k, {
+        wsid: c.wsid,
+        lokasi: c.lokasi,
+        service_point: sp,
+        sektor_bca: c.sektorBCA,
+        tipe_mesin: c.tipeMesin,
+        vendor: c.vendor,
+        jenis_mesin: c.jenisMesin,
+        hari: c.hari,
+        jam: c.jam
+      });
+    }
   }
+  return _baseStaticMachinesMap;
+}
+
+export function getMachinesMap(): Map<string, any> {
+  const map = new Map<string, any>(getBaseStaticMachinesMap());
 
   // 2. Timpa dengan data store jika user mengunggah file baru
   try {

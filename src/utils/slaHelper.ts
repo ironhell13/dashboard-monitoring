@@ -33,6 +33,8 @@ const MONTH_NAME_MAP: Record<string, number> = {
   des: 12, desember: 12, dec: 12, december: 12
 };
 
+const PERIODE_CACHE = new Map<string, { year: number; month: number; ym: number } | null>();
+
 /**
  * Parsing periode string ke objek tahun & bulan numerik { year, month, ym: year*100+month }.
  * Mendukung format: 'YYYY-MM', 'YYYY/MM', 'MM/YYYY', 'MM-YYYY', 'Sep 2026', 'September 2026', Date object.
@@ -47,48 +49,61 @@ export function parsePeriodeToYearMonth(val: any): { year: number; month: number
   const str = String(val).trim();
   if (!str || str === 'ALL') return null;
 
+  if (PERIODE_CACHE.has(str)) {
+    return PERIODE_CACHE.get(str)!;
+  }
+
+  let result: { year: number; month: number; ym: number } | null = null;
+
   // 1. Format YYYY-MM / YYYY/MM (e.g. 2026-08)
   const yyyyMm = str.match(/^(\d{4})[-/](\d{1,2})$/);
   if (yyyyMm) {
     const year = parseInt(yyyyMm[1], 10);
     const month = parseInt(yyyyMm[2], 10);
     if (month >= 1 && month <= 12) {
-      return { year, month, ym: year * 100 + month };
+      result = { year, month, ym: year * 100 + month };
     }
   }
 
   // 2. Format MM-YYYY / MM/YYYY (e.g. 08/2026)
-  const mmYyyy = str.match(/^(\d{1,2})[-/](\d{4})$/);
-  if (mmYyyy) {
-    const year = parseInt(mmYyyy[2], 10);
-    const month = parseInt(mmYyyy[1], 10);
-    if (month >= 1 && month <= 12) {
-      return { year, month, ym: year * 100 + month };
+  if (!result) {
+    const mmYyyy = str.match(/^(\d{1,2})[-/](\d{4})$/);
+    if (mmYyyy) {
+      const year = parseInt(mmYyyy[2], 10);
+      const month = parseInt(mmYyyy[1], 10);
+      if (month >= 1 && month <= 12) {
+        result = { year, month, ym: year * 100 + month };
+      }
     }
   }
 
   // 3. Nama bulan + tahun: e.g. "Sep 2026", "September 2026", "2026 Sep"
-  const wordMatch = str.match(/([a-zA-Z]+)[^0-9]+(\d{4})/) || str.match(/(\d{4})[^0-9]+([a-zA-Z]+)/);
-  if (wordMatch) {
-    const isYearFirst = /^\d{4}$/.test(wordMatch[1]);
-    const monthWord = (isYearFirst ? wordMatch[2] : wordMatch[1]).toLowerCase();
-    const year = parseInt(isYearFirst ? wordMatch[1] : wordMatch[2], 10);
-    const month = MONTH_NAME_MAP[monthWord] || MONTH_NAME_MAP[monthWord.slice(0, 3)];
-    if (month) {
-      return { year, month, ym: year * 100 + month };
+  if (!result) {
+    const wordMatch = str.match(/([a-zA-Z]+)[^0-9]+(\d{4})/) || str.match(/(\d{4})[^0-9]+([a-zA-Z]+)/);
+    if (wordMatch) {
+      const isYearFirst = /^\d{4}$/.test(wordMatch[1]);
+      const monthWord = (isYearFirst ? wordMatch[2] : wordMatch[1]).toLowerCase();
+      const year = parseInt(isYearFirst ? wordMatch[1] : wordMatch[2], 10);
+      const month = MONTH_NAME_MAP[monthWord] || MONTH_NAME_MAP[monthWord.slice(0, 3)];
+      if (month) {
+        result = { year, month, ym: year * 100 + month };
+      }
     }
   }
 
   // 4. Fallback ke normalizePeriode
-  const norm = normalizePeriode(str);
-  const m = norm.match(/^(\d{4})-(\d{2})$/);
-  if (m) {
-    const year = parseInt(m[1], 10);
-    const month = parseInt(m[2], 10);
-    return { year, month, ym: year * 100 + month };
+  if (!result) {
+    const norm = normalizePeriode(str);
+    const m = norm.match(/^(\d{4})-(\d{2})$/);
+    if (m) {
+      const year = parseInt(m[1], 10);
+      const month = parseInt(m[2], 10);
+      result = { year, month, ym: year * 100 + month };
+    }
   }
 
-  return null;
+  PERIODE_CACHE.set(str, result);
+  return result;
 }
 
 /**
@@ -191,9 +206,8 @@ export function evaluateMachineHealth(
   const targetSla = isCrm ? SLA_TARGETS.CRM : SLA_TARGETS.ATM;
   const warningThreshold = isCrm ? WARNING_THRESHOLDS.CRM : WARNING_THRESHOLDS.ATM;
 
-  const history = [...(machine.monthlyData || [])].sort((a, b) => 
-    sortPeriode(a, b)
-  );
+  const rawData = machine.monthlyData || [];
+  const history = rawData.length <= 1 ? rawData : [...rawData].sort(sortPeriode);
 
   const isAll = !selectedPeriode || selectedPeriode === 'ALL';
 

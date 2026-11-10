@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useEffect, useRef } from 'react';
-import { useLocation } from 'react-router-dom';
+import { useLocation, useInRouterContext, MemoryRouter } from 'react-router-dom';
 import {
   Ticket,
   Clock,
@@ -48,11 +48,14 @@ interface FollowUpPageProps {
   isEmbedded?: boolean;
 }
 
+interface FollowUpPageInnerProps extends FollowUpPageProps {
+  locationState?: any;
+}
+
 const DEFAULT_SERVICE_POINTS = ['ACJK', 'ACBT', 'ACCK', 'ACSR', 'ACBS', 'ACRW', 'TAG'];
 
-export default function FollowUpPage({ userRole, isEmbedded = false }: FollowUpPageProps) {
-  const location = useLocation();
-  const navState = (location.state || {}) as {
+function FollowUpPageInner({ userRole, isEmbedded = false, locationState }: FollowUpPageInnerProps) {
+  const navState = (locationState || {}) as {
     categoryFilter?: string;
     categoryLabel?: string;
     priorityFilter?: string;
@@ -84,7 +87,7 @@ export default function FollowUpPage({ userRole, isEmbedded = false }: FollowUpP
       setActiveCategoryWsids(navState.categoryWsids || null);
       setMainSectionTab('RECOMMENDATIONS');
     }
-  }, [location.state]);
+  }, [locationState]);
 
   const [createPeriodeProblem, setCreatePeriodeProblem] = useState<string>('');
   const [createUptimeBaseline, setCreateUptimeBaseline] = useState<number | undefined>(undefined);
@@ -130,6 +133,20 @@ export default function FollowUpPage({ userRole, isEmbedded = false }: FollowUpP
 
     return list;
   }, [allRecommendations, activeCategoryWsids, onlyChronicFilter, recPriorityFilter, recSearch]);
+
+  // Paginasi Rekomendasi (25 item/halaman) agar browser rendering ringan dan anti-freeze
+  const [recPage, setRecPage] = useState(1);
+  const recPageSize = 25;
+
+  useEffect(() => {
+    setRecPage(1);
+  }, [activeCategoryWsids, onlyChronicFilter, recPriorityFilter, recSearch]);
+
+  const totalRecPages = Math.ceil(filteredRecommendations.length / recPageSize) || 1;
+  const paginatedRecommendations = useMemo(() => {
+    const start = (recPage - 1) * recPageSize;
+    return filteredRecommendations.slice(start, start + recPageSize);
+  }, [filteredRecommendations, recPage, recPageSize]);
 
   const activeTicketMap = useMemo(() => {
     const map = new Map<string, FollowUpTicketItem>();
@@ -1100,7 +1117,7 @@ ${ticket.reqCloseInfo ? `*Catatan Penyelesaian:* ${ticket.reqCloseInfo.catatanPe
             </div>
 
             <div className="text-xs text-slate-500 font-medium">
-              Menampilkan <strong>{filteredRecommendations.length}</strong> rekomendasi
+              Menampilkan <strong>{filteredRecommendations.length}</strong> rekomendasi {totalRecPages > 1 && `(Halaman ${recPage} dari ${totalRecPages})`}
             </div>
           </div>
 
@@ -1128,7 +1145,7 @@ ${ticket.reqCloseInfo ? `*Catatan Penyelesaian:* ${ticket.reqCloseInfo.catatanPe
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-[#E5EAF2]">
-                    {filteredRecommendations.map((rec) => {
+                    {paginatedRecommendations.map((rec) => {
                       const activeTicket = activeTicketMap.get(rec.wsid.trim().toUpperCase());
                       return (
                         <tr key={rec.wsid} className="hover:bg-slate-50/70 transition-colors">
@@ -1253,6 +1270,36 @@ ${ticket.reqCloseInfo ? `*Catatan Penyelesaian:* ${ticket.reqCloseInfo.catatanPe
                   </tbody>
                 </table>
               </div>
+
+              {/* Kontrol Paginasi Rekomendasi */}
+              {totalRecPages > 1 && (
+                <div className="px-4 py-3 bg-slate-50 border-t border-[#E5EAF2] flex flex-wrap items-center justify-between gap-3 select-none">
+                  <div className="text-xs text-slate-500">
+                    Menampilkan <strong>{((recPage - 1) * recPageSize) + 1}</strong> - <strong>{Math.min(recPage * recPageSize, filteredRecommendations.length)}</strong> dari <strong>{filteredRecommendations.length}</strong> rekomendasi
+                  </div>
+                  <div className="flex items-center gap-1.5">
+                    <button
+                      type="button"
+                      disabled={recPage <= 1}
+                      onClick={() => setRecPage((p) => Math.max(1, p - 1))}
+                      className="px-2.5 py-1 text-xs font-semibold rounded-md border border-[#E5EAF2] bg-white text-slate-700 hover:bg-slate-100 disabled:opacity-40 disabled:cursor-not-allowed transition-colors cursor-pointer"
+                    >
+                      Sebelumnya
+                    </button>
+                    <span className="text-xs text-slate-600 px-2 font-mono">
+                      Halaman {recPage} dari {totalRecPages}
+                    </span>
+                    <button
+                      type="button"
+                      disabled={recPage >= totalRecPages}
+                      onClick={() => setRecPage((p) => Math.min(totalRecPages, p + 1))}
+                      className="px-2.5 py-1 text-xs font-semibold rounded-md border border-[#E5EAF2] bg-white text-slate-700 hover:bg-slate-100 disabled:opacity-40 disabled:cursor-not-allowed transition-colors cursor-pointer"
+                    >
+                      Selanjutnya
+                    </button>
+                  </div>
+                </div>
+              )}
             </div>
           )}
         </div>
@@ -2441,4 +2488,21 @@ ${ticket.reqCloseInfo ? `*Catatan Penyelesaian:* ${ticket.reqCloseInfo.catatanPe
       )}
     </div>
   );
+}
+
+function FollowUpPageRouterConsumer(props: FollowUpPageProps) {
+  const location = useLocation();
+  return <FollowUpPageInner {...props} locationState={location.state} />;
+}
+
+export default function FollowUpPage(props: FollowUpPageProps) {
+  const inRouter = useInRouterContext();
+  if (!inRouter) {
+    return (
+      <MemoryRouter>
+        <FollowUpPageRouterConsumer {...props} />
+      </MemoryRouter>
+    );
+  }
+  return <FollowUpPageRouterConsumer {...props} />;
 }

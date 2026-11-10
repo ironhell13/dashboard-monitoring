@@ -100,15 +100,14 @@ export const getFollowUpRecommendations = (
       return;
     }
 
-    const history = [...(machine.monthlyData || [])].sort((a, b) => 
-      sortPeriode(a, b)
-    );
-
     // Evaluasi performa kesehatan mesin sesuai periode filter
     const health = evaluateMachineHealth(machine, isAll ? 'ALL' : normActivePeriode);
 
     // Jika mesin performanya aman sesuai SLA tanpa problem khusus, tidak perlu follow up
     if (health.status === 'SAFE') return;
+
+    const rawHistory = machine.monthlyData || [];
+    const history = rawHistory.length <= 1 ? rawHistory : [...rawHistory].sort(sortPeriode);
 
     // Ambil data referensi modul hardware & problem details
     let refMonthData: any = null;
