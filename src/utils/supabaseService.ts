@@ -8,6 +8,8 @@ import type { QuickChipItem } from './quickChipsService';
 import { useDataStore } from '../store/useDataStore';
 import { normalizePeriode } from './comprehensiveExporter';
 import {
+  CLOUD_DATA_VERSION,
+  hasIntactMasterFields,
   loadCachedMasterData,
   loadMonitoringSnapshot,
   loadActiveIncidentDataset,
@@ -297,20 +299,24 @@ export async function upsertMachinesBatchSupabase(
     const total = machinesList.length;
 
     for (let i = 0; i < total; i += batchSize) {
-      const chunk = machinesList.slice(i, i + batchSize).map((m) => ({
-        wsid: String(m.wsid || '').trim().replace(/^0+/, '') || String(m.wsid || ''),
-        jenis_mesin: m.jenisMesin || m.jenis_mesin || 'ATM',
-        klien_status: m.klienStatus || m.klien_status || 'BCA',
-        sektor_bca: m.sektorBCA || m.sektor_bca || '',
-        wilayah_operasional: m.wilayahOperasional || m.wilayah_operasional || '',
-        lokasi: m.lokasi || '',
-        vendor: m.vendor || '',
-        tipe_mesin: m.tipeMesin || m.tipe_mesin || '',
-        status_aktif: m.statusAktif || m.status_aktif || 'AKTIF',
-        jam_operasional: m.jam || m.jam_operasional || '(00:00 - 24:00)',
-        opr: Math.round(Number(m.opr) || 43200),
-        updated_at: new Date().toISOString()
-      }));
+      const chunk = machinesList.slice(i, i + batchSize).map((m) => {
+        const rawW = pickFieldIC(m, 'WSID', 'wsid') || '';
+        const w = cleanWsid(rawW) || String(rawW).trim().toUpperCase();
+        return {
+          wsid: w,
+          jenis_mesin: pickFieldIC(m, 'Jenis Mesin', 'jenisMesin', 'jenis_mesin') || 'ATM',
+          klien_status: pickFieldIC(m, 'Klien', 'klienStatus', 'klien_status') || 'BCA',
+          sektor_bca: pickFieldIC(m, 'Sektor', 'Sektor BCA', 'sektorBCA', 'sektor_bca', 'sektor') || '',
+          wilayah_operasional: pickFieldIC(m, 'Wilayah', 'Wilayah Operasional', 'wilayahOperasional', 'wilayah_operasional', 'Service Point') || '',
+          lokasi: pickFieldIC(m, 'Nama Lokasi', 'Lokasi', 'lokasi', 'Alamat') || '',
+          vendor: pickFieldIC(m, 'Vendor', 'vendor', 'VDR', 'Vendor Mesin') || '',
+          tipe_mesin: pickFieldIC(m, 'Tipe Mesin', 'tipeMesin', 'tipe_mesin') || '',
+          status_aktif: pickFieldIC(m, 'Status', 'Status Aktif', 'statusAktif', 'status_aktif') || 'AKTIF',
+          jam_operasional: pickFieldIC(m, 'Jam', 'Jam Operasional', 'jam', 'jam_operasional') || '(00:00 - 24:00)',
+          opr: Math.round(Number(pickFieldIC(m, 'OPR', 'opr')) || 43200),
+          updated_at: new Date().toISOString()
+        };
+      });
 
       const { error } = await client.from('machines').upsert(chunk, { onConflict: 'wsid' });
       if (error) throw error;
@@ -2723,27 +2729,59 @@ export interface CloudDashboardMeta {
   periodUpdatedAt: Record<string, string>;
 }
 
+export function pickFieldIC(obj: any, ...aliases: string[]): any {
+  if (!obj || typeof obj !== 'object') return undefined;
+  for (const alias of aliases) {
+    if (obj[alias] !== undefined && obj[alias] !== null && String(obj[alias]).trim() !== '') {
+      return obj[alias];
+    }
+  }
+  const lowerAliases = aliases.map((a) => a.toLowerCase().trim());
+  for (const k of Object.keys(obj)) {
+    const lk = k.toLowerCase().trim();
+    if (lowerAliases.includes(lk) && obj[k] !== undefined && obj[k] !== null && String(obj[k]).trim() !== '') {
+      return obj[k];
+    }
+  }
+  return undefined;
+}
+
 function compactMasterRowForCloud(m: any): any {
-  const w = String(m?.WSID || m?.wsid || '').trim().toUpperCase();
+  const rawW = pickFieldIC(m, 'WSID', 'wsid');
+  const w = cleanWsid(rawW) || String(rawW || '').trim().toUpperCase();
   if (!w) return null;
+
+  const klien = pickFieldIC(m, 'Klien', 'klienStatus', 'klien_status');
+  const jenisMesin = pickFieldIC(m, 'Jenis Mesin', 'jenisMesin', 'jenis_mesin');
+  const tipeMesin = pickFieldIC(m, 'Tipe Mesin', 'tipeMesin', 'tipe_mesin');
+  const status = pickFieldIC(m, 'Status', 'Status Aktif', 'statusAktif', 'status_aktif');
+  const sektor = pickFieldIC(m, 'Sektor', 'Sektor BCA', 'sektorBCA', 'sektor_bca', 'sektor');
+  const wilayah = pickFieldIC(m, 'Wilayah', 'Wilayah Operasional', 'wilayahOperasional', 'wilayah_operasional', 'Service Point');
+  const lokasi = pickFieldIC(m, 'Nama Lokasi', 'Lokasi', 'lokasi', 'Alamat');
+  const vendor = pickFieldIC(m, 'Vendor', 'vendor', 'VDR', 'Vendor Mesin');
+  const hari = pickFieldIC(m, 'Hari', 'hari');
+  const jam = pickFieldIC(m, 'Jam', 'Jam Operasional', 'jam', 'jam_operasional');
+  const opr = pickFieldIC(m, 'OPR', 'opr');
+
   return {
     WSID: w,
-    Klien: m.Klien ?? m.klienStatus ?? m.klien_status ?? 'BCA',
-    'Jenis Mesin': m['Jenis Mesin'] ?? m.jenisMesin ?? m.jenis_mesin ?? 'ATM',
-    'Tipe Mesin': m['Tipe Mesin'] ?? m.tipeMesin ?? m.tipe_mesin ?? '-',
-    Status: m.Status ?? m.statusAktif ?? m.status_aktif ?? 'AKTIF',
-    Sektor: m.Sektor ?? m.sektorBCA ?? m.sektor_bca ?? '',
-    Wilayah: m.Wilayah ?? m.wilayahOperasional ?? m.wilayah_operasional ?? '',
-    'Nama Lokasi': m['Nama Lokasi'] ?? m.lokasi ?? '',
-    Vendor: m.Vendor ?? m.vendor ?? '-',
-    Hari: m.Hari ?? m.hari ?? 'MON-SUN',
-    Jam: m.Jam ?? m.jam ?? m.jam_operasional ?? '(00:00 - 24:00)',
-    OPR: m.OPR ?? m.opr ?? 43200
+    Klien: klien !== undefined ? String(klien).trim() : 'BCA',
+    'Jenis Mesin': jenisMesin !== undefined ? String(jenisMesin).trim() : 'ATM',
+    'Tipe Mesin': tipeMesin !== undefined ? String(tipeMesin).trim() : '-',
+    Status: status !== undefined ? String(status).trim() : 'AKTIF',
+    Sektor: sektor !== undefined ? String(sektor).trim() : '',
+    Wilayah: wilayah !== undefined ? String(wilayah).trim() : '',
+    'Nama Lokasi': lokasi !== undefined ? String(lokasi).trim() : '',
+    Vendor: vendor !== undefined ? String(vendor).trim() : '-',
+    Hari: hari !== undefined ? String(hari).trim() : 'MON-SUN',
+    Jam: jam !== undefined ? String(jam).trim() : '(00:00 - 24:00)',
+    OPR: opr !== undefined ? opr : 43200
   };
 }
 
 function compactUptimeRowForCloud(r: any): any {
-  const wsid = String(r?.WSID || r?.wsid || '').trim().toUpperCase();
+  const rawW = pickFieldIC(r, 'WSID', 'wsid');
+  const wsid = cleanWsid(rawW) || String(rawW || '').trim().toUpperCase();
   if (!wsid) return null;
 
   const num = (v: any) => {
@@ -2828,18 +2866,32 @@ function compactUptimeRowForCloud(r: any): any {
   const llFrx = getVal('LL_frx', 'P08 - Replenishment_frx', 'P08_frx', 'llFrx') || (hwSubCategories.P08?.frx || 0);
   const llDur = getVal('LL_dur', 'P08 - Replenishment_dur', 'P08_dur', 'llDur') || (hwSubCategories.P08?.dur || 0);
 
+  // JANGAN menimpa DESCKCU dari KWW atau memaksa Klien kosong menjadi 'BCA' — pertahankan nilai asli persis untuk matchData!
+  const rawDesckcu = pickFieldIC(r, 'DESCKCU', 'wilayahOperasional');
+  const rawKww = pickFieldIC(r, 'KWW');
+  const rawKlien = pickFieldIC(r, 'Klien', 'klienStatus', 'klien_status');
+  const rawVdr = pickFieldIC(r, 'VDR', 'Vendor', 'vendor', 'Vendor Mesin');
+  const rawSektor = pickFieldIC(r, 'SEKTOR', 'Sektor', 'sektorBCA', 'sektor_bca');
+  const rawLokasi = pickFieldIC(r, 'LOKASI', 'Nama Lokasi', 'lokasi');
+  const rawTipe = pickFieldIC(r, 'Tipe Mesin', 'tipeMesin');
+  const rawStatus = pickFieldIC(r, 'STATUS', 'Status', 'statusAktif');
+  const rawHari = pickFieldIC(r, 'HARI', 'Hari', 'hari');
+  const rawJam = pickFieldIC(r, 'JAM', 'Jam', 'jam');
+  const rawOpr = pickFieldIC(r, 'OPR', 'opr');
+
   return {
     WSID: wsid,
-    LOKASI: String(r.LOKASI || r.lokasi || '').trim(),
-    DESCKCU: String(r.DESCKCU || r.KWW || r.wilayahOperasional || '').trim(),
-    VDR: String(r.VDR || r.vendor || '').trim(),
-    SEKTOR: String(r.SEKTOR || r.sektorBCA || '').trim(),
-    Klien: String(r.Klien || r.klienStatus || 'BCA').trim(),
-    'Tipe Mesin': r['Tipe Mesin'] || r.tipeMesin || '',
-    STATUS: r.STATUS || r.statusAktif || 'AKTIF',
-    HARI: r.HARI || r.hari || '',
-    JAM: r.JAM || r.jam || '',
-    OPR: r.OPR || r.opr || '',
+    LOKASI: rawLokasi !== undefined ? String(rawLokasi).trim() : '',
+    DESCKCU: rawDesckcu !== undefined ? String(rawDesckcu).trim() : '',
+    ...(rawKww !== undefined ? { KWW: String(rawKww).trim() } : {}),
+    VDR: rawVdr !== undefined ? String(rawVdr).trim() : '',
+    SEKTOR: rawSektor !== undefined ? String(rawSektor).trim() : '',
+    Klien: rawKlien !== undefined ? String(rawKlien).trim() : '',
+    'Tipe Mesin': rawTipe !== undefined ? String(rawTipe).trim() : '',
+    STATUS: rawStatus !== undefined ? String(rawStatus).trim() : '',
+    HARI: rawHari !== undefined ? String(rawHari).trim() : '',
+    JAM: rawJam !== undefined ? String(rawJam).trim() : '',
+    OPR: rawOpr !== undefined ? rawOpr : '',
     Total_pct: getVal('Total_pct', 'Total', 'total'),
     Total_frx: getVal('Total_frx', 'frxTotal'),
     Total_dur: getVal('Total_dur', 'durTotal'),
@@ -2866,13 +2918,19 @@ function compactUptimeRowForCloud(r: any): any {
   };
 }
 
-export function compactUptimeFileForCloud(file: any): any {
+export function compactUptimeFileForCloud(file: any, masterWsidsSet?: Set<string>): any {
   const normPeriode = normalizePeriode(file?.periode || '');
   const isRelevant = (r: any) => {
     if (!r) return false;
-    const desc = String(r.DESCKCU || r.KWW || '').trim().toUpperCase();
+    const desc = String(r.DESCKCU || '').trim().toUpperCase();
+    const kww = String(r.KWW || '').trim().toUpperCase();
     const klien = String(r.Klien || '').trim().toUpperCase();
-    return desc === 'ABACUS JAKARTA' || klien === 'BCA';
+    if (desc === 'ABACUS JAKARTA' || desc === 'ACJK' || kww === 'ABACUS JAKARTA' || kww === 'ACJK') {
+      return true;
+    }
+    if (klien === 'BCA') return true;
+    if (masterWsidsSet && masterWsidsSet.has(r.WSID)) return true;
+    return false;
   };
 
   let atmData = (file?.atmData || []).map(compactUptimeRowForCloud).filter(Boolean);
@@ -2963,7 +3021,7 @@ export async function saveMasterSnapshotToCloud(masterData: any[]): Promise<{
 
     const existingMeta = await fetchDashboardMetaFromCloud();
     const nextMeta: CloudDashboardMeta = {
-      version: 1,
+      version: CLOUD_DATA_VERSION,
       updatedAt: now,
       masterUpdatedAt: now,
       availablePeriodes: existingMeta?.availablePeriodes || [],
@@ -3041,7 +3099,7 @@ export async function saveUptimePeriodSnapshotToCloud(
     };
 
     const nextMeta: CloudDashboardMeta = {
-      version: 1,
+      version: CLOUD_DATA_VERSION,
       updatedAt: now,
       masterUpdatedAt: existingMeta?.masterUpdatedAt || now,
       availablePeriodes: Array.from(availableSet).sort(),
@@ -3089,6 +3147,7 @@ export async function unlockUptimePeriodInCloud(
 
       const nextMeta: CloudDashboardMeta = {
         ...existingMeta,
+        version: CLOUD_DATA_VERSION,
         updatedAt: now,
         availablePeriodes: (existingMeta.availablePeriodes || []).filter((p) => normalizePeriode(p) !== normPeriode),
         lockedPeriodes: remainingLocked
@@ -3137,6 +3196,8 @@ export async function syncFullDatasetToCloud(
       onProgress?.('Menyinkronkan Master Data mesin ke Cloud Supabase...', 15);
 
       const compactMaster = (masterData || []).map(compactMasterRowForCloud).filter(Boolean);
+      const masterWsidsSet = new Set<string>(compactMaster.map((m: any) => String(m.WSID || '').trim().toUpperCase()));
+
       if (compactMaster.length > 0) {
         const { error: mErr } = await client.from('app_config').upsert(
           {
@@ -3155,7 +3216,7 @@ export async function syncFullDatasetToCloud(
 
       for (let i = 0; i < uptimeFiles.length; i++) {
         const file = uptimeFiles[i];
-        const compacted = compactUptimeFileForCloud(file);
+        const compacted = compactUptimeFileForCloud(file, masterWsidsSet);
         const normP = compacted.periode;
         if (!normP) continue;
 
@@ -3184,7 +3245,7 @@ export async function syncFullDatasetToCloud(
       ).sort();
 
       const meta: CloudDashboardMeta = {
-        version: 1,
+        version: CLOUD_DATA_VERSION,
         updatedAt: now,
         masterUpdatedAt: now,
         availablePeriodes: Array.from(new Set(availablePeriodes)).sort(),
@@ -3221,7 +3282,7 @@ export async function syncFullDatasetToCloud(
 export async function fetchDashboardFromCloud(localSnapshot?: {
   masterData?: any[];
   parsedUptimeFiles?: any[];
-  cloudMeta?: { updatedAt?: string; masterUpdatedAt?: string; periodUpdatedAt?: Record<string, string> };
+  cloudMeta?: { version?: number; updatedAt?: string; masterUpdatedAt?: string; periodUpdatedAt?: Record<string, string> };
 } | null): Promise<{
   success: boolean;
   hasData: boolean;
@@ -3234,25 +3295,43 @@ export async function fetchDashboardFromCloud(localSnapshot?: {
   lastUpdated?: string | null;
   cloudMeta?: CloudDashboardMeta;
   isUpToDate?: boolean;
+  needsCloudUpgrade?: boolean;
+  isPartialFallback?: boolean;
 }> {
   const client = getSupabase();
   if (!client) return { success: false, hasData: false, source: 'none' };
 
   try {
     const cloudMeta = await fetchDashboardMetaFromCloud();
+    const localHasUptime =
+      Array.isArray(localSnapshot?.parsedUptimeFiles) && localSnapshot!.parsedUptimeFiles.length > 0;
+    const localHasMaster =
+      Array.isArray(localSnapshot?.masterData) && localSnapshot!.masterData.length > 0;
+    const localIntact = localHasUptime && localHasMaster && hasIntactMasterFields(localSnapshot?.masterData);
 
     // 1. Jalur Utama (Lossless & Inkremantal): Snapshot Terkompresi di app_config
     if (cloudMeta && Array.isArray(cloudMeta.availablePeriodes) && cloudMeta.availablePeriodes.length > 0) {
+      const cloudVersion = Number(cloudMeta.version) || 1;
       const localMeta = localSnapshot?.cloudMeta;
-      const localHasUptime =
-        Array.isArray(localSnapshot?.parsedUptimeFiles) && localSnapshot!.parsedUptimeFiles.length > 0;
-      const localHasMaster =
-        Array.isArray(localSnapshot?.masterData) && localSnapshot!.masterData.length > 0;
+      const localVersion = Number(localMeta?.version) || 1;
 
-      // Cek apakah cache lokal sudah 100% identik dengan Cloud
+      // Jika Cloud masih versi v1 (lama) sementara browser ini (PC sumber) punya data lokal utuh,
+      // pertahankan data PC dan tandai needsCloudUpgrade agar PC otomatis meng-upgrade Cloud ke v2!
+      if (cloudVersion < CLOUD_DATA_VERSION && localIntact) {
+        return {
+          success: true,
+          hasData: false,
+          source: 'none',
+          needsCloudUpgrade: true
+        };
+      }
+
+      const versionsMatch = cloudVersion === CLOUD_DATA_VERSION && localVersion === CLOUD_DATA_VERSION;
+
+      // Cek apakah cache lokal sudah 100% identik dengan Cloud v2
       if (
-        localHasUptime &&
-        localHasMaster &&
+        versionsMatch &&
+        localIntact &&
         localMeta?.updatedAt &&
         localMeta.updatedAt === cloudMeta.updatedAt
       ) {
@@ -3266,10 +3345,11 @@ export async function fetchDashboardFromCloud(localSnapshot?: {
         };
       }
 
-      // 1a. Master Data (pakai lokal jika masterUpdatedAt cocok, jika tidak ambil dari Cloud)
+      // 1a. Master Data (hanya pakai lokal jika versi v2 sama & masterUpdatedAt cocok)
       let masterData: any[] = [];
       if (
-        localHasMaster &&
+        versionsMatch &&
+        localIntact &&
         localMeta?.masterUpdatedAt &&
         localMeta.masterUpdatedAt === cloudMeta.masterUpdatedAt
       ) {
@@ -3284,7 +3364,6 @@ export async function fetchDashboardFromCloud(localSnapshot?: {
         if (!mErr && mRow && Array.isArray(mRow.value)) {
           masterData = mRow.value;
         } else {
-          // Fallback: ambil dari tabel machines jika dashboard_master_v1 tidak ditemukan
           const mRes = await fetchMachinesSupabase();
           if (mRes.success && mRes.machines.length > 0) {
             masterData = mRes.machines.map(compactMasterRowForCloud).filter(Boolean);
@@ -3294,9 +3373,9 @@ export async function fetchDashboardFromCloud(localSnapshot?: {
         }
       }
 
-      // 1b. Uptime per Periode (hanya download periode yang belum ada atau periodUpdatedAt lebih baru)
+      // 1b. Uptime per Periode (hanya pakai cache lokal jika versi v2 & timestamp sama)
       const localPeriodMap = new Map<string, any>();
-      if (localHasUptime) {
+      if (versionsMatch && localHasUptime) {
         localSnapshot!.parsedUptimeFiles!.forEach((f: any) => {
           if (f?.periode) localPeriodMap.set(normalizePeriode(f.periode), f);
         });
@@ -3312,7 +3391,7 @@ export async function fetchDashboardFromCloud(localSnapshot?: {
         const cloudTs = cloudMeta.periodUpdatedAt?.[p];
         const localTs = localMeta?.periodUpdatedAt?.[p];
 
-        if (localFile && cloudTs && localTs && cloudTs === localTs) {
+        if (versionsMatch && localFile && cloudTs && localTs && cloudTs === localTs) {
           keptFiles.push(localFile);
         } else {
           periodsToFetch.push(p);
@@ -3347,11 +3426,13 @@ export async function fetchDashboardFromCloud(localSnapshot?: {
         .sort((a, b) => a.periode.localeCompare(b.periode));
 
       if (allUptimeFiles.length > 0 && masterData.length > 0) {
+        const isStillV1 = cloudVersion < CLOUD_DATA_VERSION || !hasIntactMasterFields(masterData);
         return {
           success: true,
           hasData: true,
           source: 'cloud_snapshot',
           isUpToDate: false,
+          isPartialFallback: isStillV1,
           masterData,
           parsedUptimeFiles: allUptimeFiles,
           lockedPeriodes: (cloudMeta.lockedPeriodes || []).map(normalizePeriode),
@@ -3395,15 +3476,14 @@ export async function fetchDashboardFromCloud(localSnapshot?: {
         }
 
         if (allUptimes.length > 0) {
+          const baseCatalog = getBaseStaticMachinesMap();
           const uptimeByWsid = new Map<string, any[]>();
-          const periodSet = new Set<string>();
           const lockedSet = new Set<string>();
 
           allUptimes.forEach((u) => {
             const w = cleanWsid(u.wsid);
             const p = normalizePeriode(u.periode);
             if (!w || !p) return;
-            periodSet.add(p);
             if (u.is_locked) lockedSet.add(p);
 
             const uh = Number(u.uh) || 0;
@@ -3439,30 +3519,45 @@ export async function fetchDashboardFromCloud(localSnapshot?: {
             });
           });
 
-          const reconstructedMachines = mRes.machines.map((m: any) => {
-            const w = cleanWsid(m.wsid);
-            const monthlyData = (uptimeByWsid.get(w) || []).sort((a, b) => a.periode.localeCompare(b.periode));
-            return {
-              wsid: w,
-              jenisMesin: m.jenis_mesin || 'ATM',
-              klienStatus: String(m.klien_status || 'BCA').toUpperCase() === 'BCA' ? 'BCA' : 'Non BCA',
-              sektorBCA: m.sektor_bca || '-',
-              wilayahOperasional: m.wilayah_operasional || 'ABACUS JAKARTA',
-              lokasi: m.lokasi || '-',
-              vendor: m.vendor || '-',
-              tipeMesin: m.tipe_mesin || '-',
-              statusAktif: m.status_aktif || 'AKTIF',
-              jam: m.jam_operasional || '(00:00 - 24:00)',
-              opr: m.opr || 43200,
-              monthlyData
-            };
-          });
+          const reconstructedMachines = mRes.machines
+            .map((m: any) => {
+              const w = cleanWsid(m.wsid);
+              const cat = baseCatalog.get(w) || {};
+              const monthlyData = (uptimeByWsid.get(w) || []).sort((a, b) => a.periode.localeCompare(b.periode));
+              const rawSektor = m.sektor_bca || cat.sektor_bca || '';
+              const cleanedSek = rawSektor ? cleanSektorName(rawSektor) : '-';
+              const wilayahOp = m.wilayah_operasional || 'ABACUS JAKARTA';
+              const klienStatus = String(m.klien_status || 'BCA').toUpperCase() === 'BCA' ? 'BCA' : 'Non BCA';
+              const statusAktif = m.status_aktif || 'AKTIF';
+
+              return {
+                wsid: w,
+                jenisMesin: m.jenis_mesin || cat.jenis_mesin || 'ATM',
+                klienStatus,
+                sektorBCA: cleanedSek !== '-' ? cleanedSek : (rawSektor || (klienStatus === 'BCA' ? 'Unknown' : 'Non BCA')),
+                wilayahOperasional: wilayahOp,
+                lokasi: m.lokasi || cat.lokasi || '-',
+                vendor: (m.vendor && m.vendor !== '-') ? m.vendor : (cat.vendor || '-'),
+                tipeMesin: m.tipe_mesin || cat.tipe_mesin || '-',
+                statusAktif,
+                jam: m.jam_operasional || cat.jam || '(00:00 - 24:00)',
+                opr: m.opr || 43200,
+                monthlyData
+              };
+            })
+            .filter((m: any) => {
+              const w = String(m.wilayahOperasional || '').trim().toUpperCase();
+              const isAbacus = w === 'ABACUS JAKARTA' || w === 'ACJK';
+              const isNonBca = m.klienStatus === 'Non BCA';
+              return (isAbacus || isNonBca) && String(m.statusAktif || '').trim().toUpperCase() === 'AKTIF';
+            });
 
           const masterData = mRes.machines.map(compactMasterRowForCloud).filter(Boolean);
           return {
             success: true,
             hasData: true,
             source: 'cloud_relational',
+            isPartialFallback: true,
             masterData,
             parsedUptimeFiles: [],
             lockedPeriodes: Array.from(lockedSet).sort(),

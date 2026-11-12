@@ -20,12 +20,14 @@ import { syncFullDatasetToCloud } from './utils/supabaseService';
 import { isSupabaseConfigured } from './utils/supabaseClient';
 import { logoutKaOpsApi, logoutKaWilApi } from './utils/monitoringService';
 import {
+  CLOUD_DATA_VERSION,
   loadDashboardSnapshot,
   saveDashboardSnapshot,
   loadCachedMasterData,
   loadCachedUptimeFiles,
   loadCachedLockedPeriodes,
-  hasValidUptimeInDataset
+  hasValidUptimeInDataset,
+  hasIntactMasterFields
 } from './utils/dbCache';
 import { Loader2, Zap } from 'lucide-react';
 
@@ -175,8 +177,9 @@ function App() {
     async function initializeDashboard() {
       let hasFullData = false;
       let loadedCloudUpdatedAt: string | undefined;
+      let loadedCloudVersion: number | undefined;
 
-      // STEP 1: Coba muat cache snapshot lokal yang VALID (wajib punya data uptime, bukan cache 100% kosong)
+      // STEP 1: Coba muat cache snapshot lokal yang VALID (wajib punya data uptime + vendor/sektor utuh)
       try {
         const cached = await loadDashboardSnapshot();
         if (
@@ -194,6 +197,7 @@ function App() {
           );
           hasFullData = true;
           loadedCloudUpdatedAt = cached.cloudMeta?.updatedAt;
+          loadedCloudVersion = cached.cloudMeta?.version;
           setIsDbLoaded(true);
         } else if (isMounted) {
           // Fallback STEP 1b: baca cache terpisah jika snapshot belum terbentuk
@@ -202,7 +206,7 @@ function App() {
             loadCachedUptimeFiles(),
             loadCachedLockedPeriodes()
           ]);
-          if (cMaster?.length > 0 && cUptime?.length > 0) {
+          if (cMaster?.length > 0 && cUptime?.length > 0 && hasIntactMasterFields(cMaster)) {
             applyDataset(cMaster, cUptime, cLocked || [], null);
             hasFullData = true;
             setIsDbLoaded(true);
@@ -251,9 +255,13 @@ function App() {
 
         if (dbData && dbData.hasData && validCloudOrLocal) {
           const cloudTs = dbData.cloudMeta?.updatedAt;
+          const cloudVer = dbData.cloudMeta?.version;
           const alreadySyncedSameVersion =
             hasFullData &&
             dbData.source === 'cloud_snapshot' &&
+            !dbData.isPartialFallback &&
+            cloudVer === CLOUD_DATA_VERSION &&
+            loadedCloudVersion === CLOUD_DATA_VERSION &&
             cloudTs &&
             loadedCloudUpdatedAt &&
             cloudTs === loadedCloudUpdatedAt;
@@ -268,56 +276,64 @@ function App() {
               dbData.prematchedMachines
             );
 
-            await saveDashboardSnapshot({
-              masterData: dbData.masterData || [],
-              parsedUptimeFiles: dbData.parsedUptimeFiles || [],
-              lockedPeriodes: dbData.lockedPeriodes || [],
-              followUpTickets: tickets,
-              lastUpdated: dbData.lastUpdated,
-              matchedMachines: dbData.prematchedMachines,
-              cloudMeta: dbData.cloudMeta
-                ? {
-                    updatedAt: dbData.cloudMeta.updatedAt,
-                    masterUpdatedAt: dbData.cloudMeta.masterUpdatedAt,
-                    periodUpdatedAt: dbData.cloudMeta.periodUpdatedAt
-                  }
-                : undefined,
-              timestamp: Date.now()
-            });
+            // Jangan simpan cache permanen jika masih data parsial / v1 lama
+            if (!dbData.isPartialFallback && dbData.source !== 'cloud_relational') {
+              await saveDashboardSnapshot({
+                masterData: dbData.masterData || [],
+                parsedUptimeFiles: dbData.parsedUptimeFiles || [],
+                lockedPeriodes: dbData.lockedPeriodes || [],
+                followUpTickets: tickets,
+                lastUpdated: dbData.lastUpdated,
+                matchedMachines: dbData.prematchedMachines,
+                cloudMeta: dbData.cloudMeta
+                  ? {
+                      version: dbData.cloudMeta.version,
+                      updatedAt: dbData.cloudMeta.updatedAt,
+                      masterUpdatedAt: dbData.cloudMeta.masterUpdatedAt,
+                      periodUpdatedAt: dbData.cloudMeta.periodUpdatedAt
+                    }
+                  : undefined,
+                timestamp: Date.now()
+              });
+            }
           }
 
           // AUTO-PUBLISH DARI PC SUMBER:
-          // Jika Cloud Supabase belum punya snapshot tapi PC lokal punya data uptime lengkap,
-          // otomatis unggah ke Cloud di latar belakang agar Laptop / browser lain langsung sama!
+          // Jika Cloud belum punya snapshot v2 tapi PC lokal punya data master + uptime utuh,
+          // otomatis unggah ke Cloud sehingga seluruh Laptop / browser lain ikut identik 100%!
           if (
-            dbData.source === 'local_cache' &&
             isSupabaseConfigured() &&
             dbData.parsedUptimeFiles &&
-            dbData.parsedUptimeFiles.length > 0
+            dbData.parsedUptimeFiles.length > 0 &&
+            hasIntactMasterFields(dbData.masterData) &&
+            (dbData.source === 'local_cache' || dbData.needsCloudUpgrade)
           ) {
-            syncFullDatasetToCloud(
-              dbData.masterData || [],
-              dbData.parsedUptimeFiles,
-              dbData.lockedPeriodes || []
-            )
-              .then(async (pushRes) => {
-                if (pushRes.success && pushRes.meta) {
-                  await saveDashboardSnapshot({
-                    masterData: dbData.masterData || [],
-                    parsedUptimeFiles: dbData.parsedUptimeFiles || [],
-                    lockedPeriodes: pushRes.meta.lockedPeriodes,
-                    followUpTickets: tickets,
-                    lastUpdated: pushRes.meta.updatedAt,
-                    cloudMeta: {
-                      updatedAt: pushRes.meta.updatedAt,
-                      masterUpdatedAt: pushRes.meta.masterUpdatedAt,
-                      periodUpdatedAt: pushRes.meta.periodUpdatedAt
-                    },
-                    timestamp: Date.now()
-                  });
-                }
-              })
-              .catch((err) => console.warn('[AutoCloudSync] Gagal auto-publish ke Cloud:', err));
+            try {
+              const pushRes = await syncFullDatasetToCloud(
+                dbData.masterData || [],
+                dbData.parsedUptimeFiles,
+                dbData.lockedPeriodes || []
+              );
+              if (pushRes.success && pushRes.meta) {
+                await saveDashboardSnapshot({
+                  masterData: dbData.masterData || [],
+                  parsedUptimeFiles: dbData.parsedUptimeFiles || [],
+                  lockedPeriodes: pushRes.meta.lockedPeriodes,
+                  followUpTickets: tickets,
+                  lastUpdated: pushRes.meta.updatedAt,
+                  cloudMeta: {
+                    version: pushRes.meta.version,
+                    updatedAt: pushRes.meta.updatedAt,
+                    masterUpdatedAt: pushRes.meta.masterUpdatedAt,
+                    periodUpdatedAt: pushRes.meta.periodUpdatedAt
+                  },
+                  timestamp: Date.now()
+                });
+                if (isMounted) setLastDbSync(pushRes.meta.updatedAt);
+              }
+            } catch (pushErr) {
+              console.warn('[AutoCloudSync] Gagal auto-publish ke Cloud:', pushErr);
+            }
           }
 
           setSyncError(null);

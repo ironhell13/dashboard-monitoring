@@ -1,5 +1,6 @@
 import type { MasterRow, ParsedUptimeFile } from './excelParser';
 import { normalizePeriode } from './comprehensiveExporter';
+import { cleanWsid } from './dailyIncidentParser';
 import { getSupabase, isSupabaseConfigured } from './supabaseClient';
 import staticCatalogJson from '../data/staticMachineCatalog.json';
 import {
@@ -12,6 +13,7 @@ import {
   loadDashboardSnapshot,
   saveDashboardSnapshot,
   hasValidUptimeInDataset,
+  hasIntactMasterFields,
   type CloudMetaSnapshot
 } from './dbCache';
 import {
@@ -20,6 +22,7 @@ import {
   saveMasterSnapshotToCloud,
   saveUptimePeriodSnapshotToCloud,
   unlockUptimePeriodInCloud,
+  pickFieldIC,
   type CloudDashboardMeta
 } from './supabaseService';
 
@@ -69,6 +72,8 @@ export interface DashboardDbData {
   success: boolean;
   hasData: boolean;
   source?: 'cloud_snapshot' | 'cloud_relational' | 'local_cache' | 'none';
+  needsCloudUpgrade?: boolean;
+  isPartialFallback?: boolean;
   masterData: MasterRow[];
   parsedUptimeFiles: ParsedUptimeFile[];
   lockedPeriodes: string[];
@@ -211,14 +216,15 @@ const compactUptimeRow = (r: any) => {
   const llDurVal = getVal('LL_dur', 'P08 - Replenishment_dur', 'P08_dur') || (hwSubCategories.P08 ? hwSubCategories.P08.dur : 0);
 
   return {
-    WSID: wsid,
+    WSID: cleanWsid(wsid) || wsid,
     LOKASI: String(r.LOKASI || '').trim(),
-    DESCKCU: String(r.DESCKCU || r.KWW || '').trim(),
-    VDR: String(r.VDR || '').trim(),
-    SEKTOR: String(r.SEKTOR || '').trim(),
-    Klien: String(r.Klien || 'BCA').trim(),
+    DESCKCU: String(r.DESCKCU || '').trim(),
+    ...(r.KWW !== undefined ? { KWW: String(r.KWW || '').trim() } : {}),
+    VDR: String(r.VDR || r.Vendor || '').trim(),
+    SEKTOR: String(r.SEKTOR || r.Sektor || '').trim(),
+    Klien: String(r.Klien || '').trim(),
     'Tipe Mesin': r['Tipe Mesin'] || '',
-    STATUS: r.STATUS || 'AKTIF',
+    STATUS: r.STATUS || '',
     HARI: r.HARI || '',
     JAM: r.JAM || '',
     OPR: r.OPR || '',
@@ -257,20 +263,28 @@ export const saveMasterData = async (masterData: MasterRow[]): Promise<SaveMaste
     try {
       const client = getSupabase();
       if (client) {
-        const chunk = masterData.map((m: any) => ({
-          wsid: String(m.WSID || m.wsid || '').trim().replace(/^0+/, '') || String(m.WSID || m.wsid || ''),
-          jenis_mesin: m['Jenis Mesin'] || m.jenisMesin || m.jenis_mesin || 'ATM',
-          klien_status: m.Klien || m.klienStatus || m.klien_status || 'BCA',
-          sektor_bca: m.Sektor || m.sektorBCA || m.sektor_bca || '',
-          wilayah_operasional: m.Wilayah || m.wilayahOperasional || m.wilayah_operasional || '',
-          lokasi: m['Nama Lokasi'] || m.lokasi || '',
-          vendor: m.Vendor || m.vendor || '',
-          tipe_mesin: m['Tipe Mesin'] || m.tipeMesin || m.tipe_mesin || '',
-          status_aktif: m['Status Aktif'] || m.statusAktif || m.status_aktif || 'AKTIF',
-          jam_operasional: m['Jam Operasional'] || m.jam || m.jam_operasional || '(00:00 - 24:00)',
-          opr: Math.round(Number(m.OPR || m.opr) || 43200),
-          updated_at: new Date().toISOString()
-        }));
+        const chunk = masterData
+          .map((m: any) => {
+            const rawW = pickFieldIC(m, 'WSID', 'wsid');
+            const w = cleanWsid(rawW) || String(rawW || '').trim().toUpperCase();
+            if (!w) return null;
+            return {
+              wsid: w,
+              jenis_mesin: pickFieldIC(m, 'Jenis Mesin', 'jenisMesin', 'jenis_mesin') || 'ATM',
+              klien_status: pickFieldIC(m, 'Klien', 'klienStatus', 'klien_status') || 'BCA',
+              sektor_bca: pickFieldIC(m, 'Sektor', 'Sektor BCA', 'sektorBCA', 'sektor_bca', 'sektor') || '',
+              wilayah_operasional:
+                pickFieldIC(m, 'Wilayah', 'Wilayah Operasional', 'wilayahOperasional', 'wilayah_operasional', 'Service Point') || '',
+              lokasi: pickFieldIC(m, 'Nama Lokasi', 'Lokasi', 'lokasi', 'Alamat') || '',
+              vendor: pickFieldIC(m, 'Vendor', 'vendor', 'VDR', 'Vendor Mesin') || '',
+              tipe_mesin: pickFieldIC(m, 'Tipe Mesin', 'tipeMesin', 'tipe_mesin') || '',
+              status_aktif: pickFieldIC(m, 'Status', 'Status Aktif', 'statusAktif', 'status_aktif') || 'AKTIF',
+              jam_operasional: pickFieldIC(m, 'Jam', 'Jam Operasional', 'jam', 'jam_operasional') || '(00:00 - 24:00)',
+              opr: Math.round(Number(pickFieldIC(m, 'OPR', 'opr')) || 43200),
+              updated_at: new Date().toISOString()
+            };
+          })
+          .filter((item): item is NonNullable<typeof item> => item !== null);
 
         for (let i = 0; i < chunk.length; i += 500) {
           const slice = chunk.slice(i, i + 500);
@@ -349,7 +363,7 @@ export const saveUptimePeriod = async (file: ParsedUptimeFile, forceUpdate: bool
         const all = [...compactAtmData, ...compactAtsData];
         all.forEach((r: any) => {
           const rawW = String(r.WSID ?? r.wsid ?? '').trim();
-          const w = rawW.replace(/^0+/, '') || rawW;
+          const w = cleanWsid(rawW) || rawW;
           if (!w) return;
           rows.push({
             wsid: w,
@@ -549,7 +563,13 @@ export const fetchDashboardData = async (): Promise<DashboardDbData> => {
       const cachedUptime = await loadCachedUptimeFiles();
       const cachedLocked = await loadCachedLockedPeriodes();
 
-      if (cachedMaster && cachedMaster.length > 0 && cachedUptime && cachedUptime.length > 0) {
+      if (
+        cachedMaster &&
+        cachedMaster.length > 0 &&
+        cachedUptime &&
+        cachedUptime.length > 0 &&
+        hasIntactMasterFields(cachedMaster)
+      ) {
         localSnapshotData = {
           success: true,
           hasData: true,
@@ -588,15 +608,18 @@ export const fetchDashboardData = async (): Promise<DashboardDbData> => {
         }
 
         if (cloudRes.parsedUptimeFiles && cloudRes.parsedUptimeFiles.length > 0 && cloudRes.masterData) {
-          // Simpan ke cache terpisah agar reload berikutnya instan
-          saveCachedMasterData(cloudRes.masterData).catch(() => {});
-          saveCachedUptimeFiles(cloudRes.parsedUptimeFiles).catch(() => {});
-          saveCachedLockedPeriodes(cloudRes.lockedPeriodes || []).catch(() => {});
+          // Hanya simpan ke cache lokal terpisah jika Cloud sudah format v2 yang utuh (bukan fallback v1)
+          if (!cloudRes.isPartialFallback) {
+            saveCachedMasterData(cloudRes.masterData).catch(() => {});
+            saveCachedUptimeFiles(cloudRes.parsedUptimeFiles).catch(() => {});
+            saveCachedLockedPeriodes(cloudRes.lockedPeriodes || []).catch(() => {});
+          }
 
           return {
             success: true,
             hasData: true,
             source: 'cloud_snapshot',
+            isPartialFallback: cloudRes.isPartialFallback,
             masterData: cloudRes.masterData,
             parsedUptimeFiles: cloudRes.parsedUptimeFiles,
             lockedPeriodes: cloudRes.lockedPeriodes || [],
@@ -616,6 +639,7 @@ export const fetchDashboardData = async (): Promise<DashboardDbData> => {
             success: true,
             hasData: true,
             source: 'cloud_relational',
+            isPartialFallback: true,
             masterData: cloudRes.masterData || [],
             parsedUptimeFiles: [],
             lockedPeriodes: cloudRes.lockedPeriodes || [],
@@ -623,6 +647,11 @@ export const fetchDashboardData = async (): Promise<DashboardDbData> => {
             lastUpdated: cloudRes.lastUpdated || new Date().toISOString()
           };
         }
+      } else if (cloudRes.needsCloudUpgrade && localSnapshotData) {
+        return {
+          ...localSnapshotData,
+          needsCloudUpgrade: true
+        };
       }
     } catch (cloudErr) {
       console.warn('Sinkronisasi Cloud Supabase gagal, menggunakan cache lokal jika tersedia:', cloudErr);

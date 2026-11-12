@@ -123,6 +123,7 @@ export default function UploadPage() {
           followUpTickets: [],
           lastUpdated: cloudRes.meta.updatedAt,
           cloudMeta: {
+            version: cloudRes.meta.version,
             updatedAt: cloudRes.meta.updatedAt,
             masterUpdatedAt: cloudRes.meta.masterUpdatedAt,
             periodUpdatedAt: cloudRes.meta.periodUpdatedAt
@@ -260,6 +261,7 @@ export default function UploadPage() {
           const meta = await fetchDashboardMetaFromCloud();
           if (meta) {
             latestCloudMeta = {
+              version: meta.version,
               updatedAt: meta.updatedAt,
               masterUpdatedAt: meta.masterUpdatedAt,
               periodUpdatedAt: meta.periodUpdatedAt

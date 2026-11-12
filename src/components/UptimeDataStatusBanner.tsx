@@ -4,7 +4,7 @@ import { AlertTriangle, RefreshCw, UploadCloud, Loader2 } from 'lucide-react';
 import { useDataStore } from '../store/useDataStore';
 import { fetchDashboardData } from '../utils/spreadsheetService';
 import { matchData } from '../utils/dataMatcher';
-import { saveDashboardSnapshot, hasValidUptimeInDataset } from '../utils/dbCache';
+import { saveDashboardSnapshot, hasValidUptimeInDataset, hasIntactMasterFields } from '../utils/dbCache';
 
 /**
  * Mengembalikan true jika store sudah memiliki minimal 1 data uptime bulanan mesin
@@ -23,6 +23,8 @@ export default function UptimeDataStatusBanner() {
   const hasUptimeData = useHasUptimeData();
   const {
     isSyncing,
+    rawMasterData,
+    rawUptimeFiles,
     setMachines,
     setAvailablePeriodes,
     setGlobalTrendData,
@@ -33,7 +35,14 @@ export default function UptimeDataStatusBanner() {
   } = useDataStore();
   const [isManualSyncing, setIsManualSyncing] = useState(false);
 
-  if (hasUptimeData) return null;
+  const isPartialDataset = useMemo(() => {
+    if (!hasUptimeData) return false;
+    if (!Array.isArray(rawUptimeFiles) || rawUptimeFiles.length === 0) return true;
+    if (Array.isArray(rawMasterData) && rawMasterData.length > 0 && !hasIntactMasterFields(rawMasterData)) return true;
+    return false;
+  }, [hasUptimeData, rawUptimeFiles, rawMasterData]);
+
+  if (hasUptimeData && !isPartialDataset) return null;
 
   const handleRetryCloudSync = async () => {
     setIsManualSyncing(true);
@@ -57,22 +66,25 @@ export default function UptimeDataStatusBanner() {
         if (dbData.lockedPeriodes) setLockedPeriodes(dbData.lockedPeriodes);
         setLastDbSync(dbData.lastUpdated || new Date().toISOString());
 
-        await saveDashboardSnapshot({
-          masterData: dbData.masterData || [],
-          parsedUptimeFiles: dbData.parsedUptimeFiles || [],
-          lockedPeriodes: dbData.lockedPeriodes || [],
-          followUpTickets: dbData.tickets || [],
-          lastUpdated: dbData.lastUpdated,
-          matchedMachines: dbData.prematchedMachines,
-          cloudMeta: dbData.cloudMeta
-            ? {
-                updatedAt: dbData.cloudMeta.updatedAt,
-                masterUpdatedAt: dbData.cloudMeta.masterUpdatedAt,
-                periodUpdatedAt: dbData.cloudMeta.periodUpdatedAt
-              }
-            : undefined,
-          timestamp: Date.now()
-        });
+        if (!dbData.isPartialFallback && dbData.source !== 'cloud_relational') {
+          await saveDashboardSnapshot({
+            masterData: dbData.masterData || [],
+            parsedUptimeFiles: dbData.parsedUptimeFiles || [],
+            lockedPeriodes: dbData.lockedPeriodes || [],
+            followUpTickets: dbData.tickets || [],
+            lastUpdated: dbData.lastUpdated,
+            matchedMachines: dbData.prematchedMachines,
+            cloudMeta: dbData.cloudMeta
+              ? {
+                  version: dbData.cloudMeta.version,
+                  updatedAt: dbData.cloudMeta.updatedAt,
+                  masterUpdatedAt: dbData.cloudMeta.masterUpdatedAt,
+                  periodUpdatedAt: dbData.cloudMeta.periodUpdatedAt
+                }
+              : undefined,
+            timestamp: Date.now()
+          });
+        }
       }
     } catch (err) {
       console.warn('Retry cloud sync gagal:', err);
@@ -86,7 +98,7 @@ export default function UptimeDataStatusBanner() {
       <div className="p-3 bg-blue-50 border border-blue-200 rounded-lg flex items-center gap-2.5 text-xs text-blue-800 shadow-2xs">
         <Loader2 size={15} className="animate-spin text-blue-600 shrink-0" />
         <span>
-          <strong>Menyinkronkan data uptime bulanan dari Cloud Supabase...</strong> Perhitungan persentase uptime akan tampil otomatis begitu proses selesai.
+          <strong>Menyinkronkan data lengkap Master & Uptime dari Cloud Supabase...</strong> Perhitungan Service Point, Vendor, dan persentase uptime akan tampil otomatis.
         </span>
       </div>
     );
@@ -97,9 +109,15 @@ export default function UptimeDataStatusBanner() {
       <div className="flex items-start gap-2.5">
         <AlertTriangle size={16} className="text-amber-600 shrink-0 mt-0.5" />
         <div>
-          <p className="font-semibold">Data uptime bulanan belum tersedia di Cloud Supabase / browser ini.</p>
+          <p className="font-semibold">
+            {isPartialDataset
+              ? 'Data Cloud masih versi parsial/lama (Vendor, Service Point, atau % Uptime bisa belum lengkap).'
+              : 'Data uptime bulanan belum tersedia di Cloud Supabase / browser ini.'}
+          </p>
           <p className="text-[11px] text-amber-800/90 mt-0.5">
-            Angka 100% sebelumnya muncul karena data downtime bulanan belum tersinkron dari perangkat utama. Buka dashboard di PC utama agar data otomatis tersinkron ke Cloud, atau upload ulang file uptime bulanan.
+            {isPartialDataset
+              ? 'Buka/refresh dashboard 1x di PC utama agar data lengkap otomatis tersinkron ke Cloud (v2), lalu klik "Cek Ulang Cloud" di perangkat ini.'
+              : 'Angka 100% sebelumnya muncul karena data downtime bulanan belum tersinkron dari perangkat utama. Buka dashboard di PC utama agar data otomatis tersinkron ke Cloud, atau upload ulang file uptime bulanan.'}
           </p>
         </div>
       </div>

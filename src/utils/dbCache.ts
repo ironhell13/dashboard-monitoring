@@ -2,7 +2,10 @@ import type { MasterRow, ParsedUptimeFile } from './excelParser';
 import type { FollowUpTicket } from './spreadsheetService';
 import { getSupabaseInfo } from './supabaseClient';
 
+export const CLOUD_DATA_VERSION = 2;
+
 export interface CloudMetaSnapshot {
+  version?: number;
   updatedAt?: string;
   masterUpdatedAt?: string;
   periodUpdatedAt?: Record<string, string>;
@@ -17,6 +20,30 @@ export interface CachedSnapshot {
   timestamp: number;
   matchedMachines?: any[];
   cloudMeta?: CloudMetaSnapshot;
+  isPartialFallback?: boolean;
+}
+
+/**
+ * Memastikan dataset master memiliki kolom Vendor & Sektor yang valid (bukan hasil serialisasi parsial yang kosong).
+ */
+export function hasIntactMasterFields(masterData?: any[]): boolean {
+  if (!Array.isArray(masterData) || masterData.length === 0) return false;
+  let hasVendor = false;
+  let hasSektor = false;
+  const limit = Math.min(masterData.length, 300);
+  for (let i = 0; i < limit; i++) {
+    const m = masterData[i];
+    if (!m || typeof m !== 'object') continue;
+    for (const k of Object.keys(m)) {
+      const lk = k.toLowerCase().trim();
+      const val = String(m[k] ?? '').trim();
+      if (!val || val === '-' || val.toUpperCase() === 'UNKNOWN') continue;
+      if (lk === 'vendor' || lk === 'vdr' || lk === 'vendor mesin') hasVendor = true;
+      if (lk === 'sektor' || lk === 'sektor bca' || lk === 'sektorbca' || lk === 'sektor_bca') hasSektor = true;
+    }
+    if (hasVendor && hasSektor) return true;
+  }
+  return hasVendor && hasSektor;
 }
 
 /**
@@ -81,8 +108,8 @@ const LOCKED_PERIODES_KEY = 'cached_locked_periodes';
  * Menyimpan snapshot database ke IndexedDB (dan fallback LocalStorage jika muat)
  */
 export async function saveDashboardSnapshot(snapshot: CachedSnapshot): Promise<boolean> {
-  // Jangan pernah menimpa cache dengan snapshot kosong tanpa data uptime (mencegah bug 100% uptime di client)
-  if (!hasValidUptimeInDataset(snapshot.parsedUptimeFiles, snapshot.matchedMachines)) {
+  // Jangan pernah menimpa cache dengan snapshot kosong atau fallback parsial relasional (mencegah bug 100% / vendor kosong / unknown SP)
+  if (snapshot.isPartialFallback || !hasValidUptimeInDataset(snapshot.parsedUptimeFiles, snapshot.matchedMachines)) {
     return false;
   }
 
@@ -252,8 +279,11 @@ export async function loadDashboardSnapshot(): Promise<CachedSnapshot | null> {
 
     if (
       snapshot &&
+      !snapshot.isPartialFallback &&
       snapshot.masterData?.length > 0 &&
-      hasValidUptimeInDataset(snapshot.parsedUptimeFiles, snapshot.matchedMachines)
+      hasValidUptimeInDataset(snapshot.parsedUptimeFiles, snapshot.matchedMachines) &&
+      (snapshot.parsedUptimeFiles?.length > 0) &&
+      (snapshot.cloudMeta?.version === CLOUD_DATA_VERSION || hasIntactMasterFields(snapshot.masterData))
     ) {
       return snapshot;
     }
@@ -268,8 +298,11 @@ export async function loadDashboardSnapshot(): Promise<CachedSnapshot | null> {
       const parsed = JSON.parse(raw);
       if (
         parsed &&
+        !parsed.isPartialFallback &&
         parsed.masterData?.length > 0 &&
-        hasValidUptimeInDataset(parsed.parsedUptimeFiles, parsed.matchedMachines)
+        hasValidUptimeInDataset(parsed.parsedUptimeFiles, parsed.matchedMachines) &&
+        (parsed.parsedUptimeFiles?.length > 0) &&
+        (parsed.cloudMeta?.version === CLOUD_DATA_VERSION || hasIntactMasterFields(parsed.masterData))
       ) {
         return parsed as CachedSnapshot;
       }
