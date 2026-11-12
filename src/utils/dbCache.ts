@@ -21,15 +21,14 @@ export interface CachedSnapshot {
   matchedMachines?: any[];
   cloudMeta?: CloudMetaSnapshot;
   isPartialFallback?: boolean;
+  pushedFromLocal?: boolean;
 }
 
 /**
- * Memastikan dataset master memiliki kolom Vendor & Sektor yang valid (bukan hasil serialisasi parsial yang kosong).
+ * Mengecek apakah dataset master memiliki data Sektor yang terisi (untuk membedakan cache PC vs snapshot v1 yang kosong).
  */
 export function hasIntactMasterFields(masterData?: any[]): boolean {
   if (!Array.isArray(masterData) || masterData.length === 0) return false;
-  let hasVendor = false;
-  let hasSektor = false;
   const limit = Math.min(masterData.length, 300);
   for (let i = 0; i < limit; i++) {
     const m = masterData[i];
@@ -38,12 +37,20 @@ export function hasIntactMasterFields(masterData?: any[]): boolean {
       const lk = k.toLowerCase().trim();
       const val = String(m[k] ?? '').trim();
       if (!val || val === '-' || val.toUpperCase() === 'UNKNOWN') continue;
-      if (lk === 'vendor' || lk === 'vdr' || lk === 'vendor mesin') hasVendor = true;
-      if (lk === 'sektor' || lk === 'sektor bca' || lk === 'sektorbca' || lk === 'sektor_bca') hasSektor = true;
+      if (
+        lk === 'sektor' ||
+        lk === 'sektor bca' ||
+        lk === 'sektorbca' ||
+        lk === 'sektor_bca' ||
+        lk === 'wilayah' ||
+        lk === 'wilayah operasional' ||
+        lk === 'wilayahoperasional'
+      ) {
+        return true;
+      }
     }
-    if (hasVendor && hasSektor) return true;
   }
-  return hasVendor && hasSektor;
+  return false;
 }
 
 /**
@@ -282,8 +289,7 @@ export async function loadDashboardSnapshot(): Promise<CachedSnapshot | null> {
       !snapshot.isPartialFallback &&
       snapshot.masterData?.length > 0 &&
       hasValidUptimeInDataset(snapshot.parsedUptimeFiles, snapshot.matchedMachines) &&
-      (snapshot.parsedUptimeFiles?.length > 0) &&
-      (snapshot.cloudMeta?.version === CLOUD_DATA_VERSION || hasIntactMasterFields(snapshot.masterData))
+      snapshot.parsedUptimeFiles?.length > 0
     ) {
       return snapshot;
     }
@@ -301,8 +307,7 @@ export async function loadDashboardSnapshot(): Promise<CachedSnapshot | null> {
         !parsed.isPartialFallback &&
         parsed.masterData?.length > 0 &&
         hasValidUptimeInDataset(parsed.parsedUptimeFiles, parsed.matchedMachines) &&
-        (parsed.parsedUptimeFiles?.length > 0) &&
-        (parsed.cloudMeta?.version === CLOUD_DATA_VERSION || hasIntactMasterFields(parsed.masterData))
+        parsed.parsedUptimeFiles?.length > 0
       ) {
         return parsed as CachedSnapshot;
       }

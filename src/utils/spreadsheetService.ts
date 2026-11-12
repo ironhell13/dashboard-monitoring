@@ -13,7 +13,6 @@ import {
   loadDashboardSnapshot,
   saveDashboardSnapshot,
   hasValidUptimeInDataset,
-  hasIntactMasterFields,
   type CloudMetaSnapshot
 } from './dbCache';
 import {
@@ -563,13 +562,7 @@ export const fetchDashboardData = async (): Promise<DashboardDbData> => {
       const cachedUptime = await loadCachedUptimeFiles();
       const cachedLocked = await loadCachedLockedPeriodes();
 
-      if (
-        cachedMaster &&
-        cachedMaster.length > 0 &&
-        cachedUptime &&
-        cachedUptime.length > 0 &&
-        hasIntactMasterFields(cachedMaster)
-      ) {
+      if (cachedMaster && cachedMaster.length > 0 && cachedUptime && cachedUptime.length > 0) {
         localSnapshotData = {
           success: true,
           hasData: true,

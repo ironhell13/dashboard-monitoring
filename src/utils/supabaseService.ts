@@ -2764,18 +2764,19 @@ function compactMasterRowForCloud(m: any): any {
   const opr = pickFieldIC(m, 'OPR', 'opr');
 
   return {
+    ...m,
     WSID: w,
-    Klien: klien !== undefined ? String(klien).trim() : 'BCA',
-    'Jenis Mesin': jenisMesin !== undefined ? String(jenisMesin).trim() : 'ATM',
-    'Tipe Mesin': tipeMesin !== undefined ? String(tipeMesin).trim() : '-',
-    Status: status !== undefined ? String(status).trim() : 'AKTIF',
-    Sektor: sektor !== undefined ? String(sektor).trim() : '',
-    Wilayah: wilayah !== undefined ? String(wilayah).trim() : '',
-    'Nama Lokasi': lokasi !== undefined ? String(lokasi).trim() : '',
-    Vendor: vendor !== undefined ? String(vendor).trim() : '-',
-    Hari: hari !== undefined ? String(hari).trim() : 'MON-SUN',
-    Jam: jam !== undefined ? String(jam).trim() : '(00:00 - 24:00)',
-    OPR: opr !== undefined ? opr : 43200
+    ...(m.Klien === undefined && klien !== undefined ? { Klien: String(klien).trim() } : {}),
+    ...(m['Jenis Mesin'] === undefined && jenisMesin !== undefined ? { 'Jenis Mesin': String(jenisMesin).trim() } : {}),
+    ...(m['Tipe Mesin'] === undefined && tipeMesin !== undefined ? { 'Tipe Mesin': String(tipeMesin).trim() } : {}),
+    ...(m.Status === undefined && status !== undefined ? { Status: String(status).trim() } : {}),
+    ...(m.Sektor === undefined && sektor !== undefined ? { Sektor: String(sektor).trim() } : {}),
+    ...(m.Wilayah === undefined && wilayah !== undefined ? { Wilayah: String(wilayah).trim() } : {}),
+    ...(m['Nama Lokasi'] === undefined && lokasi !== undefined ? { 'Nama Lokasi': String(lokasi).trim() } : {}),
+    ...(m.Vendor === undefined && vendor !== undefined ? { Vendor: String(vendor).trim() } : {}),
+    ...(m.Hari === undefined && hari !== undefined ? { Hari: String(hari).trim() } : {}),
+    ...(m.Jam === undefined && jam !== undefined ? { Jam: String(jam).trim() } : {}),
+    ...(m.OPR === undefined && opr !== undefined ? { OPR: opr } : {})
   };
 }
 
@@ -3307,7 +3308,7 @@ export async function fetchDashboardFromCloud(localSnapshot?: {
       Array.isArray(localSnapshot?.parsedUptimeFiles) && localSnapshot!.parsedUptimeFiles.length > 0;
     const localHasMaster =
       Array.isArray(localSnapshot?.masterData) && localSnapshot!.masterData.length > 0;
-    const localIntact = localHasUptime && localHasMaster && hasIntactMasterFields(localSnapshot?.masterData);
+    const localHasFullData = localHasUptime && localHasMaster;
 
     // 1. Jalur Utama (Lossless & Inkremantal): Snapshot Terkompresi di app_config
     if (cloudMeta && Array.isArray(cloudMeta.availablePeriodes) && cloudMeta.availablePeriodes.length > 0) {
@@ -3317,7 +3318,11 @@ export async function fetchDashboardFromCloud(localSnapshot?: {
 
       // Jika Cloud masih versi v1 (lama) sementara browser ini (PC sumber) punya data lokal utuh,
       // pertahankan data PC dan tandai needsCloudUpgrade agar PC otomatis meng-upgrade Cloud ke v2!
-      if (cloudVersion < CLOUD_DATA_VERSION && localIntact) {
+      if (
+        cloudVersion < CLOUD_DATA_VERSION &&
+        localHasFullData &&
+        (!localMeta || hasIntactMasterFields(localSnapshot?.masterData))
+      ) {
         return {
           success: true,
           hasData: false,
@@ -3331,7 +3336,7 @@ export async function fetchDashboardFromCloud(localSnapshot?: {
       // Cek apakah cache lokal sudah 100% identik dengan Cloud v2
       if (
         versionsMatch &&
-        localIntact &&
+        localHasFullData &&
         localMeta?.updatedAt &&
         localMeta.updatedAt === cloudMeta.updatedAt
       ) {
@@ -3349,7 +3354,7 @@ export async function fetchDashboardFromCloud(localSnapshot?: {
       let masterData: any[] = [];
       if (
         versionsMatch &&
-        localIntact &&
+        localHasFullData &&
         localMeta?.masterUpdatedAt &&
         localMeta.masterUpdatedAt === cloudMeta.masterUpdatedAt
       ) {
@@ -3426,7 +3431,7 @@ export async function fetchDashboardFromCloud(localSnapshot?: {
         .sort((a, b) => a.periode.localeCompare(b.periode));
 
       if (allUptimeFiles.length > 0 && masterData.length > 0) {
-        const isStillV1 = cloudVersion < CLOUD_DATA_VERSION || !hasIntactMasterFields(masterData);
+        const isStillV1 = cloudVersion < CLOUD_DATA_VERSION;
         return {
           success: true,
           hasData: true,

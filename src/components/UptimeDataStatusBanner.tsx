@@ -4,7 +4,7 @@ import { AlertTriangle, RefreshCw, UploadCloud, Loader2 } from 'lucide-react';
 import { useDataStore } from '../store/useDataStore';
 import { fetchDashboardData } from '../utils/spreadsheetService';
 import { matchData } from '../utils/dataMatcher';
-import { saveDashboardSnapshot, hasValidUptimeInDataset, hasIntactMasterFields } from '../utils/dbCache';
+import { saveDashboardSnapshot, hasValidUptimeInDataset } from '../utils/dbCache';
 
 /**
  * Mengembalikan true jika store sudah memiliki minimal 1 data uptime bulanan mesin
@@ -23,7 +23,6 @@ export default function UptimeDataStatusBanner() {
   const hasUptimeData = useHasUptimeData();
   const {
     isSyncing,
-    rawMasterData,
     rawUptimeFiles,
     setMachines,
     setAvailablePeriodes,
@@ -37,10 +36,8 @@ export default function UptimeDataStatusBanner() {
 
   const isPartialDataset = useMemo(() => {
     if (!hasUptimeData) return false;
-    if (!Array.isArray(rawUptimeFiles) || rawUptimeFiles.length === 0) return true;
-    if (Array.isArray(rawMasterData) && rawMasterData.length > 0 && !hasIntactMasterFields(rawMasterData)) return true;
-    return false;
-  }, [hasUptimeData, rawUptimeFiles, rawMasterData]);
+    return !Array.isArray(rawUptimeFiles) || rawUptimeFiles.length === 0;
+  }, [hasUptimeData, rawUptimeFiles]);
 
   if (hasUptimeData && !isPartialDataset) return null;
 

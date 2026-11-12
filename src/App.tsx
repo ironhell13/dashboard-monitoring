@@ -206,7 +206,7 @@ function App() {
             loadCachedUptimeFiles(),
             loadCachedLockedPeriodes()
           ]);
-          if (cMaster?.length > 0 && cUptime?.length > 0 && hasIntactMasterFields(cMaster)) {
+          if (cMaster?.length > 0 && cUptime?.length > 0) {
             applyDataset(cMaster, cUptime, cLocked || [], null);
             hasFullData = true;
             setIsDbLoaded(true);
@@ -305,8 +305,8 @@ function App() {
             isSupabaseConfigured() &&
             dbData.parsedUptimeFiles &&
             dbData.parsedUptimeFiles.length > 0 &&
-            hasIntactMasterFields(dbData.masterData) &&
-            (dbData.source === 'local_cache' || dbData.needsCloudUpgrade)
+            (dbData.source === 'local_cache' || dbData.needsCloudUpgrade) &&
+            (!dbData.cloudMeta || hasIntactMasterFields(dbData.masterData))
           ) {
             try {
               const pushRes = await syncFullDatasetToCloud(
@@ -321,6 +321,7 @@ function App() {
                   lockedPeriodes: pushRes.meta.lockedPeriodes,
                   followUpTickets: tickets,
                   lastUpdated: pushRes.meta.updatedAt,
+                  pushedFromLocal: true,
                   cloudMeta: {
                     version: pushRes.meta.version,
                     updatedAt: pushRes.meta.updatedAt,
@@ -340,6 +341,7 @@ function App() {
         } else if (!hasFullData && dbData.masterData && dbData.masterData.length > 0) {
           // Tidak ada data uptime di Cloud maupun lokal: tampilkan master katalog saja tanpa menyimpan snapshot palsu
           setRawMasterData(dbData.masterData);
+          setMachines(matchData(dbData.masterData, []));
         }
       } catch (syncErr: any) {
         console.warn('Sinkronisasi data latar belakang:', syncErr);
@@ -369,7 +371,8 @@ function App() {
     setLockedPeriodes,
     setLastDbSync,
     setModernTickets,
-    setRawMasterData
+    setRawMasterData,
+    setMachines
   ]);
 
   // 1. Mode Landing

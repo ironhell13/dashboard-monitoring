@@ -122,6 +122,7 @@ export default function UploadPage() {
           lockedPeriodes: cloudRes.meta.lockedPeriodes || lockedPeriodes || [],
           followUpTickets: [],
           lastUpdated: cloudRes.meta.updatedAt,
+          pushedFromLocal: true,
           cloudMeta: {
             version: cloudRes.meta.version,
             updatedAt: cloudRes.meta.updatedAt,
@@ -276,6 +277,7 @@ export default function UploadPage() {
         lockedPeriodes: currentLocked,
         followUpTickets: [],
         lastUpdated: latestCloudMeta?.updatedAt || new Date().toISOString(),
+        pushedFromLocal: true,
         cloudMeta: latestCloudMeta,
         timestamp: Date.now()
       });
