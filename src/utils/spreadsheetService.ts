@@ -9,8 +9,19 @@ import {
   loadCachedUptimeFiles,
   saveCachedLockedPeriodes,
   loadCachedLockedPeriodes,
-  loadDashboardSnapshot
+  loadDashboardSnapshot,
+  saveDashboardSnapshot,
+  hasValidUptimeInDataset,
+  type CloudMetaSnapshot
 } from './dbCache';
+import {
+  fetchDashboardMetaFromCloud,
+  fetchDashboardFromCloud,
+  saveMasterSnapshotToCloud,
+  saveUptimePeriodSnapshotToCloud,
+  unlockUptimePeriodInCloud,
+  type CloudDashboardMeta
+} from './supabaseService';
 
 /**
  * Single Source of Truth katalog mesin statis (5.000+ mesin BCA terdaftar).
@@ -57,10 +68,13 @@ export function getStaticMasterData(): any[] {
 export interface DashboardDbData {
   success: boolean;
   hasData: boolean;
+  source?: 'cloud_snapshot' | 'cloud_relational' | 'local_cache' | 'none';
   masterData: MasterRow[];
   parsedUptimeFiles: ParsedUptimeFile[];
   lockedPeriodes: string[];
+  globalTrendData?: any[];
   lastUpdated: string | null;
+  cloudMeta?: CloudDashboardMeta | CloudMetaSnapshot;
   tickets?: FollowUpTicket[];
   modernFollowUpTickets?: FollowUpTicketItem[];
   prematchedMachines?: any[];
@@ -205,6 +219,7 @@ const compactUptimeRow = (r: any) => {
     Klien: String(r.Klien || 'BCA').trim(),
     'Tipe Mesin': r['Tipe Mesin'] || '',
     STATUS: r.STATUS || 'AKTIF',
+    HARI: r.HARI || '',
     JAM: r.JAM || '',
     OPR: r.OPR || '',
     Total_pct: getVal('Total_pct', 'Total'),
@@ -259,9 +274,14 @@ export const saveMasterData = async (masterData: MasterRow[]): Promise<SaveMaste
 
         for (let i = 0; i < chunk.length; i += 500) {
           const slice = chunk.slice(i, i + 500);
-          await client.from('machines').upsert(slice, { onConflict: 'wsid' });
+          const { error: uErr } = await client.from('machines').upsert(slice, { onConflict: 'wsid' });
+          if (uErr) {
+            console.warn('Supabase machines upsert error:', uErr.message);
+            break;
+          }
         }
       }
+      await saveMasterSnapshotToCloud(masterData);
     } catch (sbErr) {
       console.warn('Supabase saveMasterData failed, fallback ke IndexedDB:', sbErr);
     }
@@ -307,29 +327,43 @@ export const saveUptimePeriod = async (file: ParsedUptimeFile, forceUpdate: bool
     compactAtsData = filteredAts;
   }
 
-  // 1. Supabase Cloud (jika terkonfigurasi)
+  const compactedFile: ParsedUptimeFile = {
+    ...file,
+    periode: normPeriode,
+    atmData: compactAtmData as any,
+    atsData: compactAtsData as any
+  };
+
+  // 1. Supabase Cloud (Single Source of Truth untuk sinkronisasi lintas PC/Laptop)
+  let latestCloudMeta: CloudDashboardMeta | undefined;
   if (isSupabaseConfigured()) {
     try {
+      const snapRes = await saveUptimePeriodSnapshotToCloud(compactedFile);
+      if (snapRes.success && snapRes.meta) {
+        latestCloudMeta = snapRes.meta;
+      }
+
       const client = getSupabase();
       if (client) {
         const rows: any[] = [];
         const all = [...compactAtmData, ...compactAtsData];
         all.forEach((r: any) => {
-          const w = String(r.wsid || '').trim().replace(/^0+/, '');
+          const rawW = String(r.WSID ?? r.wsid ?? '').trim();
+          const w = rawW.replace(/^0+/, '') || rawW;
           if (!w) return;
           rows.push({
             wsid: w,
             periode: normPeriode,
-            uh: Number(r.uh) || 0,
-            uh_frx: Math.round(Number(r.uhFrx) || 0),
-            uh_dur: Math.round(Number(r.uhDur) || 0),
-            um: Number(r.um !== undefined ? r.um : (r.kom || 0)),
-            um_frx: Math.round(Number(r.umFrx || r.komFrx) || 0),
-            um_dur: Math.round(Number(r.umDur || r.komDur) || 0),
-            pm: Number(r.pm !== undefined ? r.pm : (r.hw || 0)),
-            pm_frx: Math.round(Number(r.pmFrx || r.hwFrx) || 0),
-            pm_dur: Math.round(Number(r.pmDur || r.hwDur) || 0),
-            total_downtime_dur: Math.round(Number(r.durTotal || r.totalDowntimeDur || 0)),
+            uh: Number(r.UH_pct ?? r.uh) || 0,
+            uh_frx: Math.round(Number(r.UH_frx ?? r.uhFrx) || 0),
+            uh_dur: Math.round(Number(r.UH_dur ?? r.uhDur) || 0),
+            um: Number(r.KOM_pct ?? r.um ?? r.kom) || 0,
+            um_frx: Math.round(Number(r.KOM_frx ?? r.umFrx ?? r.komFrx) || 0),
+            um_dur: Math.round(Number(r.KOM_dur ?? r.umDur ?? r.komDur) || 0),
+            pm: Number(r.HW_pct ?? r['H/W_pct'] ?? r.pm ?? r.hw) || 0,
+            pm_frx: Math.round(Number(r.HW_frx ?? r['H/W_frx'] ?? r.pmFrx ?? r.hwFrx) || 0),
+            pm_dur: Math.round(Number(r.HW_dur ?? r['H/W_dur'] ?? r.pmDur ?? r.hwDur) || 0),
+            total_downtime_dur: Math.round(Number(r.Total_dur ?? r.durTotal ?? r.totalDowntimeDur) || 0),
             target_sla: 98.50,
             target_vol: Math.round(Number(r.targetVol) || 0),
             is_locked: true,
@@ -339,7 +373,11 @@ export const saveUptimePeriod = async (file: ParsedUptimeFile, forceUpdate: bool
 
         for (let i = 0; i < rows.length; i += 300) {
           const slice = rows.slice(i, i + 300);
-          await client.from('monthly_uptime').upsert(slice, { onConflict: 'wsid,periode' });
+          const { error: uErr } = await client.from('monthly_uptime').upsert(slice, { onConflict: 'wsid,periode' });
+          if (uErr) {
+            console.warn('Supabase monthly_uptime upsert error:', uErr.message);
+            break;
+          }
         }
       }
     } catch (sbErr) {
@@ -347,14 +385,14 @@ export const saveUptimePeriod = async (file: ParsedUptimeFile, forceUpdate: bool
     }
   }
 
-  // 2. Local storage / IndexedDB fallback (Bebas kuota 5MB)
+  // 2. Local storage / IndexedDB cache
   try {
     let lockedPeriodes: string[] = await loadCachedLockedPeriodes();
     if (!lockedPeriodes || lockedPeriodes.length === 0) {
       const rawLocked = localStorage.getItem(LOCAL_STORAGE_KEYS.LOCKED);
       lockedPeriodes = rawLocked ? JSON.parse(rawLocked) : [];
     }
-    lockedPeriodes = lockedPeriodes.map(normalizePeriode);
+    lockedPeriodes = lockedPeriodes.map(normalizePeriode).filter(Boolean);
 
     if (!forceUpdate && lockedPeriodes.includes(normPeriode)) {
       return { success: true, skipped: true, periode: normPeriode, lockedPeriodes, message: `Periode ${normPeriode} sudah terkunci.` };
@@ -369,12 +407,7 @@ export const saveUptimePeriod = async (file: ParsedUptimeFile, forceUpdate: bool
     }
 
     existingUptime = existingUptime.filter(f => normalizePeriode(f.periode) !== normPeriode);
-    existingUptime.push({
-      ...file,
-      periode: normPeriode,
-      atmData: compactAtmData as any,
-      atsData: compactAtsData as any
-    });
+    existingUptime.push(compactedFile);
 
     if (!lockedPeriodes.includes(normPeriode)) {
       lockedPeriodes.push(normPeriode);
@@ -382,6 +415,25 @@ export const saveUptimePeriod = async (file: ParsedUptimeFile, forceUpdate: bool
 
     await saveCachedUptimeFiles(existingUptime);
     await saveCachedLockedPeriodes(lockedPeriodes);
+
+    // Perbarui cloudMeta pada snapshot lokal jika tersedia
+    if (latestCloudMeta) {
+      try {
+        const snap = await loadDashboardSnapshot();
+        if (snap) {
+          await saveDashboardSnapshot({
+            ...snap,
+            parsedUptimeFiles: existingUptime,
+            lockedPeriodes,
+            cloudMeta: {
+              updatedAt: latestCloudMeta.updatedAt,
+              masterUpdatedAt: latestCloudMeta.masterUpdatedAt,
+              periodUpdatedAt: latestCloudMeta.periodUpdatedAt
+            }
+          });
+        }
+      } catch (_) {}
+    }
 
     try {
       localStorage.setItem(LOCAL_STORAGE_KEYS.LOCKED, JSON.stringify(lockedPeriodes));
@@ -415,6 +467,26 @@ export interface DashboardSummaryData {
  * Digunakan untuk first-render instant pada Dashboard Overview tanpa perlu menunggu 10 MB detail mesin.
  */
 export const fetchDashboardSummary = async (): Promise<DashboardSummaryData | null> => {
+  // 1. Prioritas Utama: Ambil metadata ringkas langsung dari Supabase Cloud (~1.5 KB)
+  if (isSupabaseConfigured()) {
+    try {
+      const cloudMeta = await fetchDashboardMetaFromCloud();
+      if (cloudMeta && Array.isArray(cloudMeta.globalTrendData) && cloudMeta.globalTrendData.length > 0) {
+        return {
+          success: true,
+          globalTrendData: cloudMeta.globalTrendData,
+          availablePeriodes: (cloudMeta.availablePeriodes || []).map(normalizePeriode),
+          lockedPeriodes: (cloudMeta.lockedPeriodes || []).map(normalizePeriode),
+          totalMachines: cloudMeta.totalMachines || 0,
+          lastUpdated: cloudMeta.updatedAt || new Date().toISOString()
+        };
+      }
+    } catch (err) {
+      console.warn('Gagal memuat dashboard_meta_v1 dari Supabase:', err);
+    }
+  }
+
+  // 2. Fallback: file summary statis jika Cloud belum terisi atau offline
   try {
     const res = await fetch('/summary-data.json');
     if (res.ok) {
@@ -435,56 +507,144 @@ export const fetchDashboardSummary = async (): Promise<DashboardSummaryData | nu
 };
 
 /**
- * Mengambil data dashboard dari database lokal / Snapshot / Bundled Data (~30ms)
- * Telah dioptimalkan penuh: Bebas dari pemanggilan lambat Google Spreadsheet.
+ * Mengambil data dashboard dengan prioritas Cloud Supabase (Single Source of Truth)
+ * dan fallback ke cache lokal IndexedDB yang valid (wajib memiliki data uptime).
  */
 export const fetchDashboardData = async (): Promise<DashboardDbData> => {
-  // 1. Coba ambil dari IndexedDB cache (kapasitas puluhan MB, sangat cepat < 30ms)
-  try {
-    const cachedMaster = await loadCachedMasterData();
-    const cachedUptime = await loadCachedUptimeFiles();
-    const cachedLocked = await loadCachedLockedPeriodes();
+  // 0. Kumpulkan cache lokal yang valid terlebih dahulu untuk inkremental cloud sync & fallback offline
+  let localSnapshotData: DashboardDbData | null = null;
+  let localCloudMeta: CloudMetaSnapshot | undefined;
 
-    if (cachedMaster && cachedMaster.length > 0 && cachedUptime && cachedUptime.length > 0) {
-      return {
-        success: true,
-        hasData: true,
-        masterData: cachedMaster,
-        parsedUptimeFiles: cachedUptime.map(f => ({ ...f, periode: normalizePeriode(f.periode) })),
-        lockedPeriodes: cachedLocked.map(normalizePeriode),
-        lastUpdated: localStorage.getItem(LOCAL_STORAGE_KEYS.LAST_SYNC) || new Date().toISOString()
-      };
-    }
-  } catch (idbErr) {
-    console.warn('Gagal membaca IndexedDB, mencoba snapshot fallback:', idbErr);
-  }
-
-  // 2. Coba ambil dari Snapshot cache
   try {
     const snapshot = await loadDashboardSnapshot();
-    if (snapshot && snapshot.masterData?.length > 0 && snapshot.parsedUptimeFiles?.length > 0) {
-      return {
+    if (
+      snapshot &&
+      snapshot.masterData?.length > 0 &&
+      hasValidUptimeInDataset(snapshot.parsedUptimeFiles, snapshot.matchedMachines)
+    ) {
+      localCloudMeta = snapshot.cloudMeta;
+      localSnapshotData = {
         success: true,
         hasData: true,
+        source: 'local_cache',
         masterData: snapshot.masterData,
-        parsedUptimeFiles: snapshot.parsedUptimeFiles.map(f => ({ ...f, periode: normalizePeriode(f.periode) })),
+        parsedUptimeFiles: (snapshot.parsedUptimeFiles || []).map((f) => ({
+          ...f,
+          periode: normalizePeriode(f.periode)
+        })),
         lockedPeriodes: (snapshot.lockedPeriodes || []).map(normalizePeriode),
         lastUpdated: snapshot.lastUpdated,
-        tickets: snapshot.followUpTickets || []
+        cloudMeta: snapshot.cloudMeta,
+        tickets: snapshot.followUpTickets || [],
+        prematchedMachines: snapshot.matchedMachines
       };
     }
-  } catch (e) {}
+  } catch (e) {
+    console.warn('Gagal membaca snapshot lokal:', e);
+  }
 
-  // 3. Fallback instan: Katalog Mesin Statis BCA (5.000+ mesin) agar Database & Wilayah selalu terhidrasi penuh
+  if (!localSnapshotData) {
+    try {
+      const cachedMaster = await loadCachedMasterData();
+      const cachedUptime = await loadCachedUptimeFiles();
+      const cachedLocked = await loadCachedLockedPeriodes();
+
+      if (cachedMaster && cachedMaster.length > 0 && cachedUptime && cachedUptime.length > 0) {
+        localSnapshotData = {
+          success: true,
+          hasData: true,
+          source: 'local_cache',
+          masterData: cachedMaster,
+          parsedUptimeFiles: cachedUptime.map((f) => ({ ...f, periode: normalizePeriode(f.periode) })),
+          lockedPeriodes: cachedLocked.map(normalizePeriode),
+          lastUpdated: localStorage.getItem(LOCAL_STORAGE_KEYS.LAST_SYNC) || new Date().toISOString()
+        };
+      }
+    } catch (idbErr) {
+      console.warn('Gagal membaca IndexedDB cache:', idbErr);
+    }
+  }
+
+  // 1. Prioritas Utama: Sinkronisasi dari Cloud Supabase (menjamin PC & Laptop 100% identik)
+  if (isSupabaseConfigured()) {
+    try {
+      const cloudRes = await fetchDashboardFromCloud(
+        localSnapshotData
+          ? {
+              masterData: localSnapshotData.masterData,
+              parsedUptimeFiles: localSnapshotData.parsedUptimeFiles,
+              cloudMeta: localCloudMeta
+            }
+          : null
+      );
+
+      if (cloudRes.success && cloudRes.hasData) {
+        if (cloudRes.isUpToDate && localSnapshotData) {
+          return {
+            ...localSnapshotData,
+            source: 'cloud_snapshot',
+            cloudMeta: cloudRes.cloudMeta
+          };
+        }
+
+        if (cloudRes.parsedUptimeFiles && cloudRes.parsedUptimeFiles.length > 0 && cloudRes.masterData) {
+          // Simpan ke cache terpisah agar reload berikutnya instan
+          saveCachedMasterData(cloudRes.masterData).catch(() => {});
+          saveCachedUptimeFiles(cloudRes.parsedUptimeFiles).catch(() => {});
+          saveCachedLockedPeriodes(cloudRes.lockedPeriodes || []).catch(() => {});
+
+          return {
+            success: true,
+            hasData: true,
+            source: 'cloud_snapshot',
+            masterData: cloudRes.masterData,
+            parsedUptimeFiles: cloudRes.parsedUptimeFiles,
+            lockedPeriodes: cloudRes.lockedPeriodes || [],
+            globalTrendData: cloudRes.globalTrendData || [],
+            lastUpdated: cloudRes.lastUpdated || new Date().toISOString(),
+            cloudMeta: cloudRes.cloudMeta
+          };
+        }
+
+        if (
+          cloudRes.source === 'cloud_relational' &&
+          cloudRes.prematchedMachines &&
+          cloudRes.prematchedMachines.length > 0 &&
+          !localSnapshotData
+        ) {
+          return {
+            success: true,
+            hasData: true,
+            source: 'cloud_relational',
+            masterData: cloudRes.masterData || [],
+            parsedUptimeFiles: [],
+            lockedPeriodes: cloudRes.lockedPeriodes || [],
+            prematchedMachines: cloudRes.prematchedMachines,
+            lastUpdated: cloudRes.lastUpdated || new Date().toISOString()
+          };
+        }
+      }
+    } catch (cloudErr) {
+      console.warn('Sinkronisasi Cloud Supabase gagal, menggunakan cache lokal jika tersedia:', cloudErr);
+    }
+  }
+
+  // 2. Gunakan cache lokal valid jika Cloud belum memiliki data atau sedang offline
+  if (localSnapshotData) {
+    return localSnapshotData;
+  }
+
+  // 3. Fallback: Katalog Master statis TANPA data uptime (hasData = false agar UI tidak menyangka 100% uptime valid)
   const fallbackMaster = getStaticMasterData();
   return {
     success: true,
-    hasData: true,
+    hasData: false,
+    source: 'none',
     masterData: fallbackMaster as any,
     parsedUptimeFiles: [],
     lockedPeriodes: [],
-    prematchedMachines: fallbackMaster,
-    lastUpdated: new Date().toISOString()
+    prematchedMachines: [],
+    lastUpdated: null
   };
 };
 
@@ -506,32 +666,51 @@ export const checkSpreadsheetStatus = async (): Promise<ConnectionStatusResult> 
  * Buka kunci periode tertentu (fitur admin perbaikan data)
  */
 export const unlockPeriode = async (periode: string): Promise<{ success: boolean; message?: string }> => {
-  if (isSupabaseConfigured()) {
-    try {
-      const client = getSupabase();
-      if (client) {
-        await client.from('monthly_uptime').update({ is_locked: false }).eq('periode', periode);
-      }
-    } catch (_) {}
-  }
+  const normPeriode = normalizePeriode(periode);
 
   try {
-    const rawLocked = localStorage.getItem(LOCAL_STORAGE_KEYS.LOCKED);
-    let lockedPeriodes: string[] = rawLocked ? JSON.parse(rawLocked) : [];
-    lockedPeriodes = lockedPeriodes.filter(p => p !== periode);
-    localStorage.setItem(LOCAL_STORAGE_KEYS.LOCKED, JSON.stringify(lockedPeriodes));
+    let lockedPeriodes: string[] = await loadCachedLockedPeriodes();
+    if (!lockedPeriodes || lockedPeriodes.length === 0) {
+      const rawLocked = localStorage.getItem(LOCAL_STORAGE_KEYS.LOCKED);
+      lockedPeriodes = rawLocked ? JSON.parse(rawLocked) : [];
+    }
+    lockedPeriodes = lockedPeriodes.map(normalizePeriode).filter((p) => p && p !== normPeriode);
 
-    const rawUptime = localStorage.getItem(LOCAL_STORAGE_KEYS.UPTIME);
-    let uptimeFiles: ParsedUptimeFile[] = rawUptime ? JSON.parse(rawUptime) : [];
-    uptimeFiles = uptimeFiles.filter(f => f.periode !== periode);
-    localStorage.setItem(LOCAL_STORAGE_KEYS.UPTIME, JSON.stringify(uptimeFiles));
+    let uptimeFiles: ParsedUptimeFile[] = await loadCachedUptimeFiles();
+    if (!uptimeFiles || uptimeFiles.length === 0) {
+      const rawUptime = localStorage.getItem(LOCAL_STORAGE_KEYS.UPTIME);
+      if (rawUptime) {
+        try { uptimeFiles = JSON.parse(rawUptime); } catch (_) {}
+      }
+    }
+    uptimeFiles = uptimeFiles.filter((f) => normalizePeriode(f.periode) !== normPeriode);
+
+    if (isSupabaseConfigured()) {
+      await unlockUptimePeriodInCloud(normPeriode, lockedPeriodes);
+    }
+
+    try {
+      localStorage.setItem(LOCAL_STORAGE_KEYS.LOCKED, JSON.stringify(lockedPeriodes));
+      localStorage.setItem(LOCAL_STORAGE_KEYS.UPTIME, JSON.stringify(uptimeFiles));
+    } catch (_) {}
 
     await saveCachedLockedPeriodes(lockedPeriodes);
     await saveCachedUptimeFiles(uptimeFiles);
 
+    const existingSnap = await loadDashboardSnapshot();
+    if (existingSnap) {
+      await saveDashboardSnapshot({
+        ...existingSnap,
+        parsedUptimeFiles: (existingSnap.parsedUptimeFiles || []).filter(
+          (f) => normalizePeriode(f.periode) !== normPeriode
+        ),
+        lockedPeriodes
+      });
+    }
+
     return {
       success: true,
-      message: `Periode ${periode} berhasil dibuka kuncinya.`
+      message: `Periode ${normPeriode} berhasil dibuka kuncinya.`
     };
   } catch (err: any) {
     return { success: false, message: err.message };

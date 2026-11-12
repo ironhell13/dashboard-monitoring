@@ -30,6 +30,7 @@ import { exportComprehensiveExcel, formatBulanTahun } from '../utils/comprehensi
 import { fetchDashboardData } from '../utils/spreadsheetService';
 import { matchData } from '../utils/dataMatcher';
 import { evaluateMachineHealth, isBcaMachine, isActiveMachine } from '../utils/slaHelper';
+import UptimeDataStatusBanner from '../components/UptimeDataStatusBanner';
 
 const SLA_ATM = 99.00;
 const SLA_CRM = 98.50;
@@ -153,6 +154,8 @@ export default function TotalUptimeBulanPage() {
           <span>{isExporting ? 'Menyiapkan Data Excel...' : 'Export Laporan Lengkap (.xlsx)'}</span>
         </button>
       </div>
+
+      <UptimeDataStatusBanner />
 
       {/* KPI Cards: Separated ATM & CRM Performance (Compact 92-105px) */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-2.5">

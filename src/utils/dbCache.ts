@@ -2,6 +2,12 @@ import type { MasterRow, ParsedUptimeFile } from './excelParser';
 import type { FollowUpTicket } from './spreadsheetService';
 import { getSupabaseInfo } from './supabaseClient';
 
+export interface CloudMetaSnapshot {
+  updatedAt?: string;
+  masterUpdatedAt?: string;
+  periodUpdatedAt?: Record<string, string>;
+}
+
 export interface CachedSnapshot {
   masterData: MasterRow[];
   parsedUptimeFiles: ParsedUptimeFile[];
@@ -10,6 +16,23 @@ export interface CachedSnapshot {
   lastUpdated: string | null;
   timestamp: number;
   matchedMachines?: any[];
+  cloudMeta?: CloudMetaSnapshot;
+}
+
+/**
+ * Memastikan dataset benar-benar memiliki data uptime bulanan (bukan sekadar katalog mesin kosong 100% uptime).
+ */
+export function hasValidUptimeInDataset(parsedUptimeFiles?: any[], matchedMachines?: any[]): boolean {
+  if (Array.isArray(parsedUptimeFiles) && parsedUptimeFiles.length > 0) {
+    return true;
+  }
+  if (
+    Array.isArray(matchedMachines) &&
+    matchedMachines.some((m) => Array.isArray(m?.monthlyData) && m.monthlyData.length > 0)
+  ) {
+    return true;
+  }
+  return false;
 }
 
 export const CACHE_SCHEMA_VERSION = 3;
@@ -58,6 +81,11 @@ const LOCKED_PERIODES_KEY = 'cached_locked_periodes';
  * Menyimpan snapshot database ke IndexedDB (dan fallback LocalStorage jika muat)
  */
 export async function saveDashboardSnapshot(snapshot: CachedSnapshot): Promise<boolean> {
+  // Jangan pernah menimpa cache dengan snapshot kosong tanpa data uptime (mencegah bug 100% uptime di client)
+  if (!hasValidUptimeInDataset(snapshot.parsedUptimeFiles, snapshot.matchedMachines)) {
+    return false;
+  }
+
   try {
     const db = await openIndexedDB();
     await new Promise<void>((resolve, reject) => {
@@ -222,7 +250,11 @@ export async function loadDashboardSnapshot(): Promise<CachedSnapshot | null> {
       };
     });
 
-    if (snapshot && snapshot.masterData?.length > 0) {
+    if (
+      snapshot &&
+      snapshot.masterData?.length > 0 &&
+      hasValidUptimeInDataset(snapshot.parsedUptimeFiles, snapshot.matchedMachines)
+    ) {
       return snapshot;
     }
   } catch (err) {
@@ -234,7 +266,11 @@ export async function loadDashboardSnapshot(): Promise<CachedSnapshot | null> {
     const raw = localStorage.getItem(FALLBACK_LS_KEY);
     if (raw) {
       const parsed = JSON.parse(raw);
-      if (parsed && parsed.masterData?.length > 0) {
+      if (
+        parsed &&
+        parsed.masterData?.length > 0 &&
+        hasValidUptimeInDataset(parsed.parsedUptimeFiles, parsed.matchedMachines)
+      ) {
         return parsed as CachedSnapshot;
       }
     }

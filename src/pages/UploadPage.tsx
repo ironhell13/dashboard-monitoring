@@ -17,6 +17,7 @@ import { parseMasterData, parseUptimeFile, type MasterRow, type ParsedUptimeFile
 import { matchData } from '../utils/dataMatcher';
 import { useDataStore } from '../store/useDataStore';
 import { saveMasterData, saveUptimePeriod, unlockPeriode } from '../utils/spreadsheetService';
+import { fetchDashboardMetaFromCloud, syncFullDatasetToCloud } from '../utils/supabaseService';
 import { isSupabaseConfigured } from '../utils/supabaseClient';
 import { saveDashboardSnapshot } from '../utils/dbCache';
 import { formatBulanTahun, normalizePeriode } from '../utils/comprehensiveExporter';
@@ -85,33 +86,53 @@ export default function UploadPage() {
 
   const handleSyncCachedToBackend = async () => {
     if (!hasExistingMaster && !hasExistingUptime) return;
+    if (!isSupabaseConfigured()) {
+      setError("Koneksi Supabase Cloud belum terkonfigurasi.");
+      return;
+    }
+
     setIsProcessing(true);
     setError(null);
-    setStatusMessage("Menghubungkan ke database...");
+    setStatusMessage("Menghubungkan ke Cloud Supabase...");
     setProgress(10);
 
     try {
-      if (hasExistingMaster && rawMasterData && rawMasterData.length > 0) {
-        setStatusMessage(`Menyimpan Master Data (${rawMasterData.length} mesin) ke database...`);
-        const mRes = await saveMasterData(rawMasterData);
-        if (!mRes.success) throw new Error(mRes.message || mRes.error || "Gagal menyimpan Master Data");
-        setProgress(45);
+      const cloudRes = await syncFullDatasetToCloud(
+        rawMasterData || [],
+        rawUptimeFiles || [],
+        lockedPeriodes || [],
+        (step, pct) => {
+          setStatusMessage(step);
+          setProgress(pct);
+        }
+      );
+
+      if (!cloudRes.success) {
+        throw new Error(cloudRes.message || "Gagal menyinkronkan dataset ke Cloud Supabase");
       }
 
-      if (hasExistingUptime && rawUptimeFiles && rawUptimeFiles.length > 0) {
-        const total = rawUptimeFiles.length;
-        for (let i = 0; i < total; i++) {
-          const file = rawUptimeFiles[i];
-          const label = formatMonthPeriode(file.periode);
-          setStatusMessage(`Menyimpan Uptime ${label} (${i + 1}/${total}) ke database...`);
-          const uRes = await saveUptimePeriod(file, true);
-          if (!uRes.success) throw new Error(uRes.message || uRes.error || `Gagal menyimpan Uptime ${label}`);
-          setProgress(45 + Math.floor(((i + 1) / total) * 50));
-        }
+      if (hasExistingMaster && rawMasterData && rawMasterData.length > 0) {
+        await saveMasterData(rawMasterData);
+      }
+
+      if (cloudRes.meta) {
+        await saveDashboardSnapshot({
+          masterData: rawMasterData || [],
+          parsedUptimeFiles: rawUptimeFiles || [],
+          lockedPeriodes: cloudRes.meta.lockedPeriodes || lockedPeriodes || [],
+          followUpTickets: [],
+          lastUpdated: cloudRes.meta.updatedAt,
+          cloudMeta: {
+            updatedAt: cloudRes.meta.updatedAt,
+            masterUpdatedAt: cloudRes.meta.masterUpdatedAt,
+            periodUpdatedAt: cloudRes.meta.periodUpdatedAt
+          },
+          timestamp: Date.now()
+        });
       }
 
       setProgress(100);
-      setStatusMessage("✅ Berhasil! Seluruh Master Data & Uptime berhasil disimpan ke Cloud Database!");
+      setStatusMessage("✅ Berhasil! Seluruh Master Data & Uptime tersinkron ke Cloud Supabase untuk semua PC & Laptop!");
       setTimeout(() => {
         setIsProcessing(false);
         setStatusMessage(null);
@@ -233,12 +254,27 @@ export default function UploadPage() {
       setLockedPeriodes(currentLocked);
       setLastDbSync(new Date().toISOString());
 
+      let latestCloudMeta = undefined;
+      if (isSupabaseConfigured()) {
+        try {
+          const meta = await fetchDashboardMetaFromCloud();
+          if (meta) {
+            latestCloudMeta = {
+              updatedAt: meta.updatedAt,
+              masterUpdatedAt: meta.masterUpdatedAt,
+              periodUpdatedAt: meta.periodUpdatedAt
+            };
+          }
+        } catch (_) {}
+      }
+
       await saveDashboardSnapshot({
         masterData: activeMasterData,
         parsedUptimeFiles: combinedUptimeFiles,
         lockedPeriodes: currentLocked,
         followUpTickets: [],
-        lastUpdated: new Date().toISOString(),
+        lastUpdated: latestCloudMeta?.updatedAt || new Date().toISOString(),
+        cloudMeta: latestCloudMeta,
         timestamp: Date.now()
       });
 

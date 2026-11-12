@@ -8,6 +8,7 @@ import { exportMesinPerSektorExcel, SERVICE_POINT_MAP, getServicePointName } fro
 import { aggregateMachinesData, getHighestProblemCategory, getValueForCategory, getFrxDurForCategory, type HighestProblemResult } from '../utils/problemCalculator';
 import { cleanSektorName, normalizeServicePoint } from '../utils/dailyIncidentParser';
 import StickyTableWrapper from '../components/StickyTableWrapper';
+import UptimeDataStatusBanner, { useHasUptimeData } from '../components/UptimeDataStatusBanner';
 
 interface SektorRow {
   sektor: string;
@@ -31,6 +32,7 @@ interface SektorRow {
 export default function MesinPerSektorPage() {
   const navigate = useNavigate();
   const filteredData = useFilteredData();
+  const hasUptimeData = useHasUptimeData();
   const { rawMasterData, rawUptimeFiles, machines, selectedPeriode, isSyncing } = useDataStore();
   const [expandedSektor, setExpandedSektor] = useState<string | null>(null);
   const [selectedWsid, setSelectedWsid] = useState<string | null>(null);
@@ -193,6 +195,8 @@ export default function MesinPerSektorPage() {
         </div>
       </div>
 
+      <UptimeDataStatusBanner />
+
       <div className="bg-white rounded-lg overflow-hidden shadow-2xs border border-[#E5EAF2]">
         <StickyTableWrapper>
           <table className="w-full text-xs text-left">
@@ -257,8 +261,12 @@ export default function MesinPerSektorPage() {
                         <td className="px-4 py-2.5 text-center font-medium text-blue-700">{row.bcaAktif.toLocaleString()}</td>
                         <td className="px-4 py-2.5 text-center font-medium text-slate-600">{row.nonBcaAktif.toLocaleString()}</td>
                         <td className="px-4 py-2.5 text-center font-bold text-slate-800">{row.totalAktif.toLocaleString()}</td>
-                        <td className="px-4 py-2.5 text-center font-semibold text-rose-600">{row.rataRataDowntime.toFixed(2)}%</td>
-                        <td className="px-4 py-2.5 text-center font-semibold text-emerald-600">{row.rataRataUptime.toFixed(2)}%</td>
+                        <td className="px-4 py-2.5 text-center font-semibold text-rose-600">
+                          {hasUptimeData ? `${row.rataRataDowntime.toFixed(2)}%` : <span className="text-slate-400 font-normal">—</span>}
+                        </td>
+                        <td className="px-4 py-2.5 text-center font-semibold text-emerald-600">
+                          {hasUptimeData ? `${row.rataRataUptime.toFixed(2)}%` : <span className="text-slate-400 font-normal">—</span>}
+                        </td>
                       </tr>
                       {isExpanded && (
                         <tr>

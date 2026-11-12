@@ -8,6 +8,7 @@ import { exportServicePointExcel, SERVICE_POINT_MAP, getServicePointName } from 
 import { cleanSektorName } from '../utils/dailyIncidentParser';
 import { aggregateMachinesData, getFrxDurForCategory } from '../utils/problemCalculator';
 import StickyTableWrapper from '../components/StickyTableWrapper';
+import UptimeDataStatusBanner, { useHasUptimeData } from '../components/UptimeDataStatusBanner';
 
 interface SektorStats {
   namaSektor: string;
@@ -41,6 +42,7 @@ interface ServicePointRow {
 export default function ServicePointPage() {
   const navigate = useNavigate();
   const filteredData = useFilteredData();
+  const hasUptimeData = useHasUptimeData();
   const [expandedSP, setExpandedSP] = useState<string | null>(null);
   const [expandedSektor, setExpandedSektor] = useState<string | null>(null);
   const [selectedWsid, setSelectedWsid] = useState<string | null>(null);
@@ -202,6 +204,8 @@ export default function ServicePointPage() {
         </div>
       </div>
 
+      <UptimeDataStatusBanner />
+
       <div className={`grid grid-cols-1 ${selectedMachine ? 'xl:grid-cols-3' : ''} gap-4 transition-all duration-200`}>
         <div className={`bg-white rounded-lg border border-[#E5EAF2] shadow-2xs overflow-hidden ${selectedMachine ? 'xl:col-span-2' : ''}`}>
           <StickyTableWrapper>
@@ -249,7 +253,9 @@ export default function ServicePointPage() {
                             <span className="font-medium text-slate-700 bg-slate-100 px-2 py-0.2 rounded text-[10px] border border-slate-200">{row.jumlahSektor}</span>
                           </td>
                           <td className="px-3 py-1.5 text-center font-semibold text-slate-800">{row.jumlahMesin.toLocaleString()}</td>
-                          <td className="px-3 py-1.5 text-center font-semibold text-emerald-700">{row.rataRataUptime.toFixed(2)}%</td>
+                          <td className="px-3 py-1.5 text-center font-semibold text-emerald-700">
+                            {hasUptimeData ? `${row.rataRataUptime.toFixed(2)}%` : <span className="text-slate-400 font-normal">—</span>}
+                          </td>
                         </tr>
                         {isExpanded && (
                           <tr>
@@ -285,7 +291,9 @@ export default function ServicePointPage() {
                                                   </div>
                                                 </td>
                                                 <td className="px-4 py-2.5 text-center text-slate-700">{s.jumlahMesin}</td>
-                                                <td className="px-4 py-2.5 text-center font-semibold text-emerald-700">{s.uptime.toFixed(2)}%</td>
+                                                <td className="px-4 py-2.5 text-center font-semibold text-emerald-700">
+                                                  {hasUptimeData ? `${s.uptime.toFixed(2)}%` : <span className="text-slate-400 font-normal">—</span>}
+                                                </td>
                                               </tr>
                                               {isSektorExpanded && (
                                                 <tr>

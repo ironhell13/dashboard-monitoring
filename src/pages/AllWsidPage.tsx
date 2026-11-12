@@ -33,10 +33,12 @@ import { exportAllWsidExcel, SERVICE_POINT_MAP, getServicePointName } from '../u
 import { cleanSektorName, normalizeServicePoint } from '../utils/dailyIncidentParser';
 import { evaluateMachineHealth, type MachineHealthStatus } from '../utils/slaHelper';
 import { useDataStore, type MachineData } from '../store/useDataStore';
+import UptimeDataStatusBanner, { useHasUptimeData } from '../components/UptimeDataStatusBanner';
 
 export default function AllWsidPage() {
   const navigate = useNavigate();
   const allFilteredData = useFilteredData();
+  const hasUptimeData = useHasUptimeData();
   const location = useLocation();
   const { machines, isSyncing, modernTickets } = useDataStore();
 
@@ -342,6 +344,8 @@ export default function AllWsidPage() {
         </div>
       </div>
 
+      <UptimeDataStatusBanner />
+
       {/* ======================================================== */}
       {/* 2. 4 EXECUTIVE KPI METRIC CARDS (COMPACT 92-105px)       */}
       {/* ======================================================== */}
@@ -376,7 +380,9 @@ export default function AllWsidPage() {
           </div>
           <p className="text-[10px] text-slate-500 flex items-center gap-1 mt-0.5">
             <span>Rata-rata Uptime:</span>
-            <strong className="text-blue-700 font-semibold">{kpiStats.avgUptime.toFixed(2)}%</strong>
+            <strong className="text-blue-700 font-semibold">
+              {hasUptimeData ? `${kpiStats.avgUptime.toFixed(2)}%` : '—'}
+            </strong>
           </p>
           {slaFilter === 'ALL' && (
             <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-blue-600" />

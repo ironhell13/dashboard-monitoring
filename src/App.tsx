@@ -16,8 +16,17 @@ import SettingsPage from './pages/SettingsPage';
 import { useDataStore } from './store/useDataStore';
 import { matchData } from './utils/dataMatcher';
 import { fetchDashboardData, fetchDashboardSummary, fetchFollowUpTickets, fetchFollowUpTicketsModern } from './utils/spreadsheetService';
+import { syncFullDatasetToCloud } from './utils/supabaseService';
+import { isSupabaseConfigured } from './utils/supabaseClient';
 import { logoutKaOpsApi, logoutKaWilApi } from './utils/monitoringService';
-import { loadDashboardSnapshot, saveDashboardSnapshot } from './utils/dbCache';
+import {
+  loadDashboardSnapshot,
+  saveDashboardSnapshot,
+  loadCachedMasterData,
+  loadCachedUptimeFiles,
+  loadCachedLockedPeriodes,
+  hasValidUptimeInDataset
+} from './utils/dbCache';
 import { Loader2, Zap } from 'lucide-react';
 
 function App() {
@@ -165,11 +174,16 @@ function App() {
 
     async function initializeDashboard() {
       let hasFullData = false;
+      let loadedCloudUpdatedAt: string | undefined;
 
-      // STEP 1: Coba muat cache snapshot lokal (IndexedDB ~15ms)
+      // STEP 1: Coba muat cache snapshot lokal yang VALID (wajib punya data uptime, bukan cache 100% kosong)
       try {
         const cached = await loadDashboardSnapshot();
-        if (isMounted && cached && ((cached.matchedMachines && cached.matchedMachines.length > 0) || (cached.masterData && cached.masterData.length > 0))) {
+        if (
+          isMounted &&
+          cached &&
+          hasValidUptimeInDataset(cached.parsedUptimeFiles, cached.matchedMachines)
+        ) {
           applyDataset(
             cached.masterData || [],
             cached.parsedUptimeFiles || [],
@@ -179,15 +193,27 @@ function App() {
             cached.matchedMachines
           );
           hasFullData = true;
-          // Segera buka dashboard dari cache lokal instan (< 15ms)
+          loadedCloudUpdatedAt = cached.cloudMeta?.updatedAt;
           setIsDbLoaded(true);
+        } else if (isMounted) {
+          // Fallback STEP 1b: baca cache terpisah jika snapshot belum terbentuk
+          const [cMaster, cUptime, cLocked] = await Promise.all([
+            loadCachedMasterData(),
+            loadCachedUptimeFiles(),
+            loadCachedLockedPeriodes()
+          ]);
+          if (cMaster?.length > 0 && cUptime?.length > 0) {
+            applyDataset(cMaster, cUptime, cLocked || [], null);
+            hasFullData = true;
+            setIsDbLoaded(true);
+          }
         }
       } catch (cacheErr) {
         console.warn('Cache snapshot lokal belum tersedia:', cacheErr);
       }
 
-      // STEP 2: Jika belum ada cache snapshot (misal Incognito / Cold Start),
-      // muat SUMMARY DATASET TERLEBIH DAHULU (1.4 KB, < 20ms) agar Dashboard LANGSUNG MUNCUL seketika!
+      // STEP 2: Jika belum ada cache lokal valid (misal Laptop baru / Incognito),
+      // muat SUMMARY DATASET dari Cloud Supabase (atau fallback statis) agar Dashboard Overview langsung tampil
       if (!hasFullData) {
         try {
           const summary = await fetchDashboardSummary();
@@ -196,7 +222,6 @@ function App() {
             setAvailablePeriodes(summary.availablePeriodes || []);
             setLockedPeriodes(summary.lockedPeriodes || []);
             setLastDbSync(summary.lastUpdated);
-            // LANGSUNG BUKA DASHBOARD INSTAN (< 30ms)!
             setIsDbLoaded(true);
           }
         } catch (summaryErr) {
@@ -204,7 +229,7 @@ function App() {
         }
       }
 
-      // STEP 3: Latar Belakang (Non-Blocking) - Sinkronisasi tiket & detail 2.043 mesin
+      // STEP 3: Sinkronisasi Cloud Supabase (Single Source of Truth antar-device)
       setIsSyncing(true);
       try {
         // 3a. Ambil tiket follow-up terbaru
@@ -217,33 +242,88 @@ function App() {
           console.warn('Gagal memuat tiket modern:', mErr);
         }
 
-        // 3b. Muat dataset detail mesin jika belum ada
+        // 3b. Sinkronkan dataset lengkap Master + Monthly Uptime dari Cloud Supabase
         const dbData = await fetchDashboardData();
         if (!isMounted) return;
 
-        let tickets = dbData.tickets || [];
-        if (dbData && dbData.hasData && ((dbData.prematchedMachines && dbData.prematchedMachines.length > 0) || (dbData.masterData && dbData.masterData.length > 0))) {
-          applyDataset(
-            dbData.masterData || [],
-            dbData.parsedUptimeFiles || [],
-            dbData.lockedPeriodes || [],
-            dbData.lastUpdated,
-            tickets,
-            dbData.prematchedMachines
-          );
+        const tickets = dbData.tickets || [];
+        const validCloudOrLocal = hasValidUptimeInDataset(dbData.parsedUptimeFiles, dbData.prematchedMachines);
 
-          // Simpan snapshot ke IndexedDB untuk kunjungan berikutnya
-          await saveDashboardSnapshot({
-            masterData: dbData.masterData || [],
-            parsedUptimeFiles: dbData.parsedUptimeFiles || [],
-            lockedPeriodes: dbData.lockedPeriodes || [],
-            followUpTickets: tickets,
-            lastUpdated: dbData.lastUpdated,
-            matchedMachines: dbData.prematchedMachines,
-            timestamp: Date.now()
-          });
+        if (dbData && dbData.hasData && validCloudOrLocal) {
+          const cloudTs = dbData.cloudMeta?.updatedAt;
+          const alreadySyncedSameVersion =
+            hasFullData &&
+            dbData.source === 'cloud_snapshot' &&
+            cloudTs &&
+            loadedCloudUpdatedAt &&
+            cloudTs === loadedCloudUpdatedAt;
+
+          if (!alreadySyncedSameVersion) {
+            applyDataset(
+              dbData.masterData || [],
+              dbData.parsedUptimeFiles || [],
+              dbData.lockedPeriodes || [],
+              dbData.lastUpdated,
+              tickets,
+              dbData.prematchedMachines
+            );
+
+            await saveDashboardSnapshot({
+              masterData: dbData.masterData || [],
+              parsedUptimeFiles: dbData.parsedUptimeFiles || [],
+              lockedPeriodes: dbData.lockedPeriodes || [],
+              followUpTickets: tickets,
+              lastUpdated: dbData.lastUpdated,
+              matchedMachines: dbData.prematchedMachines,
+              cloudMeta: dbData.cloudMeta
+                ? {
+                    updatedAt: dbData.cloudMeta.updatedAt,
+                    masterUpdatedAt: dbData.cloudMeta.masterUpdatedAt,
+                    periodUpdatedAt: dbData.cloudMeta.periodUpdatedAt
+                  }
+                : undefined,
+              timestamp: Date.now()
+            });
+          }
+
+          // AUTO-PUBLISH DARI PC SUMBER:
+          // Jika Cloud Supabase belum punya snapshot tapi PC lokal punya data uptime lengkap,
+          // otomatis unggah ke Cloud di latar belakang agar Laptop / browser lain langsung sama!
+          if (
+            dbData.source === 'local_cache' &&
+            isSupabaseConfigured() &&
+            dbData.parsedUptimeFiles &&
+            dbData.parsedUptimeFiles.length > 0
+          ) {
+            syncFullDatasetToCloud(
+              dbData.masterData || [],
+              dbData.parsedUptimeFiles,
+              dbData.lockedPeriodes || []
+            )
+              .then(async (pushRes) => {
+                if (pushRes.success && pushRes.meta) {
+                  await saveDashboardSnapshot({
+                    masterData: dbData.masterData || [],
+                    parsedUptimeFiles: dbData.parsedUptimeFiles || [],
+                    lockedPeriodes: pushRes.meta.lockedPeriodes,
+                    followUpTickets: tickets,
+                    lastUpdated: pushRes.meta.updatedAt,
+                    cloudMeta: {
+                      updatedAt: pushRes.meta.updatedAt,
+                      masterUpdatedAt: pushRes.meta.masterUpdatedAt,
+                      periodUpdatedAt: pushRes.meta.periodUpdatedAt
+                    },
+                    timestamp: Date.now()
+                  });
+                }
+              })
+              .catch((err) => console.warn('[AutoCloudSync] Gagal auto-publish ke Cloud:', err));
+          }
 
           setSyncError(null);
+        } else if (!hasFullData && dbData.masterData && dbData.masterData.length > 0) {
+          // Tidak ada data uptime di Cloud maupun lokal: tampilkan master katalog saja tanpa menyimpan snapshot palsu
+          setRawMasterData(dbData.masterData);
         }
       } catch (syncErr: any) {
         console.warn('Sinkronisasi data latar belakang:', syncErr);
@@ -272,7 +352,8 @@ function App() {
     setAvailablePeriodes,
     setLockedPeriodes,
     setLastDbSync,
-    setModernTickets
+    setModernTickets,
+    setRawMasterData
   ]);
 
   // 1. Mode Landing
