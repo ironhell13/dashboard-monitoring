@@ -3295,9 +3295,17 @@ export async function syncFullDatasetToCloud(
         if (mErr) throw mErr;
       }
 
-      const periodUpdatedAt: Record<string, string> = {};
-      const trendList: any[] = [];
-      const availablePeriodes: string[] = [];
+      const existingMeta = await fetchDashboardMetaFromCloud();
+      const existingAvailable = (existingMeta?.availablePeriodes || []).map(normalizePeriode).filter(Boolean);
+      const existingLocked = (existingMeta?.lockedPeriodes || []).map(normalizePeriode).filter(Boolean);
+      const existingPeriodUpdatedAt: Record<string, string> = { ...(existingMeta?.periodUpdatedAt || {}) };
+
+      const trendMap = new Map<string, any>();
+      (existingMeta?.globalTrendData || []).forEach((t: any) => {
+        if (t?.periode) trendMap.set(normalizePeriode(t.periode), { ...t, periode: normalizePeriode(t.periode) });
+      });
+
+      const availablePeriodesSet = new Set<string>(existingAvailable);
 
       for (let i = 0; i < uptimeFiles.length; i++) {
         const file = uptimeFiles[i];
@@ -3320,24 +3328,25 @@ export async function syncFullDatasetToCloud(
         );
         if (uErr) throw uErr;
 
-        availablePeriodes.push(normP);
-        periodUpdatedAt[normP] = now;
-        trendList.push(buildTrendEntryFromUptimeFile(compacted));
+        availablePeriodesSet.add(normP);
+        existingPeriodUpdatedAt[normP] = now;
+        trendMap.set(normP, buildTrendEntryFromUptimeFile(compacted));
       }
 
+      const uniqueAvailable = Array.from(availablePeriodesSet).sort();
       const uniqueLocked = Array.from(
-        new Set([...(lockedPeriodes || []), ...availablePeriodes].map(normalizePeriode).filter(Boolean))
+        new Set([...existingLocked, ...(lockedPeriodes || []), ...uniqueAvailable].map(normalizePeriode).filter(Boolean))
       ).sort();
 
       const meta: CloudDashboardMeta = {
         version: CLOUD_DATA_VERSION,
         updatedAt: now,
         masterUpdatedAt: now,
-        availablePeriodes: Array.from(new Set(availablePeriodes)).sort(),
+        availablePeriodes: uniqueAvailable,
         lockedPeriodes: uniqueLocked,
-        globalTrendData: trendList.sort((a, b) => a.periode.localeCompare(b.periode)),
+        globalTrendData: Array.from(trendMap.values()).sort((a, b) => a.periode.localeCompare(b.periode)),
         totalMachines: compactMaster.length,
-        periodUpdatedAt
+        periodUpdatedAt: existingPeriodUpdatedAt
       };
 
       onProgress?.('Menyimpan indeks metadata Cloud...', 95);
@@ -3462,18 +3471,46 @@ export async function fetchDashboardFromCloud(localSnapshot?: {
         }
       }
 
-      // 1b. Uptime per Periode (hanya pakai cache lokal jika versi v2 & timestamp sama)
+      // 1b. Uptime per Periode (Gabungkan seluruh periode dari Cloud & Snapshot Lokal agar tidak ada bulan yang hilang)
       const localPeriodMap = new Map<string, any>();
-      if (versionsMatch && localHasUptime) {
+      if (localHasUptime) {
         localSnapshot!.parsedUptimeFiles!.forEach((f: any) => {
           if (f?.periode) localPeriodMap.set(normalizePeriode(f.periode), f);
         });
       }
 
+      // Kumpulkan seluruh periode unik dari cloudMeta, app_config, dan localSnapshot
+      const discoveredPeriods = new Set<string>(
+        (cloudMeta.availablePeriodes || []).map(normalizePeriode).filter(Boolean)
+      );
+
+      // Cek apakah ada periode lain di app_config yang belum terdaftar di cloudMeta (misal pernah tertimpa meta parsial)
+      try {
+        const { data: uptimeConfigRows } = await client
+          .from('app_config')
+          .select('key')
+          .like('key', `${CLOUD_UPTIME_PREFIX}%`);
+
+        if (uptimeConfigRows && Array.isArray(uptimeConfigRows)) {
+          uptimeConfigRows.forEach((r: any) => {
+            const rawK = String(r.key || '');
+            if (rawK.startsWith(CLOUD_UPTIME_PREFIX)) {
+              const p = normalizePeriode(rawK.substring(CLOUD_UPTIME_PREFIX.length));
+              if (p) discoveredPeriods.add(p);
+            }
+          });
+        }
+      } catch (_) {}
+
+      // Masukkan juga periode dari localSnapshot agar bulan lokal yang valid tidak terhapus
+      localPeriodMap.forEach((_, p) => {
+        if (p) discoveredPeriods.add(p);
+      });
+
       const periodsToFetch: string[] = [];
       const keptFiles: any[] = [];
 
-      for (const rawP of cloudMeta.availablePeriodes) {
+      for (const rawP of Array.from(discoveredPeriods).sort()) {
         const p = normalizePeriode(rawP);
         if (!p) continue;
         const localFile = localPeriodMap.get(p);
@@ -3501,7 +3538,13 @@ export async function fetchDashboardFromCloud(localSnapshot?: {
               console.warn(`[CloudSync] Gagal mengunduh periode ${p}:`, uErr.message);
               return null;
             }
-            return uRow?.value || null;
+            if (uRow?.value && uRow.value.periode) {
+              return uRow.value;
+            }
+            if (localPeriodMap.has(p)) {
+              return localPeriodMap.get(p);
+            }
+            return null;
           })
         );
         results.forEach((val) => {
@@ -3509,13 +3552,42 @@ export async function fetchDashboardFromCloud(localSnapshot?: {
         });
       }
 
-      const allUptimeFiles = [...keptFiles, ...fetchedFiles]
+      const fileMap = new Map<string, any>();
+      keptFiles.forEach(f => { if (f?.periode) fileMap.set(normalizePeriode(f.periode), f); });
+      fetchedFiles.forEach(f => { if (f?.periode) fileMap.set(normalizePeriode(f.periode), f); });
+      localPeriodMap.forEach((f, p) => {
+        if (!fileMap.has(p)) fileMap.set(p, f);
+      });
+
+      const allUptimeFiles = Array.from(fileMap.values())
         .filter((f) => f && f.periode)
         .map((f) => ({ ...f, periode: normalizePeriode(f.periode) }))
         .sort((a, b) => a.periode.localeCompare(b.periode));
 
       if (allUptimeFiles.length > 0 && masterData.length > 0) {
         const isStillV1 = cloudVersion < CLOUD_DATA_VERSION;
+        const allPeriodNames = allUptimeFiles.map((f) => f.periode);
+        const mergedLocked = Array.from(
+          new Set([...(cloudMeta.lockedPeriodes || []), ...allPeriodNames].map(normalizePeriode).filter(Boolean))
+        ).sort();
+
+        const trendMap = new Map<string, any>();
+        (cloudMeta.globalTrendData || []).forEach((t: any) => {
+          if (t?.periode) trendMap.set(normalizePeriode(t.periode), t);
+        });
+        allUptimeFiles.forEach((f) => {
+          if (!trendMap.has(f.periode)) {
+            trendMap.set(f.periode, buildTrendEntryFromUptimeFile(f));
+          }
+        });
+
+        const healedMeta: CloudDashboardMeta = {
+          ...cloudMeta,
+          availablePeriodes: allPeriodNames,
+          lockedPeriodes: mergedLocked,
+          globalTrendData: Array.from(trendMap.values()).sort((a, b) => a.periode.localeCompare(b.periode))
+        };
+
         return {
           success: true,
           hasData: true,
@@ -3524,10 +3596,10 @@ export async function fetchDashboardFromCloud(localSnapshot?: {
           isPartialFallback: isStillV1,
           masterData,
           parsedUptimeFiles: allUptimeFiles,
-          lockedPeriodes: (cloudMeta.lockedPeriodes || []).map(normalizePeriode),
-          globalTrendData: cloudMeta.globalTrendData || [],
+          lockedPeriodes: mergedLocked,
+          globalTrendData: healedMeta.globalTrendData,
           lastUpdated: cloudMeta.updatedAt,
-          cloudMeta
+          cloudMeta: healedMeta
         };
       }
     }

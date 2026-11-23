@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { 
   UploadCloud, 
@@ -16,10 +16,16 @@ import {
 import { parseMasterData, parseUptimeFile, type MasterRow, type ParsedUptimeFile } from '../utils/excelParser';
 import { matchData, isAbacusWilayah } from '../utils/dataMatcher';
 import { useDataStore } from '../store/useDataStore';
-import { saveMasterData, saveUptimePeriod, unlockPeriode } from '../utils/spreadsheetService';
+import { saveMasterData, saveUptimePeriod, unlockPeriode, fetchDashboardData, getStaticMasterData } from '../utils/spreadsheetService';
 import { fetchDashboardMetaFromCloud, syncFullDatasetToCloud } from '../utils/supabaseService';
 import { isSupabaseConfigured } from '../utils/supabaseClient';
-import { saveDashboardSnapshot } from '../utils/dbCache';
+import { 
+  saveDashboardSnapshot, 
+  loadDashboardSnapshot, 
+  loadCachedUptimeFiles, 
+  loadCachedLockedPeriodes, 
+  loadCachedMasterData 
+} from '../utils/dbCache';
 import { formatBulanTahun, normalizePeriode, getServicePointName } from '../utils/comprehensiveExporter';
 
 const formatMonthPeriode = (periode: string): string => {
@@ -50,6 +56,77 @@ export default function UploadPage() {
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [unlockingPeriode, setUnlockingPeriode] = useState<string | null>(null);
+
+  // Hidrasi otomatis data yang sudah ada dari IndexedDB & Cloud saat halaman dibuka
+  useEffect(() => {
+    let isCancelled = false;
+
+    async function hydrateExistingData() {
+      try {
+        // 1. Coba baca dari snapshot lokal IndexedDB
+        const snap = await loadDashboardSnapshot();
+        if (!isCancelled && snap) {
+          if (snap.masterData?.length && (!rawMasterData || rawMasterData.length === 0)) {
+            setRawMasterData(snap.masterData);
+          }
+          if (snap.parsedUptimeFiles?.length && (!rawUptimeFiles || rawUptimeFiles.length === 0)) {
+            setRawUptimeFiles(snap.parsedUptimeFiles);
+          }
+          if (snap.lockedPeriodes?.length && (!lockedPeriodes || lockedPeriodes.length === 0)) {
+            setLockedPeriodes(snap.lockedPeriodes);
+          }
+          if (snap.matchedMachines?.length && (!machines || machines.length === 0)) {
+            setMachines(snap.matchedMachines);
+          }
+        }
+
+        // 2. Coba baca dari cache terpisah jika snapshot belum terisi
+        if (!isCancelled) {
+          const [cachedMaster, cachedUptime, cachedLocked] = await Promise.all([
+            loadCachedMasterData(),
+            loadCachedUptimeFiles(),
+            loadCachedLockedPeriodes()
+          ]);
+
+          if (cachedMaster?.length && (!rawMasterData || rawMasterData.length === 0)) {
+            setRawMasterData(cachedMaster);
+          }
+          if (cachedUptime?.length && (!rawUptimeFiles || rawUptimeFiles.length === 0)) {
+            setRawUptimeFiles(cachedUptime);
+          }
+          if (cachedLocked?.length && (!lockedPeriodes || lockedPeriodes.length === 0)) {
+            setLockedPeriodes(cachedLocked);
+          }
+        }
+
+        // 3. Sinkronkan dari Cloud Supabase jika tersedia
+        if (!isCancelled && isSupabaseConfigured()) {
+          const cloudData = await fetchDashboardData();
+          if (!isCancelled && cloudData && cloudData.hasData) {
+            if (cloudData.masterData?.length && (!rawMasterData || rawMasterData.length === 0)) {
+              setRawMasterData(cloudData.masterData);
+            }
+            if (cloudData.parsedUptimeFiles?.length && (!rawUptimeFiles || rawUptimeFiles.length === 0)) {
+              setRawUptimeFiles(cloudData.parsedUptimeFiles);
+            }
+            if (cloudData.lockedPeriodes?.length && (!lockedPeriodes || lockedPeriodes.length === 0)) {
+              setLockedPeriodes(cloudData.lockedPeriodes);
+            }
+            if (cloudData.prematchedMachines?.length && (!machines || machines.length === 0)) {
+              setMachines(cloudData.prematchedMachines);
+            }
+          }
+        }
+      } catch (err) {
+        console.warn('Gagal hidrasi data di UploadPage:', err);
+      }
+    }
+
+    hydrateExistingData();
+    return () => {
+      isCancelled = true;
+    };
+  }, []);
 
   const hasExistingMaster = rawMasterData && rawMasterData.length > 0;
   const hasExistingUptime = rawUptimeFiles && rawUptimeFiles.length > 0;
@@ -152,10 +229,6 @@ export default function UploadPage() {
       setError("Pilih minimal satu file: Master Data Mesin atau file Uptime Bulanan untuk diproses.");
       return;
     }
-    if (!hasExistingMaster && !masterFile && uptimeFiles.length > 0) {
-      setError("Belum ada Master Data Mesin di database. Mohon upload file Master Data Mesin terlebih dahulu.");
-      return;
-    }
 
     setIsProcessing(true);
     setError(null);
@@ -163,15 +236,35 @@ export default function UploadPage() {
     setProgress(10);
 
     try {
-      // 1. Parse Master Data
+      // 1. Ambil seluruh data master yang aktif (dari upload baru, state, snapshot, atau cache)
       let activeMasterData: MasterRow[] = rawMasterData || [];
       if (masterFile) {
         setStatusMessage("Mengekstrak file Master Data...");
         activeMasterData = await parseMasterData(masterFile);
         setProgress(25);
+      } else if (!activeMasterData || activeMasterData.length === 0) {
+        try {
+          const snap = await loadDashboardSnapshot();
+          if (snap?.masterData && snap.masterData.length > 0) {
+            activeMasterData = snap.masterData;
+          } else {
+            const cachedM = await loadCachedMasterData();
+            if (cachedM && cachedM.length > 0) {
+              activeMasterData = cachedM;
+            } else {
+              activeMasterData = getStaticMasterData();
+            }
+          }
+        } catch (_) {
+          activeMasterData = getStaticMasterData();
+        }
       }
 
-      // 2. Parse Uptime Files
+      if ((!activeMasterData || activeMasterData.length === 0) && uptimeFiles.length > 0) {
+        throw new Error("Belum ada Master Data Mesin di database. Mohon upload file Master Data Mesin terlebih dahulu.");
+      }
+
+      // 2. Parse Uptime Files yang baru dipilih
       const newlyParsedUptimeFiles: ParsedUptimeFile[] = [];
       if (uptimeFiles.length > 0) {
         setStatusMessage("Mengekstrak file Uptime Bulanan...");
@@ -182,7 +275,7 @@ export default function UploadPage() {
         }
       }
 
-      // 3. Simpan Master Data ke Spreadsheet secara terpisah (Cepat: ~1s)
+      // 3. Simpan Master Data jika ada file master baru yang diupload
       if (masterFile && activeMasterData.length > 0) {
         setStatusMessage(`Menyimpan Master Data (${activeMasterData.length} mesin) ke database...`);
         const mRes = await saveMasterData(activeMasterData);
@@ -192,16 +285,65 @@ export default function UploadPage() {
         setProgress(50);
       }
 
-      // 4. Simpan Uptime bulan demi bulan dengan progress real-time (Cepat: ~1-2s per bulan)
-      let currentLocked = [...(lockedPeriodes || [])];
-      let combinedUptimeFiles: ParsedUptimeFile[] = [...(rawUptimeFiles || [])];
+      // 4. PERTAHANKAN SELURUH DATA UPTIME BULAN SEBELUMNYA (Multi-Layer Merge: Zustand + IndexedDB + Cloud)
+      const existingUptimeMap = new Map<string, ParsedUptimeFile>();
 
+      // Lapisan a: Memory Zustand
+      (rawUptimeFiles || []).forEach(f => {
+        if (f?.periode) existingUptimeMap.set(normalizePeriode(f.periode), f);
+      });
+
+      // Lapisan b: Snapshot IndexedDB
+      try {
+        const snap = await loadDashboardSnapshot();
+        if (snap?.parsedUptimeFiles && Array.isArray(snap.parsedUptimeFiles)) {
+          snap.parsedUptimeFiles.forEach(f => {
+            if (f?.periode && !existingUptimeMap.has(normalizePeriode(f.periode))) {
+              existingUptimeMap.set(normalizePeriode(f.periode), f);
+            }
+          });
+        }
+      } catch (_) {}
+
+      // Lapisan c: Cache Uptime Files di IndexedDB
+      try {
+        const cachedFiles = await loadCachedUptimeFiles();
+        if (Array.isArray(cachedFiles)) {
+          cachedFiles.forEach(f => {
+            if (f?.periode && !existingUptimeMap.has(normalizePeriode(f.periode))) {
+              existingUptimeMap.set(normalizePeriode(f.periode), f);
+            }
+          });
+        }
+      } catch (_) {}
+
+      // Lapisan d: Cloud Supabase jika ada periode lama yang belum masuk lokal
+      if (isSupabaseConfigured()) {
+        try {
+          const cloudData = await fetchDashboardData();
+          if (cloudData?.parsedUptimeFiles && Array.isArray(cloudData.parsedUptimeFiles)) {
+            cloudData.parsedUptimeFiles.forEach(f => {
+              if (f?.periode && !existingUptimeMap.has(normalizePeriode(f.periode))) {
+                existingUptimeMap.set(normalizePeriode(f.periode), f);
+              }
+            });
+          }
+        } catch (_) {}
+      }
+
+      const currentLockedSet = new Set<string>([
+        ...(lockedPeriodes || []).map(normalizePeriode),
+        ...Array.from(existingUptimeMap.keys())
+      ]);
+
+      // Simpan file uptime baru ke database bulan demi bulan
       if (newlyParsedUptimeFiles.length > 0) {
         const totalFiles = newlyParsedUptimeFiles.length;
         for (let i = 0; i < totalFiles; i++) {
           const file = newlyParsedUptimeFiles[i];
-          const monthLabel = formatMonthPeriode(file.periode);
-          const isUpdating = currentLocked.includes(file.periode);
+          const normP = normalizePeriode(file.periode);
+          const monthLabel = formatMonthPeriode(normP);
+          const isUpdating = currentLockedSet.has(normP);
 
           setStatusMessage(`${isUpdating ? 'Memperbarui' : 'Menyimpan'} Uptime ${monthLabel} (${i + 1}/${totalFiles}) ke database...`);
           const uRes = await saveUptimePeriod(file, true);
@@ -210,15 +352,18 @@ export default function UploadPage() {
             throw new Error(uRes.message || uRes.error || `Gagal menyimpan Uptime periode ${monthLabel}`);
           }
 
-          if (!currentLocked.includes(file.periode)) {
-            currentLocked.push(file.periode);
-          }
-          combinedUptimeFiles = combinedUptimeFiles.filter(f => f.periode !== file.periode);
-          combinedUptimeFiles.push(file);
+          currentLockedSet.add(normP);
+          // GABUNGKAN FILE BARU KE MAP SEHINGGA BULAN LAIN TIDAK AKAN PERNAH HILANG!
+          existingUptimeMap.set(normP, file);
 
           setProgress(50 + Math.floor(((i + 1) / totalFiles) * 35));
         }
       }
+
+      // Kumpulan seluruh file uptime (Bulan-bulan sebelumnya + bulan baru yang baru diupload)
+      const combinedUptimeFiles: ParsedUptimeFile[] = Array.from(existingUptimeMap.values())
+        .sort((a, b) => a.periode.localeCompare(b.periode));
+      const currentLocked: string[] = Array.from(currentLockedSet).sort();
 
       // 5. Re-Match Data untuk dashboard
       setStatusMessage("Menyusun performa mesin...");
@@ -252,7 +397,7 @@ export default function UploadPage() {
       const sortedPeriods = Array.from(periods).sort();
       trendData.sort((a, b) => a.periode.localeCompare(b.periode));
 
-      // 7. Update Zustand Store & Simpan Snapshot ke IndexedDB
+      // 7. Update Zustand Store & Simpan Snapshot Lengkap ke IndexedDB
       setProgress(98);
       setMachines(matchedMachines);
       setAvailablePeriodes(sortedPeriods);

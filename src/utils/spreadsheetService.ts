@@ -399,7 +399,7 @@ export const saveUptimePeriod = async (file: ParsedUptimeFile, forceUpdate: bool
     }
   }
 
-  // 2. Local storage / IndexedDB cache
+  // 2. Local storage / IndexedDB cache (Gabungkan snapshot dan cache terpisah agar tidak ada periode yang tercecer)
   try {
     let lockedPeriodes: string[] = await loadCachedLockedPeriodes();
     if (!lockedPeriodes || lockedPeriodes.length === 0) {
@@ -412,40 +412,55 @@ export const saveUptimePeriod = async (file: ParsedUptimeFile, forceUpdate: bool
       return { success: true, skipped: true, periode: normPeriode, lockedPeriodes, message: `Periode ${normPeriode} sudah terkunci.` };
     }
 
-    let existingUptime: ParsedUptimeFile[] = await loadCachedUptimeFiles();
-    if (!existingUptime || existingUptime.length === 0) {
+    const uptimeMap = new Map<string, ParsedUptimeFile>();
+    let snap: any = null;
+    try {
+      snap = await loadDashboardSnapshot();
+      if (snap?.parsedUptimeFiles && Array.isArray(snap.parsedUptimeFiles)) {
+        snap.parsedUptimeFiles.forEach((f: any) => {
+          if (f?.periode) uptimeMap.set(normalizePeriode(f.periode), f);
+        });
+      }
+    } catch (_) {}
+
+    let cachedFiles = await loadCachedUptimeFiles();
+    if (!cachedFiles || cachedFiles.length === 0) {
       const rawExistingUptime = localStorage.getItem(LOCAL_STORAGE_KEYS.UPTIME);
       if (rawExistingUptime) {
-        try { existingUptime = JSON.parse(rawExistingUptime); } catch (e) {}
+        try { cachedFiles = JSON.parse(rawExistingUptime); } catch (e) {}
       }
     }
+    (cachedFiles || []).forEach((f: any) => {
+      if (f?.periode) uptimeMap.set(normalizePeriode(f.periode), f);
+    });
 
-    existingUptime = existingUptime.filter(f => normalizePeriode(f.periode) !== normPeriode);
-    existingUptime.push(compactedFile);
+    // Tambahkan atau update periode yang sedang diproses tanpa menghapus bulan lain
+    uptimeMap.set(normPeriode, compactedFile);
+    const existingUptime = Array.from(uptimeMap.values()).sort((a, b) => a.periode.localeCompare(b.periode));
 
     if (!lockedPeriodes.includes(normPeriode)) {
       lockedPeriodes.push(normPeriode);
     }
+    lockedPeriodes = Array.from(new Set(lockedPeriodes)).sort();
 
     await saveCachedUptimeFiles(existingUptime);
     await saveCachedLockedPeriodes(lockedPeriodes);
 
-    // Perbarui cloudMeta pada snapshot lokal jika tersedia
-    if (latestCloudMeta) {
+    // Perbarui snapshot lokal langsung jika snapshot sudah ada
+    if (snap) {
       try {
-        const snap = await loadDashboardSnapshot();
-        if (snap) {
-          await saveDashboardSnapshot({
-            ...snap,
-            parsedUptimeFiles: existingUptime,
-            lockedPeriodes,
-            cloudMeta: {
-              updatedAt: latestCloudMeta.updatedAt,
-              masterUpdatedAt: latestCloudMeta.masterUpdatedAt,
-              periodUpdatedAt: latestCloudMeta.periodUpdatedAt
-            }
-          });
-        }
+        await saveDashboardSnapshot({
+          ...snap,
+          parsedUptimeFiles: existingUptime,
+          lockedPeriodes,
+          lastUpdated: latestCloudMeta?.updatedAt || snap.lastUpdated || new Date().toISOString(),
+          cloudMeta: latestCloudMeta ? {
+            version: latestCloudMeta.version,
+            updatedAt: latestCloudMeta.updatedAt,
+            masterUpdatedAt: latestCloudMeta.masterUpdatedAt,
+            periodUpdatedAt: latestCloudMeta.periodUpdatedAt
+          } : snap.cloudMeta
+        });
       } catch (_) {}
     }
 
