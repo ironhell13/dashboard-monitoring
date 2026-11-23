@@ -117,6 +117,30 @@ export default function UploadPage() {
             }
           }
         }
+
+        // 4. Jika jumlah file uptime kurang dari 7 bulan, gabungkan baseline seed (/sample-data.json)
+        if (!isCancelled && (!useDataStore.getState().rawUptimeFiles || useDataStore.getState().rawUptimeFiles.length < 7)) {
+          try {
+            const res = await fetch('/sample-data.json');
+            if (res.ok) {
+              const seedData = await res.json();
+              if (seedData && seedData.parsedUptimeFiles && Array.isArray(seedData.parsedUptimeFiles)) {
+                const currentFiles = useDataStore.getState().rawUptimeFiles || [];
+                const m = new Map<string, any>();
+                seedData.parsedUptimeFiles.forEach((f: any) => {
+                  const p = normalizePeriode(f?.periode);
+                  if (p) m.set(p, { ...f, periode: p });
+                });
+                currentFiles.forEach((f: any) => {
+                  const p = normalizePeriode(f?.periode);
+                  if (p) m.set(p, { ...f, periode: p });
+                });
+                const merged = Array.from(m.values()).sort((a, b) => a.periode.localeCompare(b.periode));
+                setRawUptimeFiles(merged);
+              }
+            }
+          } catch (_) {}
+        }
       } catch (err) {
         console.warn('Gagal hidrasi data di UploadPage:', err);
       }
@@ -327,6 +351,24 @@ export default function UploadPage() {
                 existingUptimeMap.set(normalizePeriode(f.periode), f);
               }
             });
+          }
+        } catch (_) {}
+      }
+
+      // Lapisan e: Fallback Baseline Seed (/sample-data.json) jika jumlah bulan kurang dari 7
+      if (existingUptimeMap.size < 7) {
+        try {
+          const res = await fetch('/sample-data.json');
+          if (res.ok) {
+            const seedData = await res.json();
+            if (seedData && seedData.parsedUptimeFiles && Array.isArray(seedData.parsedUptimeFiles)) {
+              seedData.parsedUptimeFiles.forEach((f: any) => {
+                const p = normalizePeriode(f?.periode);
+                if (p && !existingUptimeMap.has(p)) {
+                  existingUptimeMap.set(p, { ...f, periode: p });
+                }
+              });
+            }
           }
         } catch (_) {}
       }

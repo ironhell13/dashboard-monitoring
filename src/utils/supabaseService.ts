@@ -3034,7 +3034,7 @@ export function compactUptimeFileForCloud(file: any, masterWsidsSet?: Set<string
   };
 }
 
-function buildTrendEntryFromUptimeFile(file: any) {
+export function buildTrendEntryFromUptimeFile(file: any) {
   const normPeriode = normalizePeriode(file.periode);
   const isTargetAbacus = (r: any) => {
     const desc = String(r.DESCKCU || '').trim().toUpperCase();
@@ -3426,12 +3426,17 @@ export async function fetchDashboardFromCloud(localSnapshot?: {
 
       const versionsMatch = cloudVersion === CLOUD_DATA_VERSION && localVersion === CLOUD_DATA_VERSION;
 
-      // Cek apakah cache lokal sudah 100% identik dengan Cloud v2
+      // Cek apakah cache lokal sudah 100% identik dengan Cloud v2 (hanya jika data periode tidak berkurang)
+      const localUptimeCount = localSnapshot?.parsedUptimeFiles?.length || 0;
+      const cloudPeriodCount = (cloudMeta.availablePeriodes || []).length;
+
       if (
         versionsMatch &&
         localHasFullData &&
         localMeta?.updatedAt &&
-        localMeta.updatedAt === cloudMeta.updatedAt
+        localMeta.updatedAt === cloudMeta.updatedAt &&
+        localUptimeCount >= cloudPeriodCount &&
+        localUptimeCount >= 7
       ) {
         return {
           success: true,

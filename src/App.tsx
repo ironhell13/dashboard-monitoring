@@ -187,38 +187,43 @@ function App() {
       let loadedCloudUpdatedAt: string | undefined;
       let loadedCloudVersion: number | undefined;
 
-      // STEP 1: Coba muat cache snapshot lokal yang VALID (wajib punya data uptime + vendor/sektor utuh)
+      // STEP 1: Coba muat cache snapshot lokal yang VALID (gabungkan snapshot & cache terpisah)
       try {
         const cached = await loadDashboardSnapshot();
+        const cachedUptime = await loadCachedUptimeFiles();
+
+        const fileMap = new Map<string, any>();
+        (cached?.parsedUptimeFiles || []).forEach((f: any) => {
+          if (f?.periode) fileMap.set(normalizePeriode(f.periode), f);
+        });
+        (cachedUptime || []).forEach((f: any) => {
+          const p = normalizePeriode(f?.periode);
+          if (p && !fileMap.has(p)) fileMap.set(p, f);
+        });
+
+        const initialFiles = Array.from(fileMap.values());
+        const master = cached?.masterData || (await loadCachedMasterData());
+
         if (
           isMounted &&
-          cached &&
-          hasValidUptimeInDataset(cached.parsedUptimeFiles, cached.matchedMachines)
+          master?.length > 0 &&
+          initialFiles.length > 0 &&
+          hasValidUptimeInDataset(initialFiles, cached?.matchedMachines)
         ) {
           applyDataset(
-            cached.masterData || [],
-            cached.parsedUptimeFiles || [],
-            cached.lockedPeriodes || [],
-            cached.lastUpdated,
-            cached.followUpTickets,
-            cached.matchedMachines
+            master,
+            initialFiles,
+            cached?.lockedPeriodes || (await loadCachedLockedPeriodes()) || [],
+            cached?.lastUpdated || null,
+            cached?.followUpTickets,
+            cached?.matchedMachines
           );
-          hasFullData = true;
-          loadedCloudUpdatedAt = cached.cloudMeta?.updatedAt;
-          loadedCloudVersion = cached.cloudMeta?.version;
-          setIsDbLoaded(true);
-        } else if (isMounted) {
-          // Fallback STEP 1b: baca cache terpisah jika snapshot belum terbentuk
-          const [cMaster, cUptime, cLocked] = await Promise.all([
-            loadCachedMasterData(),
-            loadCachedUptimeFiles(),
-            loadCachedLockedPeriodes()
-          ]);
-          if (cMaster?.length > 0 && cUptime?.length > 0) {
-            applyDataset(cMaster, cUptime, cLocked || [], null);
+          if (initialFiles.length >= 7) {
             hasFullData = true;
-            setIsDbLoaded(true);
           }
+          loadedCloudUpdatedAt = cached?.cloudMeta?.updatedAt;
+          loadedCloudVersion = cached?.cloudMeta?.version;
+          setIsDbLoaded(true);
         }
       } catch (cacheErr) {
         console.warn('Cache snapshot lokal belum tersedia:', cacheErr);
@@ -264,6 +269,8 @@ function App() {
         if (dbData && dbData.hasData && validCloudOrLocal) {
           const cloudTs = dbData.cloudMeta?.updatedAt;
           const cloudVer = dbData.cloudMeta?.version;
+          const currentPeriodCount = useDataStore.getState().rawUptimeFiles?.length || 0;
+          const incomingPeriodCount = dbData.parsedUptimeFiles?.length || 0;
           const alreadySyncedSameVersion =
             hasFullData &&
             dbData.source === 'cloud_snapshot' &&
@@ -272,7 +279,9 @@ function App() {
             loadedCloudVersion === CLOUD_DATA_VERSION &&
             cloudTs &&
             loadedCloudUpdatedAt &&
-            cloudTs === loadedCloudUpdatedAt;
+            cloudTs === loadedCloudUpdatedAt &&
+            incomingPeriodCount === currentPeriodCount &&
+            incomingPeriodCount >= 7;
 
           if (!alreadySyncedSameVersion) {
             applyDataset(

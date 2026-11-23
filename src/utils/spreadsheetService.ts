@@ -1,6 +1,6 @@
 import type { MasterRow, ParsedUptimeFile } from './excelParser';
 import { normalizePeriode, getServicePointName } from './comprehensiveExporter';
-import { isAbacusWilayah } from './dataMatcher';
+import { isAbacusWilayah, matchData } from './dataMatcher';
 import { cleanWsid } from './dailyIncidentParser';
 import { getSupabase, isSupabaseConfigured } from './supabaseClient';
 import staticCatalogJson from '../data/staticMachineCatalog.json';
@@ -22,6 +22,7 @@ import {
   saveMasterSnapshotToCloud,
   saveUptimePeriodSnapshotToCloud,
   unlockUptimePeriodInCloud,
+  buildTrendEntryFromUptimeFile,
   pickFieldIC,
   type CloudDashboardMeta
 } from './supabaseService';
@@ -540,179 +541,182 @@ export const fetchDashboardSummary = async (): Promise<DashboardSummaryData | nu
  * dan fallback ke cache lokal IndexedDB yang valid (wajib memiliki data uptime).
  */
 export const fetchDashboardData = async (): Promise<DashboardDbData> => {
-  // 0. Kumpulkan cache lokal yang valid terlebih dahulu untuk inkremental cloud sync & fallback offline
-  let localSnapshotData: DashboardDbData | null = null;
+  // 0. Kumpulkan SEMUA sumber data uptime yang ada di browser (Snapshot, Cached IDB, LocalStorage)
+  const allUptimeMap = new Map<string, ParsedUptimeFile>();
+  let activeMasterData: MasterRow[] = [];
+  let localLocked: string[] = [];
   let localCloudMeta: CloudMetaSnapshot | undefined;
+  let tickets: any[] = [];
+  let prematchedMachines: any[] = [];
 
+  // Sumber A: Snapshot IndexedDB
   try {
     const snapshot = await loadDashboardSnapshot();
-    if (
-      snapshot &&
-      snapshot.masterData?.length > 0 &&
-      hasValidUptimeInDataset(snapshot.parsedUptimeFiles, snapshot.matchedMachines)
-    ) {
+    if (snapshot) {
       localCloudMeta = snapshot.cloudMeta;
-      localSnapshotData = {
-        success: true,
-        hasData: true,
-        source: 'local_cache',
-        masterData: snapshot.masterData,
-        parsedUptimeFiles: (snapshot.parsedUptimeFiles || []).map((f) => ({
-          ...f,
-          periode: normalizePeriode(f.periode)
-        })),
-        lockedPeriodes: (snapshot.lockedPeriodes || []).map(normalizePeriode),
-        lastUpdated: snapshot.lastUpdated,
-        cloudMeta: snapshot.cloudMeta,
-        tickets: snapshot.followUpTickets || [],
-        prematchedMachines: snapshot.matchedMachines
-      };
+      if (snapshot.masterData?.length > 0) activeMasterData = snapshot.masterData;
+      if (snapshot.lockedPeriodes?.length > 0) localLocked = snapshot.lockedPeriodes;
+      if (snapshot.followUpTickets?.length > 0) tickets = snapshot.followUpTickets;
+      if (snapshot.matchedMachines?.length > 0) prematchedMachines = snapshot.matchedMachines;
+
+      (snapshot.parsedUptimeFiles || []).forEach((f) => {
+        const p = normalizePeriode(f?.periode);
+        if (p) allUptimeMap.set(p, { ...f, periode: p });
+      });
     }
   } catch (e) {
     console.warn('Gagal membaca snapshot lokal:', e);
   }
 
-  if (!localSnapshotData) {
-    try {
-      const cachedMaster = await loadCachedMasterData();
-      const cachedUptime = await loadCachedUptimeFiles();
-      const cachedLocked = await loadCachedLockedPeriodes();
-
-      if (cachedMaster && cachedMaster.length > 0 && cachedUptime && cachedUptime.length > 0) {
-        localSnapshotData = {
-          success: true,
-          hasData: true,
-          source: 'local_cache',
-          masterData: cachedMaster,
-          parsedUptimeFiles: cachedUptime.map((f) => ({ ...f, periode: normalizePeriode(f.periode) })),
-          lockedPeriodes: cachedLocked.map(normalizePeriode),
-          lastUpdated: localStorage.getItem(LOCAL_STORAGE_KEYS.LAST_SYNC) || new Date().toISOString()
-        };
-      }
-    } catch (idbErr) {
-      console.warn('Gagal membaca IndexedDB cache:', idbErr);
+  // Sumber B: Cache Uptime Files di IndexedDB
+  try {
+    const cachedFiles = await loadCachedUptimeFiles();
+    (cachedFiles || []).forEach((f) => {
+      const p = normalizePeriode(f?.periode);
+      if (p && !allUptimeMap.has(p)) allUptimeMap.set(p, { ...f, periode: p });
+    });
+    const cLocked = await loadCachedLockedPeriodes();
+    (cLocked || []).forEach((p) => {
+      const np = normalizePeriode(p);
+      if (np && !localLocked.includes(np)) localLocked.push(np);
+    });
+    if (!activeMasterData.length) {
+      const cMaster = await loadCachedMasterData();
+      if (cMaster?.length) activeMasterData = cMaster;
     }
+  } catch (idbErr) {
+    console.warn('Gagal membaca IndexedDB cache terpisah:', idbErr);
   }
 
-  // 1. Prioritas Utama: Sinkronisasi dari Cloud Supabase (menjamin PC & Laptop 100% identik)
+  // Sumber C: LocalStorage Uptime
+  try {
+    const rawLs = localStorage.getItem(LOCAL_STORAGE_KEYS.UPTIME);
+    if (rawLs) {
+      const parsedLs = JSON.parse(rawLs);
+      if (Array.isArray(parsedLs)) {
+        parsedLs.forEach((f) => {
+          const p = normalizePeriode(f?.periode);
+          if (p && !allUptimeMap.has(p)) allUptimeMap.set(p, { ...f, periode: p });
+        });
+      }
+    }
+  } catch (_) {}
+
+  // Sumber D: Cloud Supabase (Single Source of Truth)
   if (isSupabaseConfigured()) {
     try {
-      const cloudRes = await fetchDashboardFromCloud(
-        localSnapshotData
-          ? {
-              masterData: localSnapshotData.masterData,
-              parsedUptimeFiles: localSnapshotData.parsedUptimeFiles,
-              cloudMeta: localCloudMeta
-            }
-          : null
-      );
+      const localFilesArray = Array.from(allUptimeMap.values());
+      const cloudRes = await fetchDashboardFromCloud({
+        masterData: activeMasterData,
+        parsedUptimeFiles: localFilesArray,
+        cloudMeta: localCloudMeta
+      });
 
       if (cloudRes.success && cloudRes.hasData) {
-        if (cloudRes.isUpToDate && localSnapshotData) {
-          return {
-            ...localSnapshotData,
-            source: 'cloud_snapshot',
-            cloudMeta: cloudRes.cloudMeta
+        if (cloudRes.masterData?.length > 0) {
+          activeMasterData = cloudRes.masterData;
+        }
+        if (cloudRes.cloudMeta) {
+          localCloudMeta = {
+            version: cloudRes.cloudMeta.version,
+            updatedAt: cloudRes.cloudMeta.updatedAt,
+            masterUpdatedAt: cloudRes.cloudMeta.masterUpdatedAt,
+            periodUpdatedAt: cloudRes.cloudMeta.periodUpdatedAt
           };
         }
-
-        if (cloudRes.parsedUptimeFiles && cloudRes.parsedUptimeFiles.length > 0 && cloudRes.masterData) {
-          // Sanitasi masterData agar tidak membawa data nasional (> 2.500 mesin)
-          const validMaster = (cloudRes.masterData || []).filter((row: any) => {
-            const rawSektorVal = String(row.sektorBCA || row.Sektor || '').trim();
-            const rawWilayahVal = String(row.wilayahOperasional || row.Wilayah || '').trim();
-            return isAbacusWilayah(rawWilayahVal) || isAbacusWilayah(rawSektorVal) || getServicePointName(rawSektorVal, rawWilayahVal) !== 'Unknown Service Point';
-          });
-          const targetMaster = validMaster.length > 0 ? validMaster : cloudRes.masterData;
-
-          // Hanya simpan ke cache lokal terpisah jika Cloud sudah format v2 yang utuh (bukan fallback v1)
-          if (!cloudRes.isPartialFallback) {
-            saveCachedMasterData(targetMaster).catch(() => {});
-            saveCachedUptimeFiles(cloudRes.parsedUptimeFiles).catch(() => {});
-            saveCachedLockedPeriodes(cloudRes.lockedPeriodes || []).catch(() => {});
-          }
-
-          return {
-            success: true,
-            hasData: true,
-            source: 'cloud_snapshot',
-            isPartialFallback: cloudRes.isPartialFallback,
-            masterData: targetMaster,
-            parsedUptimeFiles: cloudRes.parsedUptimeFiles,
-            lockedPeriodes: cloudRes.lockedPeriodes || [],
-            globalTrendData: cloudRes.globalTrendData || [],
-            lastUpdated: cloudRes.lastUpdated || new Date().toISOString(),
-            cloudMeta: cloudRes.cloudMeta
-          };
-        }
-
-        if (
-          cloudRes.source === 'cloud_relational' &&
-          cloudRes.prematchedMachines &&
-          cloudRes.prematchedMachines.length > 0 &&
-          !localSnapshotData
-        ) {
-          return {
-            success: true,
-            hasData: true,
-            source: 'cloud_relational',
-            isPartialFallback: true,
-            masterData: cloudRes.masterData || [],
-            parsedUptimeFiles: [],
-            lockedPeriodes: cloudRes.lockedPeriodes || [],
-            prematchedMachines: cloudRes.prematchedMachines,
-            lastUpdated: cloudRes.lastUpdated || new Date().toISOString()
-          };
-        }
-      } else if (cloudRes.needsCloudUpgrade && localSnapshotData) {
-        return {
-          ...localSnapshotData,
-          needsCloudUpgrade: true
-        };
+        (cloudRes.parsedUptimeFiles || []).forEach((f) => {
+          const p = normalizePeriode(f?.periode);
+          if (p) allUptimeMap.set(p, { ...f, periode: p });
+        });
+        (cloudRes.lockedPeriodes || []).forEach((p) => {
+          const np = normalizePeriode(p);
+          if (np && !localLocked.includes(np)) localLocked.push(np);
+        });
       }
     } catch (cloudErr) {
-      console.warn('Sinkronisasi Cloud Supabase gagal, menggunakan cache lokal jika tersedia:', cloudErr);
+      console.warn('Sinkronisasi Cloud Supabase gagal, fallback ke akumulasi lokal:', cloudErr);
     }
   }
 
-  // 2. Gunakan cache lokal valid jika Cloud belum memiliki data atau sedang offline
-  if (localSnapshotData) {
-    return localSnapshotData;
-  }
-
-  // 3. Fallback: Coba ambil sample-data.json lengkap (2.043 mesin + Uptime 7 bulan)
-  try {
-    const res = await fetch('/sample-data.json');
-    if (res.ok) {
-      const seedData = await res.json();
-      if (seedData && seedData.hasData && seedData.masterData?.length > 0 && seedData.parsedUptimeFiles?.length > 0) {
-        return {
-          success: true,
-          hasData: true,
-          source: 'local_cache',
-          masterData: seedData.masterData,
-          parsedUptimeFiles: seedData.parsedUptimeFiles,
-          lockedPeriodes: seedData.lockedPeriodes || [],
-          globalTrendData: seedData.globalTrendData || [],
-          lastUpdated: seedData.lastUpdated || new Date().toISOString()
-        };
+  // Sumber E: Fallback Baseline Seed (/sample-data.json) jika jumlah bulan kurang dari 7
+  // Menjamin bulan Februari s/d Agustus tidak pernah hilang meskipun cache sempat tertimpa
+  if (allUptimeMap.size < 7) {
+    try {
+      const res = await fetch('/sample-data.json');
+      if (res.ok) {
+        const seedData = await res.json();
+        if (seedData && seedData.parsedUptimeFiles && Array.isArray(seedData.parsedUptimeFiles)) {
+          seedData.parsedUptimeFiles.forEach((f: any) => {
+            const p = normalizePeriode(f?.periode);
+            if (p && !allUptimeMap.has(p)) {
+              allUptimeMap.set(p, { ...f, periode: p });
+            }
+          });
+          if (!activeMasterData.length && seedData.masterData?.length > 0) {
+            activeMasterData = seedData.masterData;
+          }
+          (seedData.lockedPeriodes || []).forEach((p: any) => {
+            const np = normalizePeriode(p);
+            if (np && !localLocked.includes(np)) localLocked.push(np);
+          });
+        }
       }
+    } catch (seedErr) {
+      console.warn('Gagal memuat sample-data.json:', seedErr);
     }
-  } catch (seedErr) {
-    console.warn('Gagal memuat sample-data.json fallback:', seedErr);
   }
 
-  // 4. Fallback Terakhir: Katalog Master statis TANPA data uptime (hasData = false agar UI tidak menyangka 100% uptime valid)
-  const fallbackMaster = getStaticMasterData();
+  // Jika master data masih kosong, gunakan katalog statis
+  if (!activeMasterData.length) {
+    activeMasterData = getStaticMasterData();
+  }
+
+  const combinedFiles = Array.from(allUptimeMap.values())
+    .map((f) => ({ ...f, periode: normalizePeriode(f.periode) }))
+    .sort((a, b) => a.periode.localeCompare(b.periode));
+
+  const sortedLocked = Array.from(
+    new Set([...localLocked, ...combinedFiles.map((f) => f.periode)])
+  ).sort();
+
+  // Re-match performa mesin dengan seluruh bulan yang terkumpul
+  const reMatched = matchData(activeMasterData, combinedFiles);
+
+  // Buat globalTrendData lengkap untuk seluruh bulan yang terkumpul
+  const trendData: any[] = [];
+  combinedFiles.forEach((f) => {
+    trendData.push(buildTrendEntryFromUptimeFile(f));
+  });
+
+  // Simpan data yang SUDAH PULIH & LENGKAP ini kembali ke Snapshot & Cache IndexedDB
+  if (combinedFiles.length > 0) {
+    saveDashboardSnapshot({
+      masterData: activeMasterData,
+      parsedUptimeFiles: combinedFiles,
+      lockedPeriodes: sortedLocked,
+      followUpTickets: tickets,
+      lastUpdated: new Date().toISOString(),
+      matchedMachines: reMatched,
+      cloudMeta: localCloudMeta,
+      timestamp: Date.now()
+    }).catch(() => {});
+
+    saveCachedUptimeFiles(combinedFiles).catch(() => {});
+    saveCachedLockedPeriodes(sortedLocked).catch(() => {});
+  }
+
   return {
     success: true,
-    hasData: false,
-    source: 'none',
-    masterData: fallbackMaster as any,
-    parsedUptimeFiles: [],
-    lockedPeriodes: [],
-    prematchedMachines: [],
-    lastUpdated: null
+    hasData: combinedFiles.length > 0,
+    source: isSupabaseConfigured() ? 'cloud_snapshot' : 'local_cache',
+    masterData: activeMasterData,
+    parsedUptimeFiles: combinedFiles,
+    lockedPeriodes: sortedLocked,
+    globalTrendData: trendData.sort((a, b) => a.periode.localeCompare(b.periode)),
+    prematchedMachines: reMatched,
+    tickets,
+    lastUpdated: new Date().toISOString(),
+    cloudMeta: localCloudMeta
   };
 };
 
