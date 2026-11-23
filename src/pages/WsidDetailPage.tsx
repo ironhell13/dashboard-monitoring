@@ -35,6 +35,7 @@ import {
   saveIncidentActionApi,
   type IncidentHistoryItem
 } from '../utils/monitoringService';
+import { getMachineMetadata } from '../utils/supabaseService';
 
 export default function WsidDetailPage() {
   const { wsid } = useParams<{ wsid: string }>();
@@ -76,6 +77,20 @@ export default function WsidDetailPage() {
         monthlyData: []
       } as any;
     }
+
+    const meta = getMachineMetadata(cleanWsid);
+    if (meta) {
+      return {
+        wsid: meta.wsid,
+        lokasi: meta.lokasi || '-',
+        vendor: meta.vendor || '-',
+        tipeMesin: meta.tipe_mesin || '-',
+        sektorBCA: meta.sektor_bca || '-',
+        wilayahOperasional: meta.service_point || '-',
+        monthlyData: []
+      } as any;
+    }
+
     return null;
   }, [machines, rawMasterData, cleanWsid]);
 

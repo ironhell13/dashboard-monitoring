@@ -115,6 +115,7 @@ import {
   normalizeServicePoint,
   resolveServicePoint,
   getServicePointForSektor,
+  detectSektorAndSpFromText,
   type DailyIncidentRow,
   type WsidProblemDateAggregation
 } from '../utils/dailyIncidentParser';
@@ -1053,9 +1054,26 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
       .filter((r) => !isEndTimeFilled(r.endTime))
       .map((r) => {
         const key = (r.incidentNumber && r.incidentNumber !== '-') ? r.incidentNumber : `${r.wsid}|${r.eventCodeDesc}|${r.startTime}`;
+        const meta = getMachineMetadata(r.wsid) || {};
         const spParts = (r.servicePointSektor || '').split('-');
-        const sPoint = spParts[0]?.trim() || '-';
-        const sektor = spParts[1]?.trim() || '-';
+        let sPoint = (r.servicePoint && r.servicePoint !== '-' && r.servicePoint !== 'Wilayah Operasional' && r.servicePoint !== 'Unknown Service Point')
+          ? r.servicePoint
+          : (meta.service_point || spParts[0]?.trim() || '-');
+        let sektor = (r.sektor && r.sektor !== '-' && r.sektor !== 'Wilayah Operasional' && r.sektor !== 'Abacus Cash Jakarta')
+          ? r.sektor
+          : (meta.sektor_bca || (spParts.length > 1 ? spParts.slice(1).join('-').trim() : '-'));
+
+        if (sektor === '-' || sektor === 'UNKNOWN') {
+          const detected = detectSektorAndSpFromText(r.lokasi || meta.lokasi);
+          if (detected) {
+            sektor = detected.sektor;
+            if (sPoint === '-' || sPoint === 'ACJK') sPoint = detected.servicePoint;
+          }
+        }
+        if (sektor !== '-' && (sPoint === '-' || !['ACJK', 'ACBT', 'ACCK', 'ACSR', 'ACBS', 'ACRW', 'TAG'].includes(sPoint))) {
+          const spFromSek = getServicePointForSektor(sektor);
+          if (spFromSek) sPoint = spFromSek;
+        }
 
         const sTime = formatStartProblemTime(r.startTime) !== '-' ? formatStartProblemTime(r.startTime) : getDisplayStartTime(r);
         const dText = (!r.detail || r.detail === '-' || isDateLikeString(r.detail)) ? '-' : r.detail;
@@ -1114,21 +1132,41 @@ export default function MonitoringPage({ onLogout, isKaOps = false, userRole }: 
           const dText = (!r.detail || r.detail === '-' || isDateLikeString(r.detail)) ? '-' : r.detail;
           const actText = (r.actionTerakhir && r.actionTerakhir !== '-' && !isTechnicalMachineLog(r.actionTerakhir)) ? r.actionTerakhir : '-';
           const hasAction = actText !== '-';
+          const meta = getMachineMetadata(r.wsid) || {};
           const spParts = (r.servicePointSektor || '').split('-');
+          let sp = (r.servicePoint && r.servicePoint !== '-' && r.servicePoint !== 'Wilayah Operasional' && r.servicePoint !== 'Unknown Service Point')
+            ? r.servicePoint
+            : (meta.service_point || spParts[0]?.trim() || '-');
+          let sek = (r.sektor && r.sektor !== '-' && r.sektor !== 'Wilayah Operasional' && r.sektor !== 'Abacus Cash Jakarta')
+            ? r.sektor
+            : (meta.sektor_bca || (spParts.length > 1 ? spParts.slice(1).join('-').trim() : '-'));
+
+          if (sek === '-' || sek === 'UNKNOWN') {
+            const detected = detectSektorAndSpFromText(r.lokasi || meta.lokasi);
+            if (detected) {
+              sek = detected.sektor;
+              if (sp === '-' || sp === 'ACJK') sp = detected.servicePoint;
+            }
+          }
+          if (sek !== '-' && (sp === '-' || !['ACJK', 'ACBT', 'ACCK', 'ACSR', 'ACBS', 'ACRW', 'TAG'].includes(sp))) {
+            const spFromSek = getServicePointForSektor(sek);
+            if (spFromSek) sp = spFromSek;
+          }
+
           const compDate = toComparableDate(sTime || r.dateStr || r.tanggal || '');
           const epochStart = parseToEpoch(sTime);
           const epochEnd = parseToEpoch(eTime);
-          const searchIdx = `${r.wsid || ''} ${r.lokasi || ''} ${r.eventCodeDesc || ''} ${r.servicePoint || spParts[0]?.trim() || ''} ${r.sektor || spParts[1]?.trim() || ''} ${r.vendorMesin || r.vendor || ''} ${r.typeMesin || ''} ${actText} ${dText}`.toLowerCase();
+          const searchIdx = `${r.wsid || ''} ${r.lokasi || meta.lokasi || ''} ${r.eventCodeDesc || ''} ${sp} ${sek} ${r.vendorMesin || r.vendor || meta.vendor || ''} ${r.typeMesin || meta.tipe_mesin || ''} ${actText} ${dText}`.toLowerCase();
 
           return {
             incidentKey: key,
             incidentNumber: r.incidentNumber || '-',
             wsid: r.wsid,
-            lokasi: r.lokasi || '-',
-            servicePoint: r.servicePoint || spParts[0]?.trim() || '-',
-            sektor: r.sektor || spParts[1]?.trim() || '-',
-            typeMesin: r.typeMesin || '-',
-            vendor: r.vendorMesin || '-',
+            lokasi: r.lokasi && r.lokasi !== '-' ? r.lokasi : (meta.lokasi || '-'),
+            servicePoint: sp,
+            sektor: sek,
+            typeMesin: r.typeMesin && r.typeMesin !== '-' ? r.typeMesin : (meta.tipe_mesin || '-'),
+            vendor: r.vendorMesin && r.vendorMesin !== '-' ? r.vendorMesin : (meta.vendor || '-'),
             eventCode: r.eventCode || '-',
             eventCodeDesc: r.eventCodeDesc,
             detail: dText,

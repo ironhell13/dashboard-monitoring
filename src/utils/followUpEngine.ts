@@ -2,6 +2,8 @@ import type { MachineData } from '../store/useDataStore';
 import type { FollowUpTicket } from './spreadsheetService';
 import { normalizePeriode } from './comprehensiveExporter';
 import { evaluateMachineHealth, getTargetSla, isBcaMachine, isActiveMachine, sortPeriode } from './slaHelper';
+import { getMachineMetadata } from './supabaseService';
+import { cleanSektorName, detectSektorAndSpFromText } from './dailyIncidentParser';
 
 export interface FollowUpRecommendation {
   wsid: string;
@@ -136,13 +138,23 @@ export const getFollowUpRecommendations = (
       uptime: Number(Math.max(0, 100 - (Number(h.total) || 0)).toFixed(2))
     }));
 
+    const meta = getMachineMetadata(machine.wsid);
+    let resolvedSek = (machine.sektorBCA && machine.sektorBCA !== 'Unknown') ? machine.sektorBCA : (meta?.sektor_bca || '');
+    if (!resolvedSek || resolvedSek === 'Unknown') {
+      const detected = detectSektorAndSpFromText(machine.lokasi || meta?.lokasi);
+      if (detected) resolvedSek = detected.sektorWithSp;
+    }
+    const finalSek = resolvedSek || 'Unknown';
+    const finalLokasi = machine.lokasi && machine.lokasi !== 'Unknown Lokasi' ? machine.lokasi : (meta?.lokasi || 'Unknown Lokasi');
+    const finalWilayah = machine.wilayahOperasional || meta?.service_point || (finalSek.includes('-') ? finalSek.split('-')[0].trim() : 'ABACUS JAKARTA');
+
     recommendations.push({
       wsid: machine.wsid,
-      lokasi: machine.lokasi || 'Unknown Lokasi',
-      sektor: machine.sektorBCA || 'Unknown',
-      wilayah: machine.wilayahOperasional || 'ABACUS JAKARTA',
-      vendor: machine.vendor && machine.vendor !== '-' ? machine.vendor : 'Vendor BCA',
-      jenisMesin: machine.jenisMesin || 'ATM',
+      lokasi: finalLokasi,
+      sektor: finalSek,
+      wilayah: finalWilayah,
+      vendor: machine.vendor && machine.vendor !== '-' ? machine.vendor : (meta?.vendor || 'Vendor BCA'),
+      jenisMesin: machine.jenisMesin || meta?.jenis_mesin || 'ATM',
       latestPeriode: isAll ? 'ALL' : normActivePeriode,
       latestUptime: health.currentUptime,
       priority,

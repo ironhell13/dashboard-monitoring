@@ -6,6 +6,7 @@ import * as XLSX from 'xlsx';
 import { Download, MapPin, ChevronDown, ChevronUp, ArrowUpDown, ArrowUp, ArrowDown, X, ChevronRight } from 'lucide-react';
 import { exportServicePointExcel, SERVICE_POINT_MAP, getServicePointName } from '../utils/comprehensiveExporter';
 import { cleanSektorName } from '../utils/dailyIncidentParser';
+import { getResolvedMachineSektorAndSp } from './AllWsidPage';
 import { aggregateMachinesData, getFrxDurForCategory } from '../utils/problemCalculator';
 import StickyTableWrapper from '../components/StickyTableWrapper';
 import UptimeDataStatusBanner, { useHasUptimeData } from '../components/UptimeDataStatusBanner';
@@ -75,7 +76,10 @@ export default function ServicePointPage() {
     }>();
 
     filteredData.forEach(m => {
-      const groupName = getServicePointName(m.sektorBCA, m.wilayahOperasional);
+      const { sektor: resSek, servicePoint: resSp } = getResolvedMachineSektorAndSp(m);
+      const groupName = resSp && resSp !== 'Unknown Service Point' && !resSp.startsWith('Unknown')
+        ? (SERVICE_POINT_MAP[resSp] || resSp)
+        : getServicePointName(m.sektorBCA, m.wilayahOperasional);
 
       if (!map.has(groupName)) {
         map.set(groupName, { servicePoint: groupName, machines: [], machinesBCA: [], sektorMap: new Map() });
@@ -87,8 +91,7 @@ export default function ServicePointPage() {
         item.machinesBCA.push(m);
       }
 
-      const clean = cleanSektorName(m.sektorBCA);
-      const sektorName = clean !== '-' ? clean : (m.sektorBCA || 'Unknown Sektor');
+      const sektorName = resSek !== '-' ? resSek : 'Unknown Sektor';
       if (!item.sektorMap.has(sektorName)) {
         item.sektorMap.set(sektorName, []);
       }

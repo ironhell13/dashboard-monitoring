@@ -1118,12 +1118,20 @@ const staticCatalog = staticCatalogJson as Record<string, {
 export function getMachineMetadata(wsid?: string): any {
   if (!wsid) return null;
   const w = String(wsid).trim().toUpperCase();
-  const c = staticCatalog[w] || {};
+  const unpadded = w.replace(/^0+/, '');
+  const padded = (/^\d+$/.test(w) && w.length <= 4) ? w.padStart(4, '0') : w;
+  const cleaned = cleanWsid(w);
+
+  // Coba semua varian kunci di catalog statis (exact, unpadded, padded, cleaned)
+  const c = staticCatalog[w] || staticCatalog[unpadded] || staticCatalog[padded] || (cleaned ? staticCatalog[cleaned] : null) || {};
 
   try {
     const store = useDataStore.getState();
     const list = (store.rawMasterData && store.rawMasterData.length > 0) ? store.rawMasterData : (store.machines || []);
-    const found = list.find((m: any) => String(m.wsid || m.WSID || '').trim().toUpperCase() === w);
+    const found = list.find((m: any) => {
+      const mw = String(m.wsid || m.WSID || '').trim().toUpperCase();
+      return mw === w || mw === unpadded || mw === padded || (cleaned && mw === cleaned);
+    });
     if (found) {
       const sp = resolveServicePoint(found);
       const rawSek = found.sektorBCA || found.sektor || found.Sektor || found.sektor_bca || c.sektorBCA || '-';
@@ -1152,7 +1160,7 @@ export function getMachineMetadata(wsid?: string): any {
   } catch (_) {}
 
   // Fallback ke static catalog jika belum termuat di store
-  if (c && c.wsid) {
+  if (c && (c.wsid || c.sektorBCA)) {
     const sp = getServicePointForSektor(c.sektorBCA) || 'ACJK';
     return {
       wsid: w,
@@ -1177,7 +1185,7 @@ function getBaseStaticMachinesMap(): Map<string, any> {
     for (const k in staticCatalog) {
       const c = staticCatalog[k];
       const sp = getServicePointForSektor(c.sektorBCA) || 'ACJK';
-      _baseStaticMachinesMap.set(k, {
+      const meta = {
         wsid: c.wsid,
         lokasi: c.lokasi,
         service_point: sp,
@@ -1187,7 +1195,15 @@ function getBaseStaticMachinesMap(): Map<string, any> {
         jenis_mesin: c.jenisMesin,
         hari: c.hari,
         jam: c.jam
-      });
+      };
+      _baseStaticMachinesMap.set(k, meta);
+      // Daftarkan juga varian unpadded dan padded untuk WSID numerik
+      if (/^\d+$/.test(k)) {
+        const unp = k.replace(/^0+/, '');
+        if (unp) _baseStaticMachinesMap.set(unp, meta);
+        const pad = k.padStart(4, '0');
+        _baseStaticMachinesMap.set(pad, meta);
+      }
     }
   }
   return _baseStaticMachinesMap;
@@ -1207,25 +1223,32 @@ export function getMachinesMap(): Map<string, any> {
         const sp = resolveServicePoint(m);
         const rawSek = m.sektorBCA || m.sektor || m.Sektor || m.sektor_bca || '-';
         const existing = map.get(w) || {};
-        map.set(w, {
+        const meta = {
           wsid: w,
           lokasi: m.lokasi || m['Nama Lokasi'] || existing.lokasi || '-',
-          service_point: sp || existing.service_point || 'ACJK',
+          service_point: (sp && sp !== '-' && sp !== 'Wilayah Operasional') ? sp : (existing.service_point || 'ACJK'),
           sektor_bca: rawSek !== '-' ? rawSek : (existing.sektor_bca || '-'),
           tipe_mesin: m.tipeMesin || m['Tipe Mesin'] || existing.tipe_mesin || '-',
           vendor: (m.vendor && m.vendor !== '-') ? m.vendor : (m.Vendor || existing.vendor || '-'),
           jenis_mesin: m.jenisMesin || m.jenis_mesin || existing.jenis_mesin || 'ATM',
           hari: m.hari || existing.hari || 'MON-SUN',
           jam: m.jam || existing.jam || '(00:00 - 23:59)'
-        });
+        };
+        map.set(w, meta);
+        if (/^\d+$/.test(w)) {
+          const unp = w.replace(/^0+/, '');
+          if (unp) map.set(unp, meta);
+          const pad = w.padStart(4, '0');
+          map.set(pad, meta);
+        }
       }
     }
   } catch (_) {}
   return map;
 }
 
-import { isEndTimeFilled, normalizeServicePoint, resolveServicePoint, cleanSektorName, getServicePointForSektor } from './dailyIncidentParser';
-export { isEndTimeFilled, normalizeServicePoint, resolveServicePoint, cleanSektorName, getServicePointForSektor } from './dailyIncidentParser';
+import { isEndTimeFilled, normalizeServicePoint, resolveServicePoint, cleanSektorName, getServicePointForSektor, detectSektorAndSpFromText } from './dailyIncidentParser';
+export { isEndTimeFilled, normalizeServicePoint, resolveServicePoint, cleanSektorName, getServicePointForSektor, detectSektorAndSpFromText } from './dailyIncidentParser';
 export type { OpenIncidentItem } from './monitoringService';
 
 export function extractDateStrFromRaw(rawDate: any): string {
@@ -1282,10 +1305,29 @@ export function mapRowToDailyIncidentRow(row: any, machine?: any): DailyIncident
   const hourNumber = parseInt(timeOnly.split(':')[0] || '0', 10) || 0;
   const hourStr = `${String(hourNumber).padStart(2, '0')}:00`;
 
-  const sp = resolveServicePoint(m, row);
+  let sp = resolveServicePoint(m, row);
   const rawSek = m.sektor_bca || row.sektor || row.sektor_bca || '-';
   const cleanSek = cleanSektorName(rawSek);
-  const sek = cleanSek !== '-' ? cleanSek : (rawSek !== '-' ? rawSek : '-');
+  let sek = cleanSek !== '-' ? cleanSek : (rawSek !== '-' ? rawSek : '-');
+
+  // Jika sektor masih '-', coba deteksi dari teks lokasi
+  if (sek === '-' || sek === 'UNKNOWN') {
+    const loc = m.lokasi || row.lokasi || '';
+    const detected = detectSektorAndSpFromText(loc);
+    if (detected) {
+      sek = detected.sektor;
+      if (sp === '-' || sp === 'ACJK') {
+        sp = detected.servicePoint;
+      }
+    }
+  }
+
+  // Sinkronkan SP jika sektor sudah valid
+  if (sek !== '-' && (sp === '-' || !['ACJK', 'ACBT', 'ACCK', 'ACSR', 'ACBS', 'ACRW', 'TAG'].includes(sp))) {
+    const spFromSek = getServicePointForSektor(sek);
+    if (spFromSek) sp = spFromSek;
+  }
+
   const spSek = (sp !== '-' && sek !== '-') ? `${sp} - ${sek}` : (sp !== '-' ? sp : (sek !== '-' ? sek : '-'));
   const dur = Math.round(Number(row.duration_minutes || row.durasi || row.durationRaw || 0));
 
@@ -1334,10 +1376,28 @@ export function mapRowToOpenIncident(row: any, machine?: any): OpenIncidentItem 
     ? m.sektor_bca
     : (m.sektorBCA || m.sektor || m.Sektor || row.sektor || row.sektor_bca || fallbackMeta.sektor_bca || fallbackMeta.sektorBCA || fallbackMeta.sektor || '-');
   const cleanSek = cleanSektorName(rawSek);
-  const sek = cleanSek !== '-' ? cleanSek : (rawSek !== '-' ? rawSek : '-');
+  let sek = cleanSek !== '-' ? cleanSek : (rawSek !== '-' ? rawSek : '-');
 
   // Resolusi SP:
-  const sp = resolveServicePoint(m, row);
+  let sp = resolveServicePoint(m, row);
+
+  // Jika sektor masih '-', coba deteksi dari teks lokasi
+  if (sek === '-' || sek === 'UNKNOWN') {
+    const loc = m.lokasi || row.lokasi || fallbackMeta.lokasi || '';
+    const detected = detectSektorAndSpFromText(loc);
+    if (detected) {
+      sek = detected.sektor;
+      if (sp === '-' || sp === 'ACJK') {
+        sp = detected.servicePoint;
+      }
+    }
+  }
+
+  // Sinkronkan SP jika sektor sudah valid
+  if (sek !== '-' && (sp === '-' || !['ACJK', 'ACBT', 'ACCK', 'ACSR', 'ACBS', 'ACRW', 'TAG'].includes(sp))) {
+    const spFromSek = getServicePointForSektor(sek);
+    if (spFromSek) sp = spFromSek;
+  }
 
   const rawType = (m.tipe_mesin && m.tipe_mesin !== '-' && m.tipe_mesin !== 'N/A')
     ? m.tipe_mesin
@@ -1456,8 +1516,8 @@ export async function fetchOpenIncidentsSupabase(filters?: { forceSync?: boolean
       const meta = {
         wsid: row.wsid || cleanWsid,
         lokasi: (row.lokasi && row.lokasi !== '-') ? row.lokasi : (metaLookup.lokasi || '-'),
-        servicePoint: (row.service_point && row.service_point !== '-') ? row.service_point : (metaLookup.service_point || metaLookup.servicePoint || '-'),
-        sektor: (row.sektor_bca && row.sektor_bca !== '-') ? row.sektor_bca : (metaLookup.sektor_bca || metaLookup.sektorBCA || metaLookup.sektor || '-'),
+        servicePoint: (row.service_point && row.service_point !== '-' && row.service_point !== 'Wilayah Operasional' && row.service_point !== 'Unknown Service Point') ? row.service_point : (metaLookup.service_point || metaLookup.servicePoint || '-'),
+        sektor: (row.sektor_bca && row.sektor_bca !== '-' && row.sektor_bca !== 'Wilayah Operasional') ? row.sektor_bca : (metaLookup.sektor_bca || metaLookup.sektorBCA || metaLookup.sektor || '-'),
         typeMesin: (row.tipe_mesin && row.tipe_mesin !== '-') ? row.tipe_mesin : (metaLookup.tipe_mesin || metaLookup.tipeMesin || '-'),
         vendor: (row.vendor && row.vendor !== '-' && row.vendor !== 'N/A') ? row.vendor : (metaLookup.vendor || metaLookup.Vendor || metaLookup.vendorMesin || '-'),
         jenis_mesin: metaLookup.jenis_mesin || metaLookup.jenisMesin || 'ATM',
@@ -1544,16 +1604,19 @@ export async function uploadIncidentsToSupabase(payload: {
     ));
     for (let m = 0; m < uniqueWsids.length; m += 100) {
       const wBatch = uniqueWsids.slice(m, m + 100);
-      const stubs = wBatch.map((w) => ({
-        wsid: w,
-        lokasi: '-',
-        tipe_mesin: '-',
-        vendor: '-',
-        wilayah_operasional: 'Wilayah Operasional',
-        sektor_bca: '-'
-      }));
+      const stubs = wBatch.map((w) => {
+        const meta = getMachineMetadata(w) || {};
+        return {
+          wsid: w,
+          lokasi: meta.lokasi || '-',
+          tipe_mesin: meta.tipe_mesin || '-',
+          vendor: meta.vendor || '-',
+          wilayah_operasional: meta.service_point || 'ABACUS JAKARTA',
+          sektor_bca: meta.sektor_bca || '-'
+        };
+      });
       try {
-        await client.from('machines').upsert(stubs, { onConflict: 'wsid', ignoreDuplicates: true });
+        await client.from('machines').upsert(stubs, { onConflict: 'wsid' });
       } catch (_) {}
     }
 
@@ -2426,10 +2489,24 @@ export async function fetchFrequencyMatrixSupabase(month: string): Promise<{
       const key = `${cleanW}__${problem || '-'}`;
       if (!map[key]) {
         const meta = machinesMap.get(cleanW) || getMachineMetadata(cleanW) || {};
-        const sp = resolveServicePoint(meta);
+        let sp = resolveServicePoint(meta);
         const rawSek = meta.sektor_bca || meta.sektor || '-';
         const cleanSek = cleanSektorName(rawSek);
-        const sek = cleanSek !== '-' ? cleanSek : (rawSek !== '-' ? rawSek : '-');
+        let sek = cleanSek !== '-' ? cleanSek : (rawSek !== '-' ? rawSek : '-');
+
+        // Jika sektor masih '-', coba deteksi dari lokasi
+        if (sek === '-' || sek === 'UNKNOWN') {
+          const detected = detectSektorAndSpFromText(meta.lokasi);
+          if (detected) {
+            sek = detected.sektor;
+            if (sp === '-' || sp === 'ACJK') sp = detected.servicePoint;
+          }
+        }
+        if (sek !== '-' && (sp === '-' || !['ACJK', 'ACBT', 'ACCK', 'ACSR', 'ACBS', 'ACRW', 'TAG'].includes(sp))) {
+          const spFromSek = getServicePointForSektor(sek);
+          if (spFromSek) sp = spFromSek;
+        }
+
         const servicePointSektor = (sp && sek && sp !== '-' && sek !== '-')
           ? (sek.includes('-') ? sek : `${sp} - ${sek}`)
           : (sek !== '-' ? sek : sp);

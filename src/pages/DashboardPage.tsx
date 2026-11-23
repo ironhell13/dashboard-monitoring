@@ -12,6 +12,7 @@ import {
 } from 'lucide-react';
 import { exportDashboardExcel, SERVICE_POINT_MAP, getServicePointName, formatBulanTahun } from '../utils/comprehensiveExporter';
 import { cleanSektorName, normalizeServicePoint } from '../utils/dailyIncidentParser';
+import { getResolvedMachineSektorAndSp } from './AllWsidPage';
 import StickyTableWrapper from '../components/StickyTableWrapper';
 import { useHasUptimeData } from '../components/UptimeDataStatusBanner';
 import { 
@@ -112,7 +113,7 @@ export default function DashboardPage() {
   const servicePointOptions = useMemo(() => {
     const spSet = new Set<string>();
     filteredMachines.forEach(m => {
-      const sp = normalizeServicePoint(getServicePointName(m.sektorBCA, m.wilayahOperasional));
+      const { servicePoint: sp } = getResolvedMachineSektorAndSp(m);
       if (sp && sp !== 'Unknown Service Point' && !sp.startsWith('Unknown')) {
         spSet.add(sp);
       }
@@ -131,7 +132,8 @@ export default function DashboardPage() {
     }>();
 
     filteredMachines.forEach(m => {
-      const spName = normalizeServicePoint(getServicePointName(m.sektorBCA, m.wilayahOperasional));
+      const { sektor: resSek, servicePoint: resSp } = getResolvedMachineSektorAndSp(m);
+      const spName = resSp;
 
       let key = spName;
       let displayName = spName;
@@ -141,8 +143,7 @@ export default function DashboardPage() {
         if (filterServicePoint !== 'ALL' && spName !== filterServicePoint) {
           return;
         }
-        const clean = cleanSektorName(m.sektorBCA);
-        const sektorName = clean !== '-' ? clean : (m.sektorBCA || 'Unknown Sektor');
+        const sektorName = resSek !== '-' ? resSek : 'Unknown Sektor';
         key = `${spName}:::${sektorName}`;
         displayName = sektorName;
       }
@@ -253,11 +254,11 @@ export default function DashboardPage() {
         const unitMachines = filteredMachines.filter(m => {
           if (m.klienStatus !== 'BCA') return false;
           if (groupBy === 'SERVICE_POINT') {
-            const sp = normalizeServicePoint(getServicePointName(m.sektorBCA, m.wilayahOperasional));
+            const { servicePoint: sp } = getResolvedMachineSektorAndSp(m);
             return sp === unit.name;
           } else {
-            const clean = cleanSektorName(m.sektorBCA);
-            const sektorName = clean !== '-' ? clean : (m.sektorBCA || 'Unknown Sektor');
+            const { sektor: resSek } = getResolvedMachineSektorAndSp(m);
+            const sektorName = resSek !== '-' ? resSek : 'Unknown Sektor';
             return sektorName === unit.name;
           }
         });

@@ -30,10 +30,49 @@ import {
   Wrench
 } from 'lucide-react';
 import { exportAllWsidExcel, SERVICE_POINT_MAP, getServicePointName } from '../utils/comprehensiveExporter';
-import { cleanSektorName, normalizeServicePoint } from '../utils/dailyIncidentParser';
+import { cleanSektorName, normalizeServicePoint, resolveServicePoint, detectSektorAndSpFromText } from '../utils/dailyIncidentParser';
+import { getMachineMetadata } from '../utils/supabaseService';
 import { evaluateMachineHealth, type MachineHealthStatus } from '../utils/slaHelper';
 import { useDataStore, type MachineData } from '../store/useDataStore';
 import UptimeDataStatusBanner, { useHasUptimeData } from '../components/UptimeDataStatusBanner';
+
+export function getResolvedMachineSektorAndSp(m: MachineData): { sektor: string; servicePoint: string } {
+  let rawSek = m.sektorBCA || '';
+  let cleanSek = cleanSektorName(rawSek);
+  let sek = cleanSek !== '-' && cleanSek !== 'UNKNOWN' ? cleanSek : '';
+  let sp = normalizeServicePoint(getServicePointName(m.sektorBCA, m.wilayahOperasional));
+  if (sp === 'Unknown Service Point' || sp.startsWith('Unknown')) sp = '';
+
+  if (!sek || !sp) {
+    const meta = getMachineMetadata(m.wsid);
+    if (meta) {
+      if (!sek && meta.sektor_bca && meta.sektor_bca !== '-') {
+        const c = cleanSektorName(meta.sektor_bca);
+        if (c !== '-') sek = c;
+      }
+      if (!sp && meta.service_point && meta.service_point !== '-' && meta.service_point !== 'Wilayah Operasional') {
+        sp = meta.service_point;
+      }
+    }
+  }
+
+  if (!sek) {
+    const detected = detectSektorAndSpFromText(m.lokasi);
+    if (detected) {
+      sek = detected.sektor;
+      if (!sp) sp = detected.servicePoint;
+    }
+  }
+
+  if (!sp) {
+    sp = resolveServicePoint(m);
+  }
+
+  return {
+    sektor: sek || '-',
+    servicePoint: sp && sp !== 'Unknown Service Point' && !sp.startsWith('Unknown') ? sp : 'ACJK'
+  };
+}
 
 export default function AllWsidPage() {
   const navigate = useNavigate();
@@ -94,9 +133,9 @@ export default function AllWsidPage() {
   const uniqueServicePoints = useMemo(() => {
     const set = new Set<string>();
     baseBcaAktifMachines.forEach((m) => {
-      const sp = normalizeServicePoint(getServicePointName(m.sektorBCA, m.wilayahOperasional));
-      if (sp && sp !== 'Unknown Service Point' && !sp.startsWith('Unknown')) {
-        set.add(sp.trim());
+      const { servicePoint } = getResolvedMachineSektorAndSp(m);
+      if (servicePoint && servicePoint !== 'Unknown Service Point' && !servicePoint.startsWith('Unknown')) {
+        set.add(servicePoint.trim());
       }
     });
     return Array.from(set).sort();
@@ -167,8 +206,8 @@ export default function AllWsidPage() {
     // Service Point Filter
     if (servicePointFilter !== 'ALL') {
       list = list.filter((m) => {
-        const sp = normalizeServicePoint(getServicePointName(m.sektorBCA, m.wilayahOperasional));
-        return sp === servicePointFilter;
+        const { servicePoint } = getResolvedMachineSektorAndSp(m);
+        return servicePoint === servicePointFilter;
       });
     }
 
@@ -200,14 +239,18 @@ export default function AllWsidPage() {
           aVal = a.vendor || '';
           bVal = b.vendor || '';
         } else if (sortConfig.key === 'sektor') {
-          aVal = cleanSektorName(a.sektorBCA) !== '-' ? cleanSektorName(a.sektorBCA) : (a.sektorBCA || '');
-          bVal = cleanSektorName(b.sektorBCA) !== '-' ? cleanSektorName(b.sektorBCA) : (b.sektorBCA || '');
+          const aRes = getResolvedMachineSektorAndSp(a);
+          const bRes = getResolvedMachineSektorAndSp(b);
+          aVal = aRes.sektor;
+          bVal = bRes.sektor;
         } else if (sortConfig.key === 'jenisMesin') {
           aVal = a.jenisMesin || '';
           bVal = b.jenisMesin || '';
         } else if (sortConfig.key === 'servicePoint') {
-          aVal = normalizeServicePoint(getServicePointName(a.sektorBCA, a.wilayahOperasional));
-          bVal = normalizeServicePoint(getServicePointName(b.sektorBCA, b.wilayahOperasional));
+          const aRes = getResolvedMachineSektorAndSp(a);
+          const bRes = getResolvedMachineSektorAndSp(b);
+          aVal = aRes.servicePoint;
+          bVal = bRes.servicePoint;
         }
 
         if (aVal < bVal) return sortConfig.direction === 'asc' ? -1 : 1;
@@ -759,7 +802,8 @@ export default function AllWsidPage() {
                   paginatedMachines.map((m) => {
                     const totalPct = (m as any).aggregatedData?.total || 0;
                     const isSelected = selectedWsid === m.wsid;
-                    const spLabel = normalizeServicePoint(getServicePointName(m.sektorBCA, m.wilayahOperasional));
+                    const { sektor: resolvedSek, servicePoint: resolvedSp } = getResolvedMachineSektorAndSp(m);
+                    const spLabel = resolvedSp;
                     const mHealth = evaluateMachineHealth(m);
                     const isCrm =
                       (m.jenisMesin || '').trim().toUpperCase() === 'CRM' ||
@@ -810,7 +854,7 @@ export default function AllWsidPage() {
                         <td className="py-1.5 px-3 whitespace-nowrap">
                           <div className="flex flex-col">
                             <span className="font-semibold text-slate-700 text-xs">
-                              {cleanSektorName(m.sektorBCA) !== '-' ? cleanSektorName(m.sektorBCA) : (m.sektorBCA || '-')}
+                              {resolvedSek}
                             </span>
                             <span className="text-[10px] text-slate-400">
                               SP: {spLabel}
@@ -1032,9 +1076,14 @@ export default function AllWsidPage() {
                   <p className="text-slate-400 text-xs truncate max-w-[260px]" title={selectedMachine.lokasi}>
                     {selectedMachine.lokasi || '-'}
                   </p>
-                  <p className="text-[11px] text-slate-400">
-                    Sektor: <strong className="text-slate-200">{cleanSektorName(selectedMachine.sektorBCA) !== '-' ? cleanSektorName(selectedMachine.sektorBCA) : (selectedMachine.sektorBCA || '-')}</strong>
-                  </p>
+                  {(() => {
+                    const { sektor: selectedSek, servicePoint: selectedSp } = getResolvedMachineSektorAndSp(selectedMachine);
+                    return (
+                      <p className="text-[11px] text-slate-400">
+                        Sektor: <strong className="text-slate-200">{selectedSek}</strong> &bull; SP: <strong className="text-slate-200">{selectedSp}</strong>
+                      </p>
+                    );
+                  })()}
                 </div>
 
                 <button

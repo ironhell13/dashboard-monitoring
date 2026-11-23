@@ -7,6 +7,7 @@ import { Download, Layers, MapPin, FileSpreadsheet, ChevronDown, ChevronUp, Arro
 import { exportMesinPerSektorExcel, SERVICE_POINT_MAP, getServicePointName } from '../utils/comprehensiveExporter';
 import { aggregateMachinesData, getHighestProblemCategory, getValueForCategory, getFrxDurForCategory, type HighestProblemResult } from '../utils/problemCalculator';
 import { cleanSektorName, normalizeServicePoint } from '../utils/dailyIncidentParser';
+import { getResolvedMachineSektorAndSp } from './AllWsidPage';
 import StickyTableWrapper from '../components/StickyTableWrapper';
 import UptimeDataStatusBanner, { useHasUptimeData } from '../components/UptimeDataStatusBanner';
 
@@ -49,9 +50,9 @@ export default function MesinPerSektorPage() {
     }>();
 
     filteredData.forEach(m => {
-      const clean = cleanSektorName(m.sektorBCA);
-      const groupName = clean !== '-' ? clean : 'Unknown Sektor';
-      const servicePoint = normalizeServicePoint(getServicePointName(m.sektorBCA, m.wilayahOperasional));
+      const { sektor: resSek, servicePoint: resSp } = getResolvedMachineSektorAndSp(m);
+      const groupName = resSek !== '-' ? resSek : 'Unknown Sektor';
+      const servicePoint = resSp;
 
       if (!map.has(groupName)) {
         map.set(groupName, { sektor: groupName, servicePoint, machinesBCA: [], machinesNonBCA: [] });

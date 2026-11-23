@@ -1,5 +1,6 @@
 import * as XLSX from 'xlsx';
 import defaultOperatingHoursJson from '../data/defaultOperatingHours.json';
+import staticCatalogJson from '../data/staticMachineCatalog.json';
 import type { MasterRow } from './excelParser';
 
 export interface DailyIncidentRow {
@@ -101,6 +102,13 @@ export function cleanSektorName(raw?: string | null): string {
     'ABACUS CIKANDE',
     'ABACUS SERANG',
     'ABACUS RAWAMANGUN',
+    'ABACUS CASH JAKARTA',
+    'ABACUS CASH BINTARO',
+    'ABACUS CASH CIKANDE',
+    'ABACUS CASH SERANG',
+    'ABACUS CASH BEKASI',
+    'ABACUS CASH RAWAMANGUN',
+    'WILAYAH OPERASIONAL',
     'UNKNOWN',
     'UNKNOWN SEKTOR',
     'N/A',
@@ -155,6 +163,67 @@ export const KNOWN_SEKTOR_SP_MAP: Record<string, string> = {
   // ACBS
   "SGC": "ACBS", "BEKASI": "ACBS", "CIKARANG": "ACBS"
 };
+
+/**
+ * Deteksi cerdas Sektor dan Service Point dari teks lokasi, nama cabang, atau keterangan alamat.
+ * Berguna ketika WSID belum terdaftar di Master atau file input hanya memiliki teks lokasi.
+ */
+export function detectSektorAndSpFromText(text?: string | null): {
+  sektor: string;
+  servicePoint: string;
+  sektorWithSp: string;
+} | null {
+  if (!text || typeof text !== 'string') return null;
+  const upper = text.toUpperCase();
+
+  // 1. Cek specific keyword mappings (lokasi terkenal yang menunjukkan sektor tertentu)
+  const SPECIAL_KEYWORDS: Record<string, { sektor: string; sp: string }> = {
+    'SILKTOWN': { sektor: 'GRAHA', sp: 'ACBT' },
+    'KOSAMBI': { sektor: 'TELUK NAGA', sp: 'ACBT' },
+    'LARANGAN': { sektor: 'CILEDUG', sp: 'ACJK' },
+    'PONDOK KACANG': { sektor: 'GRAHA', sp: 'ACBT' },
+    'MENCONG': { sektor: 'CILEDUG', sp: 'ACJK' },
+    'IKEA': { sektor: 'ALAM SUTERA', sp: 'ACBT' },
+    'LIVING WORLD': { sektor: 'ALAM SUTERA', sp: 'ACBT' },
+    'AEON': { sektor: 'BSD 1', sp: 'ACBT' },
+    'LIPPO KARAWACI': { sektor: 'KARAWACI', sp: 'ACBT' },
+    'SUPERMAL': { sektor: 'KARAWACI', sp: 'ACBT' },
+    'PONDOK INDAH': { sektor: 'KEBAYORAN LAMA', sp: 'ACJK' },
+    'GANDARIA': { sektor: 'KEBAYORAN LAMA', sp: 'ACJK' },
+    'MALL CIPUTRA': { sektor: 'TJ DUREN', sp: 'ACJK' },
+    'CITRALAND': { sektor: 'TJ DUREN', sp: 'ACJK' },
+    'PLUIT': { sektor: 'TELUK GONG', sp: 'ACJK' },
+    'MUARA KARANG': { sektor: 'TELUK GONG', sp: 'ACJK' },
+    'PANTAI INDAH KAPUK': { sektor: 'PIK', sp: 'ACJK' },
+    'ROXY': { sektor: 'CIDENG', sp: 'ACRW' },
+    'GRAHA RAYA': { sektor: 'GRAHA', sp: 'ACBT' }
+  };
+
+  for (const [kw, target] of Object.entries(SPECIAL_KEYWORDS)) {
+    if (upper.includes(kw)) {
+      return {
+        sektor: target.sektor,
+        servicePoint: target.sp,
+        sektorWithSp: `${target.sp}-${target.sektor}`
+      };
+    }
+  }
+
+  // 2. Cek semua sektor yang terdaftar di KNOWN_SEKTOR_SP_MAP (diurutkan dari nama terpanjang)
+  const sortedSektors = Object.keys(KNOWN_SEKTOR_SP_MAP).sort((a, b) => b.length - a.length);
+  for (const s of sortedSektors) {
+    if (upper.includes(s)) {
+      const sp = KNOWN_SEKTOR_SP_MAP[s];
+      return {
+        sektor: s,
+        servicePoint: sp,
+        sektorWithSp: `${sp}-${s}`
+      };
+    }
+  }
+
+  return null;
+}
 
 /**
  * Normalisasi nama Service Point agar selalu seragam menggunakan singkatan resmi:
@@ -269,9 +338,9 @@ export function resolveServicePoint(machine?: any, incidentRow?: any): string {
     }
   }
 
-  // 3. Ambil dari servicePoint langsung jika ada (dan bukan generic)
+  // 3. Ambil dari servicePoint langsung jika ada (dan bukan generic / stub 'Wilayah Operasional')
   const mSp = machine?.servicePoint || machine?.service_point || machine?.ServicePoint || '';
-  if (mSp && typeof mSp === 'string' && mSp !== '-') {
+  if (mSp && typeof mSp === 'string' && mSp !== '-' && mSp !== 'Wilayah Operasional' && mSp !== 'Unknown Service Point') {
     const spFromM = normalizeServicePoint(mSp);
     if (spFromM && ['ACJK', 'ACBT', 'ACCK', 'ACSR', 'ACBS', 'ACRW', 'TAG'].includes(spFromM)) {
       return spFromM;
@@ -280,16 +349,25 @@ export function resolveServicePoint(machine?: any, incidentRow?: any): string {
 
   // 4. Ambil dari service_point baris insiden jika ada
   const rSp = incidentRow?.servicePoint || incidentRow?.service_point || '';
-  if (rSp && typeof rSp === 'string' && rSp !== '-') {
+  if (rSp && typeof rSp === 'string' && rSp !== '-' && rSp !== 'Wilayah Operasional' && rSp !== 'Unknown Service Point') {
     const spFromRow = normalizeServicePoint(rSp);
     if (spFromRow && ['ACJK', 'ACBT', 'ACCK', 'ACSR', 'ACBS', 'ACRW', 'TAG'].includes(spFromRow)) {
       return spFromRow;
     }
   }
 
-  // 5. Fallback ke wilayah operasional mesin jika tidak ada info sektor
+  // 5. Coba deteksi dari nama lokasi jika sektor belum terbaca
+  const loc = machine?.lokasi || incidentRow?.lokasi || '';
+  if (loc && typeof loc === 'string' && loc !== '-') {
+    const detected = detectSektorAndSpFromText(loc);
+    if (detected && ['ACJK', 'ACBT', 'ACCK', 'ACSR', 'ACBS', 'ACRW', 'TAG'].includes(detected.servicePoint)) {
+      return detected.servicePoint;
+    }
+  }
+
+  // 6. Fallback ke wilayah operasional mesin jika tidak ada info sektor
   const wil = machine?.wilayahOperasional || machine?.wilayah_operasional || machine?.Wilayah || '';
-  if (wil && typeof wil === 'string' && wil !== '-') {
+  if (wil && typeof wil === 'string' && wil !== '-' && wil !== 'Wilayah Operasional') {
     const spFromWil = normalizeServicePoint(wil);
     if (spFromWil && ['ACJK', 'ACBT', 'ACCK', 'ACSR', 'ACBS', 'ACRW', 'TAG'].includes(spFromWil)) {
       return spFromWil;
@@ -1099,14 +1177,15 @@ export async function parseDailyIncidentCsv(
 
     // Resolusi Nama Lokasi, Tipe Mesin, Vendor Mesin, Service Point - Sektor
     const m = masterMap.get(wsid);
-    const lokasi = (m && (m['Nama Lokasi'] || m.lokasi)) || getCol(parts, 'Lokasi 1', 'lokasi') || '-';
-    const typeMesin = (m && (m['Tipe Mesin'] || m.tipeMesin)) || getCol(parts, 'Tipe Mesin', 'type mesin') || '-';
-    const vendorMesin = (m && (m.Vendor || m.vendor)) || getCol(parts, 'Vendor Mesin', 'vendor') || '-';
+    const catEntry = (staticCatalogJson as any)[wsid] || (staticCatalogJson as any)[rawWsid] || (staticCatalogJson as any)[wsid.replace(/^0+/, '')] || {};
+    const lokasi = (m && (m['Nama Lokasi'] || m.lokasi)) || catEntry.lokasi || getCol(parts, 'Lokasi 1', 'lokasi') || '-';
+    const typeMesin = (m && (m['Tipe Mesin'] || m.tipeMesin)) || catEntry.tipeMesin || getCol(parts, 'Tipe Mesin', 'type mesin') || '-';
+    const vendorMesin = (m && (m.Vendor || m.vendor)) || catEntry.vendor || getCol(parts, 'Vendor Mesin', 'vendor') || '-';
 
     // Format SERVICE POINT - SEKTOR (Contoh: "ACJK - ULUJAMI", Sektor murni: "ULUJAMI")
-    const rawSektor = m?.Sektor || m?.sektor || m?.sektorBCA || '';
+    const rawSektor = m?.Sektor || m?.sektor || m?.sektorBCA || catEntry.sektorBCA || '';
     const rawPengelola = getCol(parts, 'Pengelola', 'pengelola');
-    const servicePointSektor = formatServicePointSektor(rawSektor, rawPengelola);
+    let servicePointSektor = formatServicePointSektor(rawSektor, rawPengelola);
 
     let servicePoint = '-';
     let sektor = '-';
@@ -1126,6 +1205,26 @@ export async function parseDailyIncidentCsv(
     }
     if (sektor === '-' && rawSektor) {
       sektor = cleanSektorName(rawSektor);
+    }
+
+    // Jika sektor masih '-', coba deteksi dari teks lokasi
+    if (sektor === '-') {
+      const detected = detectSektorAndSpFromText(lokasi);
+      if (detected) {
+        sektor = detected.sektor;
+        if (servicePoint === '-' || servicePoint === 'UNKNOWN') {
+          servicePoint = detected.servicePoint;
+        }
+        servicePointSektor = detected.sektorWithSp;
+      }
+    }
+
+    // Pastikan servicePoint valid jika sektor valid
+    if (sektor !== '-' && (servicePoint === '-' || !['ACJK', 'ACBT', 'ACCK', 'ACSR', 'ACBS', 'ACRW', 'TAG'].includes(servicePoint))) {
+      const spFromSek = getServicePointForSektor(sektor);
+      if (spFromSek) servicePoint = spFromSek;
+      else servicePoint = 'ACJK';
+      servicePointSektor = `${servicePoint} - ${sektor}`;
     }
 
     // Date and Hour info

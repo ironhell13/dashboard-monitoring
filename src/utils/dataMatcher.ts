@@ -1,7 +1,8 @@
 import type { MachineData, MonthlyProblemData } from '../store/useDataStore';
 import type { MasterRow, ParsedUptimeFile, UptimeRow } from './excelParser';
 import { normalizePeriode, SERVICE_POINT_MAP, getServicePointName } from './comprehensiveExporter';
-import { cleanSektorName, cleanWsid } from './dailyIncidentParser';
+import { cleanSektorName, cleanWsid, detectSektorAndSpFromText } from './dailyIncidentParser';
+import staticCatalogJson from '../data/staticMachineCatalog.json';
 
 /**
  * Validasi apakah suatu wilayah atau kode sektor termasuk dalam lingkup operasional ABACUS JAKARTA
@@ -66,24 +67,32 @@ export const matchData = (
       
       const jenisMesinVal = getValIC(row, 'Jenis Mesin');
 
-      let sektorVal = rawSektorVal || (isBCA ? 'Unknown' : 'Non BCA');
+      const catEntry = (staticCatalogJson as any)[wsid] || (staticCatalogJson as any)[wsid.replace(/^0+/, '')] || {};
+      let sektorVal = rawSektorVal || catEntry.sektorBCA || (isBCA ? 'Unknown' : 'Non BCA');
       if (rawSektorVal) {
         const cleaned = cleanSektorName(rawSektorVal);
         if (cleaned === '-') {
-          sektorVal = isBCA ? 'Unknown' : 'Non BCA';
+          sektorVal = catEntry.sektorBCA || (isBCA ? 'Unknown' : 'Non BCA');
         } else if (!rawSektorVal.includes('-') && rawWilayahVal && SERVICE_POINT_MAP[rawWilayahVal.toUpperCase()]) {
           sektorVal = `${rawWilayahVal.toUpperCase()}-${cleaned}`;
         }
       }
+      if (sektorVal === 'Unknown' || sektorVal === '-') {
+        const loc = getValIC(row, 'Nama Lokasi') || catEntry.lokasi || '';
+        const detected = detectSektorAndSpFromText(loc);
+        if (detected) {
+          sektorVal = detected.sektorWithSp;
+        }
+      }
 
-      const wilayahVal = rawWilayahVal || (rawSektorVal.includes('-') ? rawSektorVal.split('-')[0].trim().toUpperCase() : 'ABACUS JAKARTA');
-      const lokasiVal = getValIC(row, 'Nama Lokasi');
-      const tipeMesinVal = getValIC(row, 'Tipe Mesin');
+      const wilayahVal = rawWilayahVal || (rawSektorVal.includes('-') ? rawSektorVal.split('-')[0].trim().toUpperCase() : (sektorVal.includes('-') ? sektorVal.split('-')[0].trim().toUpperCase() : 'ABACUS JAKARTA'));
+      const lokasiVal = getValIC(row, 'Nama Lokasi') || catEntry.lokasi;
+      const tipeMesinVal = getValIC(row, 'Tipe Mesin') || catEntry.tipeMesin;
       const statusVal = getValIC(row, 'Status');
       
-      const vendorVal = getValIC(row, 'Vendor');
-      const hariVal = getValIC(row, 'Hari');
-      const jamVal = getValIC(row, 'Jam');
+      const vendorVal = getValIC(row, 'Vendor') || catEntry.vendor;
+      const hariVal = getValIC(row, 'Hari') || catEntry.hari;
+      const jamVal = getValIC(row, 'Jam') || catEntry.jam;
       const oprVal = getValIC(row, 'OPR');
       
       machineMap.set(wsid, {
@@ -296,30 +305,40 @@ export const matchData = (
 
       if (!machineMap.has(wsid)) {
         if (!isTargetAbacus) return; // Jangan tambahkan mesin dari luar wilayah Abacus Jakarta
+        const catEntry = (staticCatalogJson as any)[wsid] || (staticCatalogJson as any)[wsid.replace(/^0+/, '')] || {};
         // Machine from Uptime (not in Master Data -> Non BCA)
         const rawRowSek = (row.SEKTOR && String(row.SEKTOR).trim() !== '' && String(row.SEKTOR).trim() !== '#N/A')
           ? String(row.SEKTOR).trim()
-          : '';
-        let rowSektor = rawRowSek || (isBCA ? 'Unknown' : 'Non BCA');
+          : (catEntry.sektorBCA || '');
+        let rowSektor = rawRowSek || catEntry.sektorBCA || (isBCA ? 'Unknown' : 'Non BCA');
         if (rawRowSek) {
           const cleanedRowSek = cleanSektorName(rawRowSek);
           if (cleanedRowSek === '-') {
-            rowSektor = isBCA ? 'Unknown' : 'Non BCA';
+            rowSektor = catEntry.sektorBCA || (isBCA ? 'Unknown' : 'Non BCA');
+          }
+        }
+        if (rowSektor === 'Unknown' || rowSektor === '-') {
+          const loc = row.LOKASI || catEntry.lokasi || '';
+          const detected = detectSektorAndSpFromText(loc);
+          if (detected) {
+            rowSektor = detected.sektorWithSp;
           }
         }
 
+        const finalWilayah = wilayahOperasional || catEntry.wilayahOperasional || (rowSektor.includes('-') ? rowSektor.split('-')[0].trim() : 'ABACUS JAKARTA');
+
         machineMap.set(wsid, {
           wsid,
-          jenisMesin: jenis,
+          jenisMesin: jenis || catEntry.jenisMesin || 'ATM',
           klienStatus,
           sektorBCA: rowSektor,
-          wilayahOperasional,
-          lokasi: row.LOKASI || 'Unknown Lokasi',
-          vendor: vendorVal || '-',
-          tipeMesin: row['Tipe Mesin'] || jenis,
+          wilayahOperasional: finalWilayah,
+          lokasi: row.LOKASI || catEntry.lokasi || 'Unknown Lokasi',
+          vendor: vendorVal && vendorVal !== '-' ? vendorVal : (catEntry.vendor || '-'),
+          tipeMesin: row['Tipe Mesin'] || catEntry.tipeMesin || jenis,
           statusAktif: 'AKTIF', // Forcing AKTIF for Non BCA / machines from Uptime
-          hari: row.HARI,
-          jam: row.JAM,
+          hari: row.HARI || catEntry.hari,
+          jam: row.JAM || catEntry.jam,
           opr: row.OPR,
           monthlyData: [monthlyData]
         });
