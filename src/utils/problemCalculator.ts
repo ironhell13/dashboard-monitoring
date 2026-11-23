@@ -97,20 +97,22 @@ export function aggregateMachinesData(machines: (MachineData & { aggregatedData?
   let validCount = 0;
 
   for (const machine of machines) {
-    if (machine.aggregatedData) {
+    const agg = machine.aggregatedData;
+    // Hanya hitung mesin yang memiliki data uptime aktif pada periode yang dipilih
+    if (agg && agg.hasData !== false && (agg.total > 0 || agg.hasData === true || (machine.monthlyData && machine.monthlyData.length > 0))) {
       validCount++;
-      aggregated.uh += machine.aggregatedData.uh || 0;
-      aggregated.kom += machine.aggregatedData.kom || 0;
-      aggregated.up += machine.aggregatedData.up || 0;
-      aggregated.hw += machine.aggregatedData.hw || 0;
-      aggregated.ll += machine.aggregatedData.ll || 0;
-      aggregated.total += machine.aggregatedData.total || 0;
+      aggregated.uh += agg.uh || 0;
+      aggregated.kom += agg.kom || 0;
+      aggregated.up += agg.up || 0;
+      aggregated.hw += agg.hw || 0;
+      aggregated.ll += agg.ll || 0;
+      aggregated.total += agg.total || 0;
       
-      if (machine.aggregatedData.hwDetail) {
-        aggregated.hwDetail.P01 += machine.aggregatedData.hwDetail.P01 || 0;
-        aggregated.hwDetail.P02 += machine.aggregatedData.hwDetail.P02 || 0;
-        aggregated.hwDetail.P03 += machine.aggregatedData.hwDetail.P03 || 0;
-        aggregated.hwDetail.P04 += machine.aggregatedData.hwDetail.P04 || 0;
+      if (agg.hwDetail) {
+        aggregated.hwDetail.P01 += agg.hwDetail.P01 || 0;
+        aggregated.hwDetail.P02 += agg.hwDetail.P02 || 0;
+        aggregated.hwDetail.P03 += agg.hwDetail.P03 || 0;
+        aggregated.hwDetail.P04 += agg.hwDetail.P04 || 0;
       }
     }
   }
@@ -126,9 +128,10 @@ export function aggregateMachinesData(machines: (MachineData & { aggregatedData?
     aggregated.hwDetail.P02 /= validCount;
     aggregated.hwDetail.P03 /= validCount;
     aggregated.hwDetail.P04 /= validCount;
+    return { ...aggregated, validCount };
   }
 
-  return aggregated;
+  return null;
 }
 
 export function getValueForCategory(aggregatedData: any, categoryKey: string): number {

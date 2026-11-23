@@ -12,6 +12,81 @@ export const SERVICE_POINT_MAP: Record<string, string> = {
   'ACRW': 'ABACUS RAWAMANGUN'
 };
 
+export const SEKTOR_TO_SERVICE_POINT_PREFIX: Record<string, string> = {
+  'GRAHA': 'ACBT',
+  'SLIPI': 'ACJK',
+  'SERANG KOTA 2': 'ACSR',
+  'CENTRAL PARK': 'ACJK',
+  'SUDIRMAN': 'ACJK',
+  'BINTARO': 'ACBT',
+  'KOTA': 'ACJK',
+  'GADING SERPONG': 'ACBT',
+  'TANGERANG KOTA': 'ACBT',
+  'TOMANG': 'ACJK',
+  'BSD 1': 'ACBT',
+  'KARAWACI': 'ACBT',
+  'CURUG': 'ACBT',
+  'ULUJAMI': 'ACJK',
+  'INPRES': 'ACJK',
+  'CIKOKOL': 'ACBT',
+  'DAAN MOGOT': 'ACJK',
+  'SUMMARECON SERPONG': 'ACBT',
+  'NEGLASARI': 'ACBT',
+  'SENAYAN': 'ACJK',
+  'BENHIL': 'ACJK',
+  'BSD 2': 'ACBT',
+  'MELATI MAS': 'ACBT',
+  'PASAR KEMIS': 'ACCK',
+  'CIPONDOH 2': 'ACBT',
+  'TELUK GONG 2': 'ACJK',
+  'BSD TAMAN TEKNO': 'ACBT',
+  'TJ DUREN': 'ACJK',
+  'CILEDUG': 'ACJK',
+  'CENGKARENG 1': 'ACBT',
+  'CEGER': 'ACBT',
+  'KEBAYORAN LAMA': 'ACJK',
+  'KREO': 'ACJK',
+  'LEGOK': 'ACBT',
+  'ALAM SUTERA': 'ACBT',
+  'CITRA RAYA': 'ACCK',
+  'SERPONG RAYA': 'ACBT',
+  'DUTA GARDEN': 'ACBT',
+  'CIPONDOH 1': 'ACBT',
+  'PORIS': 'ACBT',
+  'TELUK GONG': 'ACJK',
+  'CIKANDE': 'ACCK',
+  'BALARAJA': 'ACCK',
+  'JAYANTI': 'ACCK',
+  'CENGKARENG 2': 'ACBT',
+  'DADAP': 'ACBT',
+  'BITUNG': 'ACBT',
+  'PIK': 'ACJK',
+  'KRAGILAN': 'ACCK',
+  'CISAUK': 'ACBT',
+  'JATAKE': 'ACBT',
+  'FORESTA': 'ACBT',
+  'TIGARAKSA': 'ACCK',
+  'JELAMBAR': 'ACJK',
+  'TELUK NAGA': 'ACBT',
+  'JAWILAN': 'ACCK',
+  'KOTA BUMI': 'ACBT',
+  'CIRUAS': 'ACCK',
+  'PETIR': 'ACSR',
+  'SEPATAN': 'ACBT',
+  'SENAYAN 2': 'ACJK',
+  'CIPOCOK JAYA': 'ACSR',
+  'SERANG KOTA 1': 'ACSR',
+  'PAKU HAJI': 'ACBT',
+  'CISOKA': 'ACCK',
+  'CIOMAS': 'ACSR',
+  'TAKTAKAN': 'ACSR',
+  'RAJEG': 'ACCK',
+  'RANGKASBITUNG': 'ACCK',
+  'PARUNG PANJANG': 'ACBT',
+  'CIDENG': 'ACRW',
+  'SGC': 'ACBS'
+};
+
 export function getServicePointName(sektorName?: string | null, wilayah?: string | null): string {
   if (sektorName && sektorName !== 'Unknown' && sektorName !== '-') {
     const sNorm = sektorName.trim().toUpperCase();
@@ -21,17 +96,27 @@ export function getServicePointName(sektorName?: string | null, wilayah?: string
     }
     const prefix = sektorName.split('-')[0].trim().toUpperCase();
     if (SERVICE_POINT_MAP[prefix]) return SERVICE_POINT_MAP[prefix];
+
+    // Lookup clean sector name in SEKTOR_TO_SERVICE_POINT_PREFIX
+    const cleanSek = sektorName.includes('-') ? sektorName.split('-').slice(1).join('-').trim().toUpperCase() : sNorm;
+    if (SEKTOR_TO_SERVICE_POINT_PREFIX[cleanSek]) {
+      const spPrefix = SEKTOR_TO_SERVICE_POINT_PREFIX[cleanSek];
+      if (SERVICE_POINT_MAP[spPrefix]) return SERVICE_POINT_MAP[spPrefix];
+    }
   }
+
   if (wilayah && wilayah !== '-' && wilayah !== 'Unknown') {
     const wNorm = wilayah.trim().toUpperCase();
     if (SERVICE_POINT_MAP[wNorm]) return SERVICE_POINT_MAP[wNorm];
     if (Object.values(SERVICE_POINT_MAP).map(v => v.toUpperCase()).includes(wNorm)) {
       return wNorm;
     }
+    const wPrefix = wilayah.split('-')[0].trim().toUpperCase();
+    if (SERVICE_POINT_MAP[wPrefix]) return SERVICE_POINT_MAP[wPrefix];
   }
-  if (!sektorName || sektorName === 'Unknown' || sektorName === '-') return 'Unknown Service Point';
-  const prefix = sektorName.split('-')[0].trim().toUpperCase();
-  return SERVICE_POINT_MAP[prefix] || `Unknown (${prefix})`;
+
+  // Fallback to ABACUS JAKARTA for BCA operational machines rather than "Unknown"
+  return 'ABACUS JAKARTA';
 }
 
 // Universal safe number helper

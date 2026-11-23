@@ -6,7 +6,8 @@
 import { getSupabase, isSupabaseConfigured } from './supabaseClient';
 import type { QuickChipItem } from './quickChipsService';
 import { useDataStore } from '../store/useDataStore';
-import { normalizePeriode } from './comprehensiveExporter';
+import { normalizePeriode, getServicePointName } from './comprehensiveExporter';
+import { isAbacusWilayah } from './dataMatcher';
 import {
   CLOUD_DATA_VERSION,
   hasIntactMasterFields,
@@ -2926,7 +2927,7 @@ export function compactUptimeFileForCloud(file: any, masterWsidsSet?: Set<string
     const desc = String(r.DESCKCU || '').trim().toUpperCase();
     const kww = String(r.KWW || '').trim().toUpperCase();
     const klien = String(r.Klien || '').trim().toUpperCase();
-    if (desc === 'ABACUS JAKARTA' || desc === 'ACJK' || kww === 'ABACUS JAKARTA' || kww === 'ACJK') {
+    if (isAbacusWilayah(desc) || isAbacusWilayah(kww)) {
       return true;
     }
     if (klien === 'BCA') return true;
@@ -2955,12 +2956,13 @@ export function compactUptimeFileForCloud(file: any, masterWsidsSet?: Set<string
 
 function buildTrendEntryFromUptimeFile(file: any) {
   const normPeriode = normalizePeriode(file.periode);
-  const atmCount = (file.atmData || []).filter(
-    (r: any) => String(r.DESCKCU || r.KWW || '').trim().toUpperCase() === 'ABACUS JAKARTA'
-  ).length;
-  const atsCount = (file.atsData || []).filter(
-    (r: any) => String(r.DESCKCU || r.KWW || '').trim().toUpperCase() === 'ABACUS JAKARTA'
-  ).length;
+  const isTargetAbacus = (r: any) =>
+    isAbacusWilayah(r.DESCKCU) ||
+    isAbacusWilayah(r.KWW) ||
+    String(r.Klien || '').trim().toUpperCase() === 'BCA';
+
+  const atmCount = (file.atmData || []).filter(isTargetAbacus).length;
+  const atsCount = (file.atsData || []).filter(isTargetAbacus).length;
 
   return {
     periode: normPeriode,
@@ -3551,8 +3553,10 @@ export async function fetchDashboardFromCloud(localSnapshot?: {
               };
             })
             .filter((m: any) => {
-              const w = String(m.wilayahOperasional || '').trim().toUpperCase();
-              const isAbacus = w === 'ABACUS JAKARTA' || w === 'ACJK';
+              const isAbacus =
+                isAbacusWilayah(m.wilayahOperasional) ||
+                isAbacusWilayah(m.sektorBCA) ||
+                getServicePointName(m.sektorBCA, m.wilayahOperasional) !== 'Unknown Service Point';
               const isNonBca = m.klienStatus === 'Non BCA';
               return (isAbacus || isNonBca) && String(m.statusAktif || '').trim().toUpperCase() === 'AKTIF';
             });

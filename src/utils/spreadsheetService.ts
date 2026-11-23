@@ -32,9 +32,9 @@ import {
 export function getStaticMasterData(): any[] {
   const entries = Object.values(staticCatalogJson) as any[];
   return entries.map((entry) => {
-    const cleanW = String(entry.wsid || '').trim().toUpperCase();
+    const cleanW = cleanWsid(entry.wsid) || String(entry.wsid || '').trim().toUpperCase();
     const sek = entry.sektorBCA || '-';
-    const wil = entry.wilayahOperasional || (sek.includes('-') ? sek.split('-')[0] : 'ABACUS JAKARTA');
+    const wil = entry.wilayahOperasional || 'ABACUS JAKARTA';
     const jm = (entry.jenisMesin === 'CRM' ? 'CRM' : 'ATM');
     return {
       // MachineData properties
@@ -656,7 +656,29 @@ export const fetchDashboardData = async (): Promise<DashboardDbData> => {
     return localSnapshotData;
   }
 
-  // 3. Fallback: Katalog Master statis TANPA data uptime (hasData = false agar UI tidak menyangka 100% uptime valid)
+  // 3. Fallback: Coba ambil sample-data.json lengkap (2.043 mesin + Uptime 7 bulan)
+  try {
+    const res = await fetch('/sample-data.json');
+    if (res.ok) {
+      const seedData = await res.json();
+      if (seedData && seedData.hasData && seedData.masterData?.length > 0 && seedData.parsedUptimeFiles?.length > 0) {
+        return {
+          success: true,
+          hasData: true,
+          source: 'local_cache',
+          masterData: seedData.masterData,
+          parsedUptimeFiles: seedData.parsedUptimeFiles,
+          lockedPeriodes: seedData.lockedPeriodes || [],
+          globalTrendData: seedData.globalTrendData || [],
+          lastUpdated: seedData.lastUpdated || new Date().toISOString()
+        };
+      }
+    }
+  } catch (seedErr) {
+    console.warn('Gagal memuat sample-data.json fallback:', seedErr);
+  }
+
+  // 4. Fallback Terakhir: Katalog Master statis TANPA data uptime (hasData = false agar UI tidak menyangka 100% uptime valid)
   const fallbackMaster = getStaticMasterData();
   return {
     success: true,

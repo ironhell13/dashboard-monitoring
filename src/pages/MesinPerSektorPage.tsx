@@ -70,15 +70,16 @@ export default function MesinPerSektorPage() {
       const totalAktif = allMachines.filter(m => m.statusAktif.trim().toUpperCase() === 'AKTIF').length;
       const machinesTidakAktif = allMachines.filter(m => m.statusAktif.trim().toUpperCase() !== 'AKTIF');
 
-      // HANYA gunakan mesin BCA untuk kalkulasi Uptime/Downtime dan Problem Tertinggi
-      const aggregated = aggregateMachinesData(item.machinesBCA);
-      const rataRataDowntime = aggregated?.total || 0;
-      const rataRataUptime = 100 - rataRataDowntime;
+      const bcaAktifMachines = item.machinesBCA.filter(m => m.statusAktif?.trim().toUpperCase() === 'AKTIF');
+      const bcaAktif = bcaAktifMachines.length;
+      const nonBcaAktif = item.machinesNonBCA.filter(m => m.statusAktif?.trim().toUpperCase() === 'AKTIF').length;
+
+      // HANYA gunakan mesin BCA AKTIF untuk kalkulasi Uptime/Downtime dan Problem Tertinggi
+      const aggregated = aggregateMachinesData(bcaAktifMachines);
+      const rataRataDowntime = aggregated ? aggregated.total : 0;
+      const rataRataUptime = aggregated ? Math.max(0, 100 - rataRataDowntime) : (hasUptimeData ? 100 : 0);
       
       const highestProblem = getHighestProblemCategory(aggregated);
-
-      const bcaAktif = item.machinesBCA.filter(m => m.statusAktif.trim().toUpperCase() === 'AKTIF').length;
-      const nonBcaAktif = item.machinesNonBCA.filter(m => m.statusAktif.trim().toUpperCase() === 'AKTIF').length;
 
       return {
         sektor: item.sektor,

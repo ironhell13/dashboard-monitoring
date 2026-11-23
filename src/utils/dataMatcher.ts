@@ -1,7 +1,21 @@
 import type { MachineData, MonthlyProblemData } from '../store/useDataStore';
 import type { MasterRow, ParsedUptimeFile, UptimeRow } from './excelParser';
-import { normalizePeriode, SERVICE_POINT_MAP } from './comprehensiveExporter';
+import { normalizePeriode, SERVICE_POINT_MAP, getServicePointName } from './comprehensiveExporter';
 import { cleanSektorName, cleanWsid } from './dailyIncidentParser';
+
+/**
+ * Validasi apakah suatu wilayah atau kode sektor termasuk dalam lingkup operasional ABACUS JAKARTA
+ * (mencakup 6 Service Point: ACJK, ACBT, ACCK, ACSR, ACBS, ACRW).
+ */
+export function isAbacusWilayah(val?: string | null): boolean {
+  if (!val) return false;
+  const w = val.trim().toUpperCase();
+  if (w === 'ABACUS JAKARTA' || w === 'ACJK' || w === 'JAKARTA' || w === 'PT ABACUS JAKARTA') return true;
+  if (['ACBT', 'ACCK', 'ACSR', 'ACBS', 'ACRW', 'TAG'].includes(w)) return true;
+  if (w.startsWith('ABACUS ') || w.startsWith('PT ABACUS ')) return true;
+  if (w.startsWith('ACJK') || w.startsWith('ACBT') || w.startsWith('ACCK') || w.startsWith('ACSR') || w.startsWith('ACBS') || w.startsWith('ACRW')) return true;
+  return false;
+}
 
 export const matchData = (
   masterData: MasterRow[],
@@ -52,7 +66,7 @@ export const matchData = (
         }
       }
 
-      const wilayahVal = rawWilayahVal || (rawSektorVal.includes('-') ? rawSektorVal.split('-')[0].trim().toUpperCase() : 'ACJK');
+      const wilayahVal = rawWilayahVal || (rawSektorVal.includes('-') ? rawSektorVal.split('-')[0].trim().toUpperCase() : 'ABACUS JAKARTA');
       const lokasiVal = getValIC(row, 'Nama Lokasi');
       const tipeMesinVal = getValIC(row, 'Tipe Mesin');
       const statusVal = getValIC(row, 'Status');
@@ -92,8 +106,8 @@ export const matchData = (
       const masterWilayah = masterRow ? getValIC(masterRow, 'Wilayah') : 'Unknown';
       const wilayahOperasional = (row.DESCKCU || row.KWW || masterWilayah || 'Unknown').trim().toUpperCase();
 
-      // HANYA proses mesin kelolaan ABACUS JAKARTA (sesuai instruksi spesifik pengguna)
-      if (wilayahOperasional !== 'ABACUS JAKARTA' && !masterRow) {
+      // HANYA proses mesin kelolaan ABACUS JAKARTA (seluruh 6 Service Point) atau yang terdaftar di Master
+      if (!isAbacusWilayah(wilayahOperasional) && !masterRow) {
         return;
       }
       
@@ -325,8 +339,7 @@ export const matchData = (
   // Sort monthlyData internally by period
   const allMachines = Array.from(machineMap.values());
   const machines = allMachines.filter(m => {
-    const w = m.wilayahOperasional.trim().toUpperCase();
-    const isAbacus = w === 'ABACUS JAKARTA' || w === 'ACJK';
+    const isAbacus = isAbacusWilayah(m.wilayahOperasional) || isAbacusWilayah(m.sektorBCA) || getServicePointName(m.sektorBCA, m.wilayahOperasional) !== 'Unknown Service Point';
     const isNonBca = m.klienStatus === 'Non BCA';
     return (isAbacus || isNonBca) && m.statusAktif.trim().toUpperCase() === 'AKTIF';
   });

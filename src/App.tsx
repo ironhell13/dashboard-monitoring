@@ -14,7 +14,7 @@ import FollowUpPage from './pages/FollowUpPage';
 import CekDailyPage from './pages/CekDailyPage';
 import SettingsPage from './pages/SettingsPage';
 import { useDataStore } from './store/useDataStore';
-import { matchData } from './utils/dataMatcher';
+import { matchData, isAbacusWilayah } from './utils/dataMatcher';
 import { fetchDashboardData, fetchDashboardSummary, fetchFollowUpTickets, fetchFollowUpTicketsModern } from './utils/spreadsheetService';
 import { syncFullDatasetToCloud } from './utils/supabaseService';
 import { isSupabaseConfigured } from './utils/supabaseClient';
@@ -118,8 +118,13 @@ function App() {
 
     (uptimeFiles || []).forEach((f: any) => {
       periods.add(f.periode);
-      const atmCount = (f.atmData || []).filter((r: any) => String(r.DESCKCU || r.KWW || '').trim().toUpperCase() === 'ABACUS JAKARTA').length;
-      const atsCount = (f.atsData || []).filter((r: any) => String(r.DESCKCU || r.KWW || '').trim().toUpperCase() === 'ABACUS JAKARTA').length;
+      const isAbacus = (r: any) =>
+        isAbacusWilayah(r.DESCKCU) ||
+        isAbacusWilayah(r.KWW) ||
+        String(r.Klien || '').trim().toUpperCase() === 'BCA';
+
+      const atmCount = (f.atmData || []).filter(isAbacus).length;
+      const atsCount = (f.atsData || []).filter(isAbacus).length;
 
       trendData.push({
         periode: f.periode,

@@ -409,14 +409,16 @@ export const parseUptimeFile = async (file: File): Promise<ParsedUptimeFile> => 
         if (rekapUptimeATM === 0 && atmData.length > 0) {
           const abacusAtm = atmData.filter(r => String(r.DESCKCU || r.KWW || '').trim().toUpperCase() === 'ABACUS JAKARTA');
           const targetAtm = abacusAtm.length > 0 ? abacusAtm : atmData;
-          const sum = targetAtm.reduce((acc, r) => acc + (Number(r.Total_pct || r.UP_pct) || 0), 0);
-          rekapUptimeATM = +(sum / targetAtm.length).toFixed(2);
+          const sum = targetAtm.reduce((acc, r) => acc + (Number(r.Total_pct || 0)), 0);
+          const avgDown = targetAtm.length > 0 ? sum / targetAtm.length : 0;
+          rekapUptimeATM = +(Math.max(0, 100 - avgDown)).toFixed(2);
         }
         if (rekapUptimeCRM === 0 && atsData.length > 0) {
           const abacusAts = atsData.filter(r => String(r.DESCKCU || r.KWW || '').trim().toUpperCase() === 'ABACUS JAKARTA');
           const targetAts = abacusAts.length > 0 ? abacusAts : atsData;
-          const sum = targetAts.reduce((acc, r) => acc + (Number(r.Total_pct || r.UP_pct) || 0), 0);
-          rekapUptimeCRM = +(sum / targetAts.length).toFixed(2);
+          const sum = targetAts.reduce((acc, r) => acc + (Number(r.Total_pct || 0)), 0);
+          const avgDown = targetAts.length > 0 ? sum / targetAts.length : 0;
+          rekapUptimeCRM = +(Math.max(0, 100 - avgDown)).toFixed(2);
         }
 
         let periode = extractPeriodeFromFilename(file.name);

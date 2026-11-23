@@ -14,27 +14,13 @@ let lastUsedKey = '';
  */
 export function getSupabaseUrl(): string {
   const envUrl = (import.meta as any).env?.VITE_SUPABASE_URL;
-  const isDev = Boolean((import.meta as any).env?.DEV);
-
-  // Jika di produksi, bersihkan override localStorage lama agar tidak memecah koneksi
-  if (!isDev) {
-    try {
-      if (localStorage.getItem(STORAGE_URL_KEY)) {
-        console.warn('[SupabaseClient] Menghapus override custom URL lama di produksi.');
-        localStorage.removeItem(STORAGE_URL_KEY);
-      }
-    } catch (_) {}
-  }
-
   if (envUrl && envUrl.trim() !== '') return envUrl.trim();
 
-  // Hanya izinkan custom URL jika di mode development (DEV)
-  if (isDev) {
-    try {
-      const custom = localStorage.getItem(STORAGE_URL_KEY);
-      if (custom && custom.trim() !== '') return custom.trim();
-    } catch (_) {}
-  }
+  // Fallback: custom URL di localStorage jika env belum disetel
+  try {
+    const custom = localStorage.getItem(STORAGE_URL_KEY);
+    if (custom && custom.trim() !== '') return custom.trim();
+  } catch (_) {}
 
   return '';
 }
@@ -44,25 +30,13 @@ export function getSupabaseUrl(): string {
  */
 export function getSupabaseAnonKey(): string {
   const envKey = (import.meta as any).env?.VITE_SUPABASE_ANON_KEY;
-  const isDev = Boolean((import.meta as any).env?.DEV);
-
-  // Jika di produksi, bersihkan override localStorage lama
-  if (!isDev) {
-    try {
-      if (localStorage.getItem(STORAGE_KEY_KEY)) {
-        localStorage.removeItem(STORAGE_KEY_KEY);
-      }
-    } catch (_) {}
-  }
-
   if (envKey && envKey.trim() !== '') return envKey.trim();
 
-  if (isDev) {
-    try {
-      const custom = localStorage.getItem(STORAGE_KEY_KEY);
-      if (custom && custom.trim() !== '') return custom.trim();
-    } catch (_) {}
-  }
+  // Fallback: custom key di localStorage jika env belum disetel
+  try {
+    const custom = localStorage.getItem(STORAGE_KEY_KEY);
+    if (custom && custom.trim() !== '') return custom.trim();
+  } catch (_) {}
 
   return '';
 }

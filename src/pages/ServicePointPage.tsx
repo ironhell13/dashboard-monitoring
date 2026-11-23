@@ -100,19 +100,20 @@ export default function ServicePointPage() {
       const allActive = item.machines.filter(m => m.statusAktif?.trim().toUpperCase() === 'AKTIF');
       const bcaActive = item.machinesBCA.filter(m => m.statusAktif?.trim().toUpperCase() === 'AKTIF');
 
-      const aggregated = aggregateMachinesData(item.machinesBCA);
-      const rataRataDowntime = aggregated?.total || 0;
-      const rataRataUptime = 100 - rataRataDowntime;
+      const aggregated = aggregateMachinesData(bcaActive);
+      const rataRataDowntime = aggregated ? aggregated.total : 0;
+      const rataRataUptime = aggregated ? Math.max(0, 100 - rataRataDowntime) : (hasUptimeData ? 100 : 0);
 
       const sektorList: SektorStats[] = Array.from(item.sektorMap.entries()).map(([sName, sMachines]) => {
         const bcaInSektor = sMachines.filter(m => m.klienStatus === 'BCA');
         const activeBcaInSektor = bcaInSektor.filter(m => m.statusAktif?.trim().toUpperCase() === 'AKTIF');
-        const sAgg = aggregateMachinesData(bcaInSektor);
-        const sDown = sAgg?.total || 0;
+        const sAgg = aggregateMachinesData(activeBcaInSektor);
+        const sDown = sAgg ? sAgg.total : 0;
+        const sUp = sAgg ? Math.max(0, 100 - sDown) : (hasUptimeData ? 100 : 0);
         return {
           namaSektor: sName,
           jumlahMesin: activeBcaInSektor.length,
-          uptime: 100 - sDown,
+          uptime: sUp,
           downtime: sDown,
           uh: sAgg?.uh || 0,
           kom: sAgg?.kom || 0,
@@ -126,7 +127,7 @@ export default function ServicePointPage() {
       return {
         servicePoint: item.servicePoint,
         jumlahSektor: item.sektorMap.size,
-        jumlahMesin: allActive.length,
+        jumlahMesin: bcaActive.length,
         rataRataUptime,
         rataRataDowntime,
         uh: aggregated?.uh || 0,

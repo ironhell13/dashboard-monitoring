@@ -108,6 +108,7 @@ export default function AllWsidPage() {
     let warning = 0;
     let critical = 0;
     let totalDowntimePct = 0;
+    let machinesWithDataCount = 0;
 
     baseBcaAktifMachines.forEach((m) => {
       const h = evaluateMachineHealth(m);
@@ -115,13 +116,16 @@ export default function AllWsidPage() {
       else if (h.status === 'WARNING') warning++;
       else if (h.status === 'CRITICAL') critical++;
 
-      const pct = (m as any).aggregatedData?.total || 0;
-      totalDowntimePct += pct;
+      const agg = (m as any).aggregatedData;
+      if (agg && agg.hasData !== false && (agg.total > 0 || agg.hasData === true || (m.monthlyData && m.monthlyData.length > 0))) {
+        totalDowntimePct += agg.total || 0;
+        machinesWithDataCount++;
+      }
     });
 
     const total = baseBcaAktifMachines.length;
-    const avgDowntime = total > 0 ? totalDowntimePct / total : 0;
-    const avgUptime = Math.max(0, 100 - avgDowntime);
+    const avgDowntime = machinesWithDataCount > 0 ? totalDowntimePct / machinesWithDataCount : 0;
+    const avgUptime = machinesWithDataCount > 0 ? Math.max(0, 100 - avgDowntime) : (hasUptimeData ? 100 : 0);
 
     return {
       total,
@@ -129,9 +133,10 @@ export default function AllWsidPage() {
       warning,
       critical,
       avgDowntime,
-      avgUptime
+      avgUptime,
+      machinesWithDataCount
     };
-  }, [baseBcaAktifMachines]);
+  }, [baseBcaAktifMachines, hasUptimeData]);
 
   // Filtered Machines
   const filteredMachines = useMemo(() => {

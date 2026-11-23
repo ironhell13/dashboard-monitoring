@@ -64,6 +64,7 @@ export function useFilteredData() {
           ...machine,
           aggregatedData: {
             periode: selectedPeriode,
+            hasData: false,
             uh: 0, uhFrx: 0, uhDur: 0,
             kom: 0, komFrx: 0, komDur: 0,
             up: 0, upFrx: 0, upDur: 0,
@@ -148,7 +149,10 @@ export function useFilteredData() {
 
       return {
         ...machine,
-        aggregatedData
+        aggregatedData: {
+          ...aggregatedData,
+          hasData: true
+        }
       };
     }).filter(Boolean) as (MachineData & { aggregatedData: any })[];
   }, [machines, selectedPeriode, selectedPeriodeStart, selectedPeriodeEnd, selectedKlien, selectedJenisMesin, sektorMode, selectedSektorWilayah]);

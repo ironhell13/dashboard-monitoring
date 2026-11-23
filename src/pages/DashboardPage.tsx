@@ -13,6 +13,7 @@ import {
 import { exportDashboardExcel, SERVICE_POINT_MAP, getServicePointName, formatBulanTahun } from '../utils/comprehensiveExporter';
 import { cleanSektorName, normalizeServicePoint } from '../utils/dailyIncidentParser';
 import StickyTableWrapper from '../components/StickyTableWrapper';
+import { useHasUptimeData } from '../components/UptimeDataStatusBanner';
 import { 
   evaluateMachineHealth, 
   SPIKE_THRESHOLDS,
@@ -56,6 +57,7 @@ const PROBLEM_COLORS = {
 
 export default function DashboardPage() {
   const navigate = useNavigate();
+  const hasUptimeData = useHasUptimeData();
   const { 
     machines, 
     availablePeriodes, 
@@ -186,20 +188,17 @@ export default function DashboardPage() {
           sumHw += mHw;
           sumLl += mLl;
           sumUptime += Math.max(0, 100 - mDown);
-        } else {
-          // If no month data in period, default uptime 100%
-          sumUptime += 100;
         }
       });
 
-      const denom = bcaCount || 1;
-      const avgDowntime = bcaCount > 0 ? sumDowntime / denom : 0;
-      const avgUptime = bcaCount > 0 ? sumUptime / denom : 100;
-      const avgUh = bcaCount > 0 ? sumUh / denom : 0;
-      const avgKom = bcaCount > 0 ? sumKom / denom : 0;
-      const avgUp = bcaCount > 0 ? sumUp / denom : 0;
-      const avgHw = bcaCount > 0 ? sumHw / denom : 0;
-      const avgLl = bcaCount > 0 ? sumLl / denom : 0;
+      const denom = machineCountWithData > 0 ? machineCountWithData : 1;
+      const avgDowntime = machineCountWithData > 0 ? sumDowntime / denom : 0;
+      const avgUptime = machineCountWithData > 0 ? Math.max(0, 100 - avgDowntime) : (hasUptimeData ? 100 : 0);
+      const avgUh = machineCountWithData > 0 ? sumUh / denom : 0;
+      const avgKom = machineCountWithData > 0 ? sumKom / denom : 0;
+      const avgUp = machineCountWithData > 0 ? sumUp / denom : 0;
+      const avgHw = machineCountWithData > 0 ? sumHw / denom : 0;
+      const avgLl = machineCountWithData > 0 ? sumLl / denom : 0;
 
       // Find dominant problem
       const problems = [

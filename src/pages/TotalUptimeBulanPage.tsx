@@ -123,8 +123,21 @@ export default function TotalUptimeBulanPage() {
       }));
   }, [globalTrendData]);
 
-  // Statistik bulan terakhir
-  const latestMonth = chartData.length > 0 ? chartData[chartData.length - 1] : null;
+  // Statistik bulan terpilih atau bulan terakhir
+  const latestMonth = useMemo(() => {
+    if (!chartData || chartData.length === 0) return null;
+    if (selectedPeriode && selectedPeriode !== 'ALL') {
+      const norm = normalizePeriode(selectedPeriode);
+      const found = chartData.find(d => normalizePeriode(d.periodeRaw) === norm);
+      if (found) return found;
+    }
+    return chartData[chartData.length - 1];
+  }, [chartData, selectedPeriode]);
+
+  const totalMasterCount = useMemo(() => {
+    const list = (machines || []).filter(m => isBcaMachine(m) && isActiveMachine(m));
+    return list.length > 0 ? list.length : 2043;
+  }, [machines]);
 
   // Hitung batas minimum sumbu Y agar grafik terlihat dinamis namun proporsional
   const minUptime = useMemo(() => {
@@ -268,7 +281,7 @@ export default function TotalUptimeBulanPage() {
           <div className="flex items-center justify-between pt-1.5 border-t border-[#E5EAF2] text-[10px] text-slate-500">
             <span>ATM: <strong className="text-blue-600 font-semibold">{latestMonth?.mesinATM || 0}</strong></span>
             <span>CRM: <strong className="text-slate-700 font-semibold">{latestMonth?.mesinCRM || 0}</strong></span>
-            <span>Periode: <strong className="text-slate-700 font-semibold">{chartData.length} Bulan</strong></span>
+            <span>Master: <strong className="text-slate-700 font-semibold">{totalMasterCount.toLocaleString()}</strong></span>
           </div>
         </div>
       </div>
