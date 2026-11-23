@@ -115,8 +115,8 @@ export function getServicePointName(sektorName?: string | null, wilayah?: string
     if (SERVICE_POINT_MAP[wPrefix]) return SERVICE_POINT_MAP[wPrefix];
   }
 
-  // Fallback to ABACUS JAKARTA for BCA operational machines rather than "Unknown"
-  return 'ABACUS JAKARTA';
+  // Jika tidak cocok dengan 6 Service Point Abacus Jakarta, tandai Unknown agar mesin luar wilayah tersaring
+  return 'Unknown Service Point';
 }
 
 // Universal safe number helper

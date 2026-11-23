@@ -5,15 +5,19 @@ import { cleanSektorName, cleanWsid } from './dailyIncidentParser';
 
 /**
  * Validasi apakah suatu wilayah atau kode sektor termasuk dalam lingkup operasional ABACUS JAKARTA
- * (mencakup 6 Service Point: ACJK, ACBT, ACCK, ACSR, ACBS, ACRW).
+ * (mencakup 6 Service Point: ACJK/Jakarta, ACBT/Bintaro, ACCK/Cikande, ACSR/Serang, ACBS/Bekasi, ACRW/Rawamangun).
+ * PENTING: Jangan gunakan w.startsWith('ABACUS ') karena akan meloloskan ABACUS SURABAYA, ABACUS MEDAN, dll.
  */
 export function isAbacusWilayah(val?: string | null): boolean {
   if (!val) return false;
   const w = val.trim().toUpperCase();
-  if (w === 'ABACUS JAKARTA' || w === 'ACJK' || w === 'JAKARTA' || w === 'PT ABACUS JAKARTA') return true;
-  if (['ACBT', 'ACCK', 'ACSR', 'ACBS', 'ACRW', 'TAG'].includes(w)) return true;
-  if (w.startsWith('ABACUS ') || w.startsWith('PT ABACUS ')) return true;
-  if (w.startsWith('ACJK') || w.startsWith('ACBT') || w.startsWith('ACCK') || w.startsWith('ACSR') || w.startsWith('ACBS') || w.startsWith('ACRW')) return true;
+  if (w === 'ABACUS JAKARTA' || w === 'ACJK' || w === 'JAKARTA' || w === 'PT ABACUS JAKARTA' || w.startsWith('ACJK')) return true;
+  if (w === 'ABACUS BINTARO' || w === 'ACBT' || w === 'BINTARO' || w.startsWith('ACBT')) return true;
+  if (w === 'ABACUS CIKANDE' || w === 'ACCK' || w === 'CIKANDE' || w.startsWith('ACCK')) return true;
+  if (w === 'ABACUS SERANG' || w === 'ACSR' || w === 'SERANG' || w.startsWith('ACSR')) return true;
+  if (w === 'ABACUS BEKASI' || w === 'ACBS' || w === 'BEKASI' || w.startsWith('ACBS')) return true;
+  if (w === 'ABACUS RAWAMANGUN' || w === 'ACRW' || w === 'RAWAMANGUN' || w.startsWith('ACRW')) return true;
+  if (w === 'TAG') return true;
   return false;
 }
 
@@ -44,17 +48,23 @@ export const matchData = (
     return undefined;
   };
 
-  // Pre-load ALL machines from Master Data (ensures all sectors exist)
+  // Pre-load ALL machines from Master Data (ensures all sectors exist for Abacus Jakarta)
   for (const row of masterData) {
     const wsid = cleanWsid(row.WSID);
     if (wsid) {
+      const rawSektorVal = String(getValIC(row, 'Sektor') || '').trim();
+      const rawWilayahVal = String(getValIC(row, 'Wilayah') || '').trim();
+
+      // Saring hanya mesin kelolaan Abacus Jakarta jika file Master berisi data nasional
+      const isTargetAbacus = isAbacusWilayah(rawWilayahVal) || isAbacusWilayah(rawSektorVal) || getServicePointName(rawSektorVal, rawWilayahVal) !== 'Unknown Service Point';
+      if (!isTargetAbacus && rawWilayahVal && rawWilayahVal !== '-' && rawWilayahVal !== 'UNKNOWN') {
+        continue;
+      }
 
       const klienVal = getValIC(row, 'Klien');
       const isBCA = String(klienVal || '').trim().toUpperCase() === 'BCA';
       
       const jenisMesinVal = getValIC(row, 'Jenis Mesin');
-      const rawSektorVal = String(getValIC(row, 'Sektor') || '').trim();
-      const rawWilayahVal = String(getValIC(row, 'Wilayah') || '').trim();
 
       let sektorVal = rawSektorVal || (isBCA ? 'Unknown' : 'Non BCA');
       if (rawSektorVal) {
@@ -105,9 +115,12 @@ export const matchData = (
       const masterRow = masterMap.get(wsid);
       const masterWilayah = masterRow ? getValIC(masterRow, 'Wilayah') : 'Unknown';
       const wilayahOperasional = (row.DESCKCU || row.KWW || masterWilayah || 'Unknown').trim().toUpperCase();
+      const rowSektor = String(row.SEKTOR || '').trim();
 
-      // HANYA proses mesin kelolaan ABACUS JAKARTA (seluruh 6 Service Point) atau yang terdaftar di Master
-      if (!isAbacusWilayah(wilayahOperasional) && !masterRow) {
+      const isTargetAbacus = isAbacusWilayah(wilayahOperasional) || isAbacusWilayah(rowSektor) || getServicePointName(rowSektor, wilayahOperasional) !== 'Unknown Service Point';
+
+      // HANYA proses mesin kelolaan ABACUS JAKARTA (seluruh 6 Service Point) atau yang terdaftar di Master Abacus
+      if (!isTargetAbacus && !masterRow) {
         return;
       }
       
@@ -282,6 +295,7 @@ export const matchData = (
       const vendorVal = String(row.VDR || '').trim();
 
       if (!machineMap.has(wsid)) {
+        if (!isTargetAbacus) return; // Jangan tambahkan mesin dari luar wilayah Abacus Jakarta
         // Machine from Uptime (not in Master Data -> Non BCA)
         const rawRowSek = (row.SEKTOR && String(row.SEKTOR).trim() !== '' && String(row.SEKTOR).trim() !== '#N/A')
           ? String(row.SEKTOR).trim()

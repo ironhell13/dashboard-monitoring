@@ -2926,12 +2926,15 @@ export function compactUptimeFileForCloud(file: any, masterWsidsSet?: Set<string
     if (!r) return false;
     const desc = String(r.DESCKCU || '').trim().toUpperCase();
     const kww = String(r.KWW || '').trim().toUpperCase();
-    const klien = String(r.Klien || '').trim().toUpperCase();
+    const sek = String(r.SEKTOR || '').trim().toUpperCase();
     if (isAbacusWilayah(desc) || isAbacusWilayah(kww)) {
       return true;
     }
-    if (klien === 'BCA') return true;
-    if (masterWsidsSet && masterWsidsSet.has(r.WSID)) return true;
+    if (sek && getServicePointName(sek, desc) !== 'Unknown Service Point') {
+      return true;
+    }
+    const wsid = cleanWsid(r.WSID);
+    if (masterWsidsSet && masterWsidsSet.has(wsid)) return true;
     return false;
   };
 
@@ -2956,10 +2959,12 @@ export function compactUptimeFileForCloud(file: any, masterWsidsSet?: Set<string
 
 function buildTrendEntryFromUptimeFile(file: any) {
   const normPeriode = normalizePeriode(file.periode);
-  const isTargetAbacus = (r: any) =>
-    isAbacusWilayah(r.DESCKCU) ||
-    isAbacusWilayah(r.KWW) ||
-    String(r.Klien || '').trim().toUpperCase() === 'BCA';
+  const isTargetAbacus = (r: any) => {
+    const desc = String(r.DESCKCU || '').trim().toUpperCase();
+    const kww = String(r.KWW || '').trim().toUpperCase();
+    const sek = String(r.SEKTOR || '').trim().toUpperCase();
+    return isAbacusWilayah(desc) || isAbacusWilayah(kww) || (sek && getServicePointName(sek, desc) !== 'Unknown Service Point');
+  };
 
   const atmCount = (file.atmData || []).filter(isTargetAbacus).length;
   const atsCount = (file.atsData || []).filter(isTargetAbacus).length;

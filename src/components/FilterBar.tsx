@@ -1,10 +1,10 @@
 import { useState } from 'react';
 import { useDataStore } from '../store/useDataStore';
 import { Filter, Calendar, MonitorSmartphone, FileSpreadsheet, RefreshCw, CheckCircle2, AlertCircle } from 'lucide-react';
-import { exportComprehensiveExcel, formatBulanTahun } from '../utils/comprehensiveExporter';
+import { exportComprehensiveExcel, formatBulanTahun, getServicePointName } from '../utils/comprehensiveExporter';
 import { fetchDashboardData, fetchFollowUpTickets, fetchFollowUpTicketsModern, getStaticMasterData } from '../utils/spreadsheetService';
 import { saveDashboardSnapshot } from '../utils/dbCache';
-import { matchData } from '../utils/dataMatcher';
+import { matchData, isAbacusWilayah } from '../utils/dataMatcher';
 
 export default function FilterBar() {
   const {
@@ -73,8 +73,14 @@ export default function FilterBar() {
 
         (dbData.parsedUptimeFiles || []).forEach(f => {
           periods.add(f.periode);
-          const atmCount = f.atmData.filter(r => String(r.DESCKCU || r.KWW || '').trim().toUpperCase() === 'ABACUS JAKARTA').length;
-          const atsCount = f.atsData.filter(r => String(r.DESCKCU || r.KWW || '').trim().toUpperCase() === 'ABACUS JAKARTA').length;
+          const isTargetAbacus = (r: any) => {
+            const desc = String(r.DESCKCU || '').trim().toUpperCase();
+            const kww = String(r.KWW || '').trim().toUpperCase();
+            const sek = String(r.SEKTOR || '').trim().toUpperCase();
+            return isAbacusWilayah(desc) || isAbacusWilayah(kww) || (sek && getServicePointName(sek, desc) !== 'Unknown Service Point');
+          };
+          const atmCount = f.atmData.filter(isTargetAbacus).length;
+          const atsCount = f.atsData.filter(isTargetAbacus).length;
 
           trendData.push({
             periode: f.periode,

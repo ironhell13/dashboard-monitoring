@@ -14,13 +14,13 @@ import {
   Unlock
 } from 'lucide-react';
 import { parseMasterData, parseUptimeFile, type MasterRow, type ParsedUptimeFile } from '../utils/excelParser';
-import { matchData } from '../utils/dataMatcher';
+import { matchData, isAbacusWilayah } from '../utils/dataMatcher';
 import { useDataStore } from '../store/useDataStore';
 import { saveMasterData, saveUptimePeriod, unlockPeriode } from '../utils/spreadsheetService';
 import { fetchDashboardMetaFromCloud, syncFullDatasetToCloud } from '../utils/supabaseService';
 import { isSupabaseConfigured } from '../utils/supabaseClient';
 import { saveDashboardSnapshot } from '../utils/dbCache';
-import { formatBulanTahun, normalizePeriode } from '../utils/comprehensiveExporter';
+import { formatBulanTahun, normalizePeriode, getServicePointName } from '../utils/comprehensiveExporter';
 
 const formatMonthPeriode = (periode: string): string => {
   return formatBulanTahun(periode);
@@ -231,8 +231,14 @@ export default function UploadPage() {
       
       combinedUptimeFiles.forEach(f => {
         periods.add(f.periode);
-        const atmCount = f.atmData.filter(r => String(r.DESCKCU || '').trim().toUpperCase() === 'ABACUS JAKARTA').length;
-        const atsCount = f.atsData.filter(r => String(r.DESCKCU || '').trim().toUpperCase() === 'ABACUS JAKARTA').length;
+        const isTargetAbacus = (r: any) => {
+          const desc = String(r.DESCKCU || '').trim().toUpperCase();
+          const kww = String(r.KWW || '').trim().toUpperCase();
+          const sek = String(r.SEKTOR || '').trim().toUpperCase();
+          return isAbacusWilayah(desc) || isAbacusWilayah(kww) || (sek && getServicePointName(sek, desc) !== 'Unknown Service Point');
+        };
+        const atmCount = f.atmData.filter(isTargetAbacus).length;
+        const atsCount = f.atsData.filter(isTargetAbacus).length;
         
         trendData.push({
           periode: f.periode,

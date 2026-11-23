@@ -271,10 +271,14 @@ export default function TotalUptimeBulanPage() {
           
           <div className="flex items-baseline gap-2 my-0.5">
             <span className="text-2xl font-bold text-slate-900 leading-tight">
-              {latestMonth?.totalMesin?.toLocaleString() || 0}
+              {selectedPeriode && selectedPeriode !== 'ALL'
+                ? (latestMonth?.totalMesin?.toLocaleString() || totalMasterCount.toLocaleString())
+                : totalMasterCount.toLocaleString()}
             </span>
             <span className="text-[11px] font-medium text-slate-500">
-              Mesin Aktif
+              {selectedPeriode && selectedPeriode !== 'ALL'
+                ? `Mesin Aktif (${selectedPeriode})`
+                : 'Mesin Terdaftar (Master)'}
             </span>
           </div>
 

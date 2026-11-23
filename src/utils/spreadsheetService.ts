@@ -1,5 +1,6 @@
 import type { MasterRow, ParsedUptimeFile } from './excelParser';
-import { normalizePeriode } from './comprehensiveExporter';
+import { normalizePeriode, getServicePointName } from './comprehensiveExporter';
+import { isAbacusWilayah } from './dataMatcher';
 import { cleanWsid } from './dailyIncidentParser';
 import { getSupabase, isSupabaseConfigured } from './supabaseClient';
 import staticCatalogJson from '../data/staticMachineCatalog.json';
@@ -601,9 +602,17 @@ export const fetchDashboardData = async (): Promise<DashboardDbData> => {
         }
 
         if (cloudRes.parsedUptimeFiles && cloudRes.parsedUptimeFiles.length > 0 && cloudRes.masterData) {
+          // Sanitasi masterData agar tidak membawa data nasional (> 2.500 mesin)
+          const validMaster = (cloudRes.masterData || []).filter((row: any) => {
+            const rawSektorVal = String(row.sektorBCA || row.Sektor || '').trim();
+            const rawWilayahVal = String(row.wilayahOperasional || row.Wilayah || '').trim();
+            return isAbacusWilayah(rawWilayahVal) || isAbacusWilayah(rawSektorVal) || getServicePointName(rawSektorVal, rawWilayahVal) !== 'Unknown Service Point';
+          });
+          const targetMaster = validMaster.length > 0 ? validMaster : cloudRes.masterData;
+
           // Hanya simpan ke cache lokal terpisah jika Cloud sudah format v2 yang utuh (bukan fallback v1)
           if (!cloudRes.isPartialFallback) {
-            saveCachedMasterData(cloudRes.masterData).catch(() => {});
+            saveCachedMasterData(targetMaster).catch(() => {});
             saveCachedUptimeFiles(cloudRes.parsedUptimeFiles).catch(() => {});
             saveCachedLockedPeriodes(cloudRes.lockedPeriodes || []).catch(() => {});
           }
@@ -613,7 +622,7 @@ export const fetchDashboardData = async (): Promise<DashboardDbData> => {
             hasData: true,
             source: 'cloud_snapshot',
             isPartialFallback: cloudRes.isPartialFallback,
-            masterData: cloudRes.masterData,
+            masterData: targetMaster,
             parsedUptimeFiles: cloudRes.parsedUptimeFiles,
             lockedPeriodes: cloudRes.lockedPeriodes || [],
             globalTrendData: cloudRes.globalTrendData || [],

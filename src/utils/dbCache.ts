@@ -69,7 +69,7 @@ export function hasValidUptimeInDataset(parsedUptimeFiles?: any[], matchedMachin
   return false;
 }
 
-export const CACHE_SCHEMA_VERSION = 3;
+export const CACHE_SCHEMA_VERSION = 4;
 const CACHE_VERSION_TAG = 'EMONS_CACHE_VERSION_TAG';
 
 const DB_NAME = 'DOWNTIME_BCA_CACHE_DB';
@@ -178,7 +178,13 @@ export async function loadCachedMasterData(): Promise<MasterRow[]> {
       req.onsuccess = () => resolve(req.result || null);
       req.onerror = () => reject(req.error);
     });
-    if (rows && Array.isArray(rows)) return rows;
+    if (rows && Array.isArray(rows)) {
+      if (rows.length > 2500) {
+        // Abaikan cache master lama yang bocor data nasional (> 2.500)
+        return [];
+      }
+      return rows;
+    }
   } catch (err) {
     console.warn('Gagal membaca master data dari IndexedDB:', err);
   }
@@ -288,6 +294,8 @@ export async function loadDashboardSnapshot(): Promise<CachedSnapshot | null> {
       snapshot &&
       !snapshot.isPartialFallback &&
       snapshot.masterData?.length > 0 &&
+      snapshot.masterData.length <= 2500 && // Tolak snapshot lama yang bocor data nasional (> 2.500 mesin)
+      (!snapshot.matchedMachines || snapshot.matchedMachines.length <= 2500) &&
       hasValidUptimeInDataset(snapshot.parsedUptimeFiles, snapshot.matchedMachines) &&
       snapshot.parsedUptimeFiles?.length > 0
     ) {

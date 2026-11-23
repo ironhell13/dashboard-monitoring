@@ -15,6 +15,7 @@ import CekDailyPage from './pages/CekDailyPage';
 import SettingsPage from './pages/SettingsPage';
 import { useDataStore } from './store/useDataStore';
 import { matchData, isAbacusWilayah } from './utils/dataMatcher';
+import { getServicePointName } from './utils/comprehensiveExporter';
 import { fetchDashboardData, fetchDashboardSummary, fetchFollowUpTickets, fetchFollowUpTicketsModern } from './utils/spreadsheetService';
 import { syncFullDatasetToCloud } from './utils/supabaseService';
 import { isSupabaseConfigured } from './utils/supabaseClient';
@@ -118,10 +119,12 @@ function App() {
 
     (uptimeFiles || []).forEach((f: any) => {
       periods.add(f.periode);
-      const isAbacus = (r: any) =>
-        isAbacusWilayah(r.DESCKCU) ||
-        isAbacusWilayah(r.KWW) ||
-        String(r.Klien || '').trim().toUpperCase() === 'BCA';
+      const isAbacus = (r: any) => {
+        const desc = String(r.DESCKCU || '').trim().toUpperCase();
+        const kww = String(r.KWW || '').trim().toUpperCase();
+        const sek = String(r.SEKTOR || '').trim().toUpperCase();
+        return isAbacusWilayah(desc) || isAbacusWilayah(kww) || (sek && getServicePointName(sek, desc) !== 'Unknown Service Point');
+      };
 
       const atmCount = (f.atmData || []).filter(isAbacus).length;
       const atsCount = (f.atsData || []).filter(isAbacus).length;
